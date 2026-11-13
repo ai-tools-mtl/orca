@@ -7,6 +7,7 @@ import type { AiVaultDeletableAgent } from '../../../shared/ai-vault/contracts/a
 import { resolveGrokSessionsDir } from '../../../shared/grok-session-paths'
 import { resolveKiroHomeDir } from '../../../shared/kiro-home'
 import { uniqueCodexSessionsDirs } from '../scanners/codex/session-scanner-codex-paths'
+import { DSH_AGENT_SOURCE } from '../scanners/dsh/session-scanner-dsh-layout'
 import {
   clineMessagesPathForMetadata,
   kiroTranscriptPathForMetadata
@@ -167,6 +168,7 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     extensions: ['.json'],
     filePredicate: (filePath) => basename(filePath) === 'summary.json'
   },
+  dsh: DSH_AGENT_SOURCE,
   devin: {
     rootDirs: (options, wslHomeDirs) => [
       ...sessionRootDirs(options.devinTranscriptsDir ?? DEVIN_TRANSCRIPTS_DIR, wslHomeDirs, [
