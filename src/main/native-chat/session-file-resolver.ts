@@ -19,6 +19,8 @@ import {
   findGrokChatHistoryBySessionId,
   resolveGrokSessionsDir
 } from '../../shared/grok-session-paths'
+import { resolveDshSessionsDir } from '../../shared/dsh-session-paths'
+import { findDshSessionTranscriptById } from '../dsh/dsh-transcript-import'
 import {
   hostAdditionalCodexHomePaths,
   needsWslHostResolution,
@@ -68,6 +70,7 @@ export type ResolveSessionFileOptions = {
   /** Defaults to managed Codex then CODEX_HOME/~/.codex, in order. */
   codexSessionsDirs?: string[]
   grokSessionsDir?: string
+  dshSessionsDir?: string
   ompSessionsDir?: string
   /** Hook paths are authoritative: Claude filenames may differ from its reported session ID. */
   transcriptPath?: string
@@ -190,6 +193,12 @@ async function resolveSessionFileById(
       signal,
       strictErrors: options.strictErrors
     })
+  }
+  if (transcriptAgent === 'dsh') {
+    return findDshSessionTranscriptById(
+      options.dshSessionsDir ?? resolveDshSessionsDir(),
+      trimmedId
+    )
   }
   transcriptAgent satisfies never
   return null

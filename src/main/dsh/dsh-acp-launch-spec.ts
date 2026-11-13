@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { GENERIC_ACP_DIALECT } from '../acp/acp-dialects/acp-dialect'
 import { directoryAccountBinding } from '../acp/launch/acp-account-binding'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
+import { DSH_TRANSCRIPT_IMPORT } from './dsh-transcript-import'
 import { DSH_SESSION_HISTORY } from './dsh-session-history'
 
 // 0.2.2-rc.1 is verified end to end; earlier 0.2 lines ship the acp profile too.
@@ -21,6 +22,6 @@ export const DSH_LAUNCH_SPEC: AcpLaunchSpec = {
   // leave sessions behind; its chats expose the real menu through their configOptions.
   modelDiscovery: { kind: 'unavailable', reason: 'dsh lists its models only in chats' },
   resumePreference: 'resume',
-  transcriptImport: null,
+  transcriptImport: DSH_TRANSCRIPT_IMPORT,
   sessionHistory: DSH_SESSION_HISTORY
 }
