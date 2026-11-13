@@ -56,6 +56,11 @@ const NATIVE_CHAT_AGENT_PROFILES: Partial<Record<AgentType, NativeChatAgentProfi
     skillPrefix: '/',
     skillSourceOwner: 'grok'
   },
+  // dsh reads only the shared agent-skills home; its own skill tool self-invokes from /name text.
+  dsh: {
+    skillPrefix: '/',
+    skillSourceOwner: 'dsh'
+  },
   // Pi expands only `/skill:<name>`; a bare `/<name>` reaches the model as text.
   pi: {
     skillPrefix: '/',
