@@ -31,6 +31,7 @@ export const SELF_CONTAINED_TRANSCRIPT_AGENTS = {
   opencode2: false,
   zcode: false,
   grok: false, // chat_history.jsonl supplies messages.
+  dsh: false, // No file scanner publishes dsh sessions yet.
   hermes: true,
   rovo: false, // session_context.json supplies messages.
   openclaw: true,

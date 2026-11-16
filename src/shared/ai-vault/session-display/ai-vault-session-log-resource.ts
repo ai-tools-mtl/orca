@@ -52,6 +52,7 @@ const logFileResolvers = {
     getRuntimePathBasename(filePath) === 'summary.json'
       ? grokTranscriptPathForMetadata(filePath)
       : null,
+  dsh: () => null,
   openclaw: jsonlLog,
   devin: jsonLog,
   droid: jsonlLog,

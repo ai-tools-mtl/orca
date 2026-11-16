@@ -39,6 +39,7 @@ export type AiVaultScanOptions = {
   opencodeAccountDataDirs?: readonly string[]
   zcodeDbPath?: string
   grokSessionsDir?: string
+  dshSessionsDir?: string
   devinTranscriptsDir?: string
   hermesSessionsDir?: string
   rovoSessionsDir?: string

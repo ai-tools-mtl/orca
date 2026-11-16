@@ -1,6 +1,6 @@
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 
-export type NativeChatTranscriptAgent = 'claude' | 'codex' | 'grok' | 'omp' | 'opencode'
+export type NativeChatTranscriptAgent = 'claude' | 'codex' | 'dsh' | 'grok' | 'omp' | 'opencode'
 
 /** Agents whose transcripts the native chat view can parse and render. */
 export const NATIVE_CHAT_SUPPORTED_AGENT_LIST: readonly TuiAgent[] = [
@@ -57,7 +57,7 @@ export function resolveNativeChatTranscriptAgent(
   if (agent === 'opencode' || agent === 'opencode2' || agent === 'zcode') {
     return 'opencode'
   }
-  if (agent === 'codex' || agent === 'grok' || agent === 'omp') {
+  if (agent === 'codex' || agent === 'dsh' || agent === 'grok' || agent === 'omp') {
     return agent
   }
   return null

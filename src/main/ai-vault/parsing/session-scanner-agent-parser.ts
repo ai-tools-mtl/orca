@@ -10,6 +10,7 @@ import { parseAntigravitySessionFile } from '../scanners/antigravity/session-sca
 import { parseDroidSessionFile } from '../scanners/droid/session-scanner-droid-parser'
 import { parseClineSessionFile } from '../scanners/cline/session-scanner-cline-parser'
 import { parseGrokSessionFile } from '../scanners/grok/session-scanner-grok-parser'
+import { parseDshSessionFile } from '../scanners/dsh/session-scanner-dsh-parser'
 import {
   parseMessageGraphSessionFile,
   parseRovoSessionFile
@@ -126,6 +127,8 @@ export async function parseAgentSessionFile(
         ? readOpenCodeSqliteCandidate(sqliteCandidate, platform, messages, signal, 'zcode')
         : null
     }
+    case 'dsh':
+      return parseDshSessionFile(candidate.file, platform, messages, signal, onSkippedRecords)
     case 'grok':
       return parseGrokSessionFile(candidate.file, platform, messages, signal)
     case 'hermes':

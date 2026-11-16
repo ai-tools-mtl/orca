@@ -185,6 +185,9 @@ function buildAgentResumeInvocation(
   switch (agent) {
     case 'codex':
       return `${baseCommand} resume ${sessionArg}`
+    case 'dsh':
+      // Pin the backend: young dsh-tui releases read a bare session id as a prompt.
+      return `${baseCommand} --backend=dsh --resume ${sessionArg}`
     case 'rovo':
       // Why: the base is the full launch command, as a settings override is.
       return `${baseCommand} --restore ${sessionArg}`

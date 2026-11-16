@@ -64,6 +64,8 @@ export function isolatedScanRoots(root: string) {
     opencodeDbPaths: [] as readonly string[],
     zcodeDbPath: join(root, 'zcode', 'db.sqlite'),
     grokSessionsDir: join(root, 'grok-sessions'),
+    // Avoid discovering the user's real dsh sessions.
+    dshSessionsDir: join(root, 'dsh-sessions'),
     devinTranscriptsDir: join(root, 'devin-transcripts'),
     hermesSessionsDir: join(root, 'hermes-sessions'),
     rovoSessionsDir: join(root, 'rovo-sessions'),
