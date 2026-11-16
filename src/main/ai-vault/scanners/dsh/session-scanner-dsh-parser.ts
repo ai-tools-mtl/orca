@@ -101,6 +101,9 @@ function applyDshSessionRecord(
   const type = extractString(record.type)
   const time = numberValue(record.time)
   const data = asRecord(record.data)
+  if (type === null) {
+    return
+  }
   switch (type) {
     case 'session':
       accumulator.sessionId = extractString(record.id) ?? accumulator.sessionId
@@ -127,7 +130,7 @@ function applyDshSessionRecord(
       accumulator.totalTokens += numberValue(asRecord(data?.usage)?.totalTokens) ?? 0
       break
     }
-    default:
+    case null:
       break
   }
   if (time !== undefined) {

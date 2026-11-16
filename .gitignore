@@ -163,3 +163,6 @@ ci-shards/
 /.build/windows-native-benchmark/
 
 .local/static-analysis-research/
+
+# ZCode agent working files (plans, sessions).
+.zcode/
