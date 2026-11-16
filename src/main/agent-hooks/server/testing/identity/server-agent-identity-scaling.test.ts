@@ -152,6 +152,16 @@ it('claims a running place only for an agent this runtime has observed', async (
   const id = first.getStatusSnapshot()[0]?.orcaSessionId
   const dormant = first.getStatusSnapshot()[1]?.orcaSessionId
   first.dropStatusEntry(paneKey(1), { preserveResumeIdentity: false })
+  first.setTerminalPaneLifecycle({
+    ownsProcess: (key, pty) => key === paneKey(0) && pty === 'sleeping-pty',
+    isStopping: () => true,
+    isReversibleStop: (pty) => pty === 'sleeping-pty',
+    isPlaced: () => true
+  })
+  expect(first.settleTerminalPaneSleep(paneKey(0), 'sleeping-pty')).toBe(true)
+  expect(first.getStatusSnapshot()[0]).toMatchObject({ state: 'done', orcaSessionId: id })
+  expect(await first.terminalAgentPlaces(id!)).toEqual([])
+
   const saved = first.savedStatus()
   first.stop()
 
@@ -164,6 +174,7 @@ it('claims a running place only for an agent this runtime has observed', async (
   expect(await restarted.terminalAgentPlaces(dormant!)).toEqual([])
   expect(restarted.identityClient.hasRequests).toBe(1)
   expect(await restarted.terminalAgentPlaces('claude_never_minted_here')).toBeNull()
+  restarted.retireSleepingPaneOnSpawn(paneKey(0))
   restarted.ingestRemote(hook(0, 'session-0'), WSL)
   expect(await restarted.terminalAgentPlaces(id!)).toEqual([
     { paneKey: paneKey(0), worktreeId: 'wt-1' }
@@ -177,7 +188,7 @@ it('publishes a lost first answer as pending, and the click recovers the committ
   server.ingestRemote(hook(0, 'session-0'), WSL)
   await answered()
   // The host can name this conversation but has not: the field is present and null, which is
-  // what offers Copy Agent ID (canPaneOfferAgentId).
+  // what offers Copy Orca Session ID (canPaneOfferAgentId).
   expect(server.getStatusSnapshot()[0]).toHaveProperty('orcaSessionId', null)
   // Inside the 30 s backoff only the click asks again; its answer also re-stamps the row.
   const id = await server.resolvePaneAgentId(paneKey(0), () => undefined)
