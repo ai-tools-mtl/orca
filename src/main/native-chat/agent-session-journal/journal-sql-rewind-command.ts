@@ -3,10 +3,7 @@ import type Database from '../../sqlite/sync-database'
 import { isReadableAgentSessionStoreRecord } from '../../runtime/agent-session/records/agent-session-store-row-rules'
 import { decodePersistedAgentSessionRecord } from '../../../shared/agent-session/lifecycle/records/agent-session-record-stored-form'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
-import {
-  agentSessionJournalProviderHandle,
-  claudeProviderHandle
-} from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { assertJournalFence } from './writing/journal-write-guards'
 import type { JournalWriterCommand } from './journal-writer-command'
 import { JournalSqlScope } from './journal-sql-scope'
@@ -110,14 +107,22 @@ export function applyJournalSqlRewindCommand(
     ) {
       throw new Error('agent_session_rewind:stale-context')
     }
+    // The fork link keeps the head's own transport/agent and only swaps the session (plus the
+    // fork's resume cursor); the native_copy unit follows the provider, not a hard-coded claude.
+    const forkProviderHandle = rewind.providerFork
+      ? handle
+        ? {
+            ...handle,
+            nativeId: rewind.providerFork.sessionId,
+            ...(rewind.providerFork.resumeCursor
+              ? { resumeCursor: rewind.providerFork.resumeCursor }
+              : {})
+          }
+        : null
+      : (handle ?? null)
     const providerHandle = agentSessionJournalProviderHandle({
       agent: record.provider,
-      providerHandle: rewind.providerFork
-        ? claudeProviderHandle(
-            rewind.providerFork.sessionId,
-            rewind.providerFork.resumeCursor ?? null
-          )
-        : (handle ?? null)
+      providerHandle: forkProviderHandle
     })
     const nativeOrigin =
       rewind.providerFork?.coverage !== undefined &&
@@ -127,8 +132,9 @@ export function applyJournalSqlRewindCommand(
             raw: {
               version: 1 as const,
               kind: 'native_copy' as const,
-              agent: 'claude',
-              unit: 'claude-entry' as const,
+              agent: record.provider,
+              unit:
+                record.provider === 'zcode' ? ('zcode-turn' as const) : ('claude-entry' as const),
               providerHandle,
               ids: rewind.providerFork.coverage
             }
@@ -153,12 +159,7 @@ export function applyJournalSqlRewindCommand(
     if (!local) {
       const providerHandle = agentSessionJournalProviderHandle({
         agent: record.provider,
-        providerHandle: rewind.providerFork
-          ? claudeProviderHandle(
-              rewind.providerFork.sessionId,
-              rewind.providerFork.resumeCursor ?? null
-            )
-          : (handle ?? null)
+        providerHandle: forkProviderHandle
       })
       const origin =
         nativeOrigin ??

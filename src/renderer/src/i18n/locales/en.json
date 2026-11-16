@@ -20750,6 +20750,7 @@
         "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
         "modelFallback": "Claude switched models: {{from}} → {{to}}.",
         "forkedFrom": "Forked from",
+        "modelSwitched": "Model switched: {{from}} → {{to}}",
         "forkedFromUnknown": "Forked from another chat"
       },
       "composer": {
