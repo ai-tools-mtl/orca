@@ -1,6 +1,7 @@
 import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
 import type { CommandSpec } from '../discovery/command-spec'
 import { ORCHESTRATION_GATE_COMMAND_SPECS } from './orchestration-gate-specs'
+import { ORCHESTRATION_ROUTING_COMMAND_SPECS } from './orchestration-routing-specs'
 import { ORCHESTRATION_WORKER_COMMAND_SPECS } from './orchestration-worker-specs'
 
 export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
@@ -283,6 +284,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   ...ORCHESTRATION_GATE_COMMAND_SPECS,
+  ...ORCHESTRATION_ROUTING_COMMAND_SPECS,
   {
     path: ['orchestration', 'reset'],
     destructive: true,

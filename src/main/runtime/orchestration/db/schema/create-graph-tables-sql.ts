@@ -243,6 +243,66 @@ CREATE TABLE IF NOT EXISTS decision_gates (
 CREATE INDEX IF NOT EXISTS idx_gates_task ON decision_gates(task_id);
 CREATE INDEX IF NOT EXISTS idx_gates_status ON decision_gates(status);
 
+-- Routing ledger (optional-decision-routing plan §6): persistent inputs, their sub-actions, and
+-- targeted supplement deliveries with per-attempt receipts. Task/Dispatch execution state stays
+-- in its own tables; these rows only carry the input→sub-action→delivery linkage.
+CREATE TABLE IF NOT EXISTS routing_inputs (
+  input_id        TEXT PRIMARY KEY,
+  run_id          TEXT NOT NULL,
+  raw_text        TEXT NOT NULL,
+  received_seq    INTEGER NOT NULL,
+  decision_status TEXT NOT NULL DEFAULT 'received'
+    CHECK(decision_status IN ('received', 'decided')),
+  decision_json   TEXT,
+  created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_routing_inputs_run ON routing_inputs(run_id);
+
+CREATE TABLE IF NOT EXISTS routing_sub_actions (
+  sub_action_id    TEXT PRIMARY KEY,
+  input_id         TEXT NOT NULL,
+  run_id           TEXT NOT NULL,
+  seq              INTEGER NOT NULL,
+  text             TEXT NOT NULL,
+  constraints_json TEXT NOT NULL DEFAULT '[]',
+  task_id          TEXT,
+  created_at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_routing_sub_actions_input ON routing_sub_actions(input_id);
+
+CREATE TABLE IF NOT EXISTS routing_supplements (
+  supplement_id      TEXT PRIMARY KEY,
+  input_id           TEXT NOT NULL,
+  sub_action_id      TEXT NOT NULL,
+  run_id             TEXT NOT NULL,
+  target_dispatch_id TEXT NOT NULL,
+  raw_text           TEXT NOT NULL,
+  created_at         TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_routing_supplements_sub_action
+  ON routing_supplements(sub_action_id);
+
+CREATE TABLE IF NOT EXISTS routing_supplement_attempts (
+  attempt_id         TEXT PRIMARY KEY,
+  supplement_id      TEXT NOT NULL,
+  request_id         TEXT NOT NULL,
+  target_dispatch_id TEXT NOT NULL,
+  -- Null only on refusals recorded before any expected turn was established.
+  expected_turn_id   TEXT,
+  outcome            TEXT NOT NULL
+    CHECK(outcome IN ('delivered', 'refused', 'unverified')),
+  refusal_kind       TEXT,
+  detail             TEXT,
+  turn_id            TEXT,
+  created_at         TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_routing_supplement_attempts_supplement
+  ON routing_supplement_attempts(supplement_id);
+
 CREATE INDEX IF NOT EXISTS idx_runs_coordinator_pane_leaf
   ON runs(${RUN_PANE_KEY_MATCH_SUFFIX_SQL})
   WHERE coordinator_pane_key IS NOT NULL;

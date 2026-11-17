@@ -12,6 +12,7 @@ import { attachLegacyRemoteDbMethods } from '../legacy-remote/legacy-remote-db-m
 import { attachLegacyRemoteHomeDbMethods } from '../legacy-remote-home/legacy-remote-home-db-methods'
 import { attachPeerMailStore } from './federation/peer-mail-store'
 import { attachPeerRunStore } from './peer-runs/peer-run-store'
+import { attachRoutingLedger } from '../routing/routing-ledger'
 import { attachLegacyAskOperation } from './legacy/legacy-ask-operation'
 import { attachLegacyCompatibilityCandidates } from './legacy/legacy-compatibility-candidates'
 import { attachLegacyCompatibilityPrincipals } from './legacy/legacy-compatibility-principals'
@@ -121,6 +122,7 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachDispatchCompletion(ctor)
   attachWorkerReportSettlement(ctor)
   attachDecisionGateStore(ctor)
+  attachRoutingLedger(ctor)
   attachCoordinatorRunStore(ctor)
   attachOrchestrationReset(ctor)
   attachCrewMutationNotifications(ctor)

@@ -114,6 +114,28 @@ function parseGateOptions(raw: string): string[] {
   }
 }
 
+/** Targeted supplement delivery acts on a Dispatch of the Run the caller coordinates. */
+export function routingSupplementSendAccess(
+  input: OrchestrationAccessRuleInput<RunScopedParams & { dispatch: string }>
+): RunAccess {
+  const db = input.ctx.runtime.getOrchestrationDb()
+  const dispatch = db.getDispatchContextById(input.params.dispatch)
+  if (!dispatch) {
+    throw new OrchestrationError(
+      'dispatch_not_found',
+      `Dispatch ${input.params.dispatch} was not found.`
+    )
+  }
+  const { run } = coordinatedRunAccess(input)
+  if (dispatch.run_id !== run.id) {
+    throw new OrchestrationError(
+      'dispatch_run_mismatch',
+      `Dispatch ${dispatch.id} belongs to Run ${dispatch.run_id}, not ${run.id}.`
+    )
+  }
+  return { run }
+}
+
 export function gateResolveAccess(
   input: OrchestrationAccessRuleInput<RunScopedParams & { id: string }>
 ): RunAccess {

@@ -51,6 +51,16 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
 
   dispatch: Adapter['dispatch'] = (input) => this.owner(input.sessionId).dispatch(input)
 
+  /** Targeted delivery routes to the owning adapter; one without it refuses as unsupported. */
+  steerExpectedTurn: NonNullable<Adapter['steerExpectedTurn']> = (input) =>
+    Promise.resolve(
+      this.owner(input.sessionId).steerExpectedTurn?.(input) ?? {
+        status: 'refused' as const,
+        kind: 'unsupported' as const,
+        expectedTurnId: input.expectedTurnId
+      }
+    )
+
   permissionModeRequiresAcquisition = (
     sessionId: string,
     mode: AgentChatPermissionChoice

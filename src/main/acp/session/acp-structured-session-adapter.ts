@@ -1,4 +1,5 @@
 import { startAcpStructuredSession } from './start/acp-structured-start'
+import { steerExpectedAcpTurn } from '../turns/acp-expected-steer'
 
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { AgentSessionAcquisitionExitUnprovenError } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
@@ -145,6 +146,9 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
       return { state: 'admitted' }
     })
   }
+
+  steerExpectedTurn: NonNullable<SessionAdapter['steerExpectedTurn']> = (input) =>
+    steerExpectedAcpTurn(this.live(input.sessionId), input, this.now)
 
   compact: NonNullable<SessionAdapter['compact']> = async (input) => {
     const session = this.live(input.sessionId)

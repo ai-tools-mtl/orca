@@ -11,6 +11,7 @@ import type { LegacyRemoteDbMethods } from '../legacy-remote/legacy-remote-db-me
 import type { LegacyRemoteHomeDbMethods } from '../legacy-remote-home/legacy-remote-home-db-methods'
 import type { PeerMailStoreMethods } from './federation/peer-mail-store'
 import type { PeerRunStoreMethods } from './peer-runs/peer-run-store'
+import type { RoutingLedgerMethods } from '../routing/routing-ledger'
 import type { LegacyAskOperationMethods } from './legacy/legacy-ask-operation'
 import type { LegacyCompatibilityCandidatesMethods } from './legacy/legacy-compatibility-candidates'
 import type { LegacyCompatibilityPrincipalsMethods } from './legacy/legacy-compatibility-principals'
@@ -119,5 +120,6 @@ export type OrchestrationDbMethods = AttemptObservationStoreMethods &
   DispatchCompletionMethods &
   WorkerReportSettlementMethods &
   DecisionGateStoreMethods &
+  RoutingLedgerMethods &
   CoordinatorRunStoreMethods &
   OrchestrationResetMethods

@@ -14,6 +14,7 @@ import type {
 import type { StructuredAgentSessionProviderOpenInput } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import type { CodexJournalTranslationAdmission } from '../journal/codex-structured-journal-contracts'
 import { dispatchCodexTurn } from '../turns/codex-structured-turn-start'
+import { steerExpectedCodexSessionTurn } from './codex-structured-session-steer'
 import { isCodexTurnOptionKey } from '../turns/codex-turn-option-keys'
 import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host'
 import { CodexStructuredSessionTeardown } from './codex-structured-session-teardown'
@@ -242,15 +243,12 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
     const session = this.session(input.sessionId)
     session.dispatchPending = true
     try {
-      const outcome = await dispatchCodexTurn(
+      const prepared = await messageOptions.prepareCodexMessageDispatch(
         session,
-        await messageOptions.prepareCodexMessageDispatch(
-          session,
-          input,
-          () => this.sessions.get(input.sessionId) === session
-        ),
-        this.deps.requestTimeoutMs
+        input,
+        () => this.sessions.get(input.sessionId) === session
       )
+      const outcome = await dispatchCodexTurn(session, prepared, this.deps.requestTimeoutMs)
       this.deps.onEvent?.({
         type: 'options-reported',
         sessionId: input.sessionId,
@@ -267,6 +265,10 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
       requestEndWait.settleCodexRequestEndWaiters(session)
     }
   }
+
+
+  steerExpectedTurn: NonNullable<SessionAdapter['steerExpectedTurn']> = (input) =>
+    steerExpectedCodexSessionTurn(this.sessions, input)
 
   cancelTurn: SessionAdapter['cancelTurn'] = (request) =>
     cancelCodexStructuredTurn({

@@ -37,6 +37,11 @@ import type { AgentSessionSlashCommand } from '../../../../shared/agent-session/
 import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session/agent-session-thread-goal-wire'
 import type { SubmissionRejectionFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type {
+  AgentSessionExpectedSteerOutcome,
+  SteerExpectedTurnInput
+} from './structured-agent-session-expected-steer'
+export type { AgentSessionExpectedSteerOutcome }
+import type {
   AgentSessionCloseObserver,
   StructuredAgentSessionAdapterStop
 } from './structured-agent-session-adapter-stop'
@@ -226,6 +231,8 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     /** Checkpoint between choice application and execution-evidence capture. */
     onExecutionSnapshot?: () => void
   }): Promise<AgentSessionDispatchOutcome>
+  /** Targeted delivery: steer exactly `expectedTurnId`; refusals never re-target or start turns. */
+  steerExpectedTurn?(input: SteerExpectedTurnInput): Promise<AgentSessionExpectedSteerOutcome>
   /** Narrow declared rewind per session; agent supplies the resting-session answer. */
   rewindSupport?(sessionId: string, agent?: string): AgentSessionRewindSupport
   prepareRewind?: PrepareStructuredRewind

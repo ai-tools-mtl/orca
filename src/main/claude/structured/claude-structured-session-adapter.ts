@@ -18,6 +18,7 @@ import { acquireClaudeSession } from './claude-structured-session-acquisition'
 import { supportsClaudeStructuredLocation } from './launch/claude-structured-location-support'
 import * as claudeOptions from './launch/claude-structured-options'
 import { dispatchClaudeMessage } from './launch/claude-structured-message-options'
+import { steerExpectedClaudeTurn } from './claude-structured-expected-steer'
 import { readClaudeStructuredSessionOptions } from './launch/claude-structured-session-options'
 import {
   ClaudeAcquisitionRegistry,
@@ -156,6 +157,9 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     const { requestTimeoutMs, logger } = this.deps
     return dispatchClaudeMessage(this.session(input.sessionId), input, requestTimeoutMs, logger)
   }
+
+  steerExpectedTurn: NonNullable<StructuredAgentSessionAdapter['steerExpectedTurn']> = (input) =>
+    steerExpectedClaudeTurn(this.session(input.sessionId), input)
 
   forkForRewind = claudeForkForRewind
   copyConversation = copyClaudeConversation

@@ -27,6 +27,13 @@ async function rig(routes: Record<string, CodexTestRoute>) {
       body: CODEX_TEST_USER_MESSAGE,
       fence: 7
     })
+  const steerExpected = (expectedTurnId: string, clientMessageId = 'client-1') =>
+    adapter.steerExpectedTurn!({
+      sessionId: 'session-1',
+      clientMessageId,
+      body: CODEX_TEST_USER_MESSAGE,
+      expectedTurnId
+    })
   const methods = () =>
     connection.calls
       .map(({ method }) => method)
@@ -38,7 +45,7 @@ async function rig(routes: Record<string, CodexTestRoute>) {
       threadId: CODEX_TEST_THREAD_ID,
       turn: { id: turnId, status }
     })
-  return { connection, settlements, send, methods, endTurn }
+  return { adapter, connection, settlements, send, steerExpected, methods, endTurn }
 }
 
 const refusedSteer = (message: string): CodexAppServerRequestError =>
@@ -182,5 +189,86 @@ describe('a Codex send after a turn Codex answered and never opened', () => {
     rig.turns.end('completed')
 
     expect(await settledWithin(rig.send('client-3'))).toMatchObject({ state: 'admitted' })
+  })
+})
+
+describe('targeted delivery steers exactly the turn it names', () => {
+  it('delivers to the named running turn and binds its receipt', async () => {
+    const { connection, steerExpected } = await rig({
+      'turn/steer': () => ({ turnId: 'turn-1' })
+    })
+    startTurn(connection, 'turn-1')
+
+    expect(await steerExpected('turn-1')).toEqual({
+      status: 'delivered',
+      turnId: 'turn-1',
+      via: 'steer'
+    })
+    expect(connection.calls.at(-1)?.params).toMatchObject({
+      threadId: CODEX_TEST_THREAD_ID,
+      expectedTurnId: 'turn-1'
+    })
+  })
+
+  it('reports the provider refusal as a typed fact and never re-targets nor starts a turn', async () => {
+    const { connection, settlements, steerExpected, methods } = await rig({
+      'turn/steer': () => {
+        throw refusedSteer('expected active turn id `turn-1` but found `turn-2`')
+      },
+      'turn/start': () => {
+        throw new Error('turn/start must never be called')
+      }
+    })
+    startTurn(connection, 'turn-1')
+
+    expect(await steerExpected('turn-1')).toMatchObject({
+      status: 'refused',
+      kind: 'provider-refused',
+      expectedTurnId: 'turn-1'
+    })
+    expect(methods()).toEqual(['thread/start', 'turn/steer'])
+    expect(settlements).toEqual([])
+  })
+
+  it('refuses a turn the execution record shows ended, without calling the provider', async () => {
+    const { connection, steerExpected, methods, endTurn } = await rig({
+      'turn/steer': () => {
+        throw new Error('turn/steer must never be called')
+      },
+      'turn/start': () => {
+        throw new Error('turn/start must never be called')
+      }
+    })
+    startTurn(connection, 'turn-1')
+    endTurn('turn-1', 'completed')
+
+    expect(await steerExpected('turn-1')).toEqual({
+      status: 'refused',
+      kind: 'turn-not-active',
+      expectedTurnId: 'turn-1'
+    })
+    expect(methods()).toEqual(['thread/start'])
+  })
+
+  it('refuses the ended turn by name while another turn runs, delivering nowhere else', async () => {
+    const { connection, steerExpected, methods, endTurn } = await rig({
+      'turn/steer': () => {
+        throw new Error('turn/steer must never be called')
+      },
+      'turn/start': () => {
+        throw new Error('turn/start must never be called')
+      }
+    })
+    startTurn(connection, 'turn-1')
+    endTurn('turn-1', 'completed')
+    startTurn(connection, 'turn-2')
+
+    expect(await steerExpected('turn-1')).toEqual({
+      status: 'refused',
+      kind: 'turn-not-active',
+      expectedTurnId: 'turn-1'
+    })
+    expect(methods()).toEqual(['thread/start'])
+    expect(methods().filter((method) => method === 'turn/steer')).toEqual([])
   })
 })
