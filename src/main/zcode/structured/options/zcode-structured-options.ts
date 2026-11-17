@@ -1,4 +1,4 @@
-import type { AgentSessionModelOption } from '../../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import { contextUsageField, readAvailabilityRow } from './zcode-options-wire-shapes'
 import type { ZcodeAppServerConnection } from '../../../zcode/app-server/zcode-app-server-connection-types'
 import type { ZcodeStructuredSessionLiveOptions } from './zcode-live-options'
@@ -6,6 +6,7 @@ import {
   formatZcodeModelOption,
   parseZcodeModelOption
 } from '../launch/zcode-structured-launch-resolution'
+import { permissionModeOfZcodeMode, zcodeModeOfPermissionMode } from './zcode-collaboration-modes'
 
 // zcode session options: model (`session/setModel`, value `providerId/modelId`), effort (the
 // model's reasoning level, sent on the same setModel), and Build/Plan (`session/setMode`).
@@ -75,12 +76,10 @@ export class ZcodeStructuredOptions {
       })
     }
     for (const model of this.models) {
-      // A refreshed row must not lose its levels to an older placeholder for the same id.
+      // The model's own reported facts outrank the generic placeholder: a row listing fewer
+      // levels than the generic menu is still the authoritative one for that model.
       const existing = merged.get(model.id)
-      const richer =
-        (model.reasoningLevels.length ?? 0) >= (existing?.reasoningLevels.length ?? 0)
-          ? model
-          : (existing ?? model)
+      const richer = model.reasoningLevels.length > 0 ? model : (existing ?? model)
       merged.set(model.id, richer)
     }
     this.models = [...merged.values()]
@@ -149,7 +148,7 @@ export class ZcodeStructuredOptions {
       ...(model.defaultLevel ? { defaultEffort: model.defaultLevel } : {}),
       efforts: model.reasoningLevels
     }))
-    const permissionMode = this.permissionModeOf(this.currentMode)
+    const permissionMode = permissionModeOfZcodeMode(this.currentMode)
     return {
       models,
       // Availability arrives only after a session's first state push; without it the host catalog
@@ -182,21 +181,28 @@ export class ZcodeStructuredOptions {
     )
   }
 
-  /** Orca's permission vocabulary for the zcode mode a session reports; plan is not a permission. */
-  private permissionModeOf(mode: string | null): string | undefined {
-    if (mode === 'build') {
-      return 'ask'
+  /**
+   * The applied map a write of this saved record would return, without writing — the pick
+   * reply's compiled options. Null when nothing applies (unparseable model, effort with no model).
+   */
+  project(options: Readonly<Record<string, string>>): Record<string, string> | null {
+    const applied: Record<string, string> = {}
+    for (const [key, value] of Object.entries(options)) {
+      if (key === 'model') {
+        if (!parseZcodeModelOption(value)) {
+          return null
+        }
+        applied.model = value
+      } else if (key === 'effort') {
+        if (!parseZcodeModelOption(this.currentModelId ?? '')) {
+          return null
+        }
+        applied.effort = value
+      } else if (key === 'interactionMode') {
+        applied.interactionMode = value
+      }
     }
-    if (mode === 'edit') {
-      return 'accept-edits'
-    }
-    if (mode === 'auto') {
-      return 'auto'
-    }
-    if (mode === 'yolo') {
-      return 'full-access'
-    }
-    return undefined
+    return Object.keys(applied).length > 0 ? applied : null
   }
 
   /** Writes one option; returns the applied options map. */
@@ -235,7 +241,10 @@ export class ZcodeStructuredOptions {
       return { model: value }
     }
     if (key === 'effort') {
-      const model = parseZcodeModelOption(this.currentModelId ?? '')
+      // Capture the model identity before the await: an availability push that lands mid-request
+      // must not make the stored effort name a different model than the one this write updated.
+      const requestedModelId = this.currentModelId ?? ''
+      const model = parseZcodeModelOption(requestedModelId)
       if (!model) {
         throw new Error('zcode effort follows a selected model; pick a model first')
       }
@@ -252,7 +261,7 @@ export class ZcodeStructuredOptions {
         },
         { timeoutMs }
       )
-      this.selectedEffort = { modelId: this.currentModelId ?? '', level: value }
+      this.selectedEffort = { modelId: requestedModelId, level: value }
       return { effort: value }
     }
     if (key === 'interactionMode') {
@@ -266,14 +275,7 @@ export class ZcodeStructuredOptions {
       return { interactionMode: value }
     }
     if (key === 'permissionMode') {
-      // Orca's permission vocabulary onto zcode's collaboration mode (Build/Plan rides separately).
-      const byMode: Record<string, string> = {
-        ask: 'build',
-        'accept-edits': 'edit',
-        auto: 'auto',
-        'full-access': 'yolo'
-      }
-      const mode = byMode[value]
+      const mode = zcodeModeOfPermissionMode(value)
       if (!mode) {
         throw new Error(`zcode has no collaboration mode for permission ${value}`)
       }

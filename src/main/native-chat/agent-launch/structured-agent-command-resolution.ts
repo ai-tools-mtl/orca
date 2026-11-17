@@ -1,7 +1,7 @@
 import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import { homedir } from 'node:os'
 import { delimiter, isAbsolute, resolve as resolvePath } from 'node:path'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   resolveCliCommand,
@@ -19,7 +19,7 @@ import {
 import {
   guestNativePathEnv,
   resolveGuestNativeProgram
-} from '../../ipc/wsl-guest-windows-drive-path'
+} from '../../wsl/filesystem/wsl-guest-windows-drive-path'
 
 export type StructuredAgentResolutionOperation = {
   deadline?: number
@@ -100,6 +100,9 @@ export function resolveStructuredAgentCommand(
     return { command: resolved, prefixArgs: [] }
   }
   const invocation = resolveOverride(agent, settings, options)
+  console.warn(
+    `[agent-command] override=${JSON.stringify(settings?.agentCmdOverrides?.[agent] ?? null)} resolved=${JSON.stringify(invocation)}`
+  )
   if (!invocation || !spawnableOn(options.platform ?? process.platform, invocation.command)) {
     throw new AgentSessionPreSpawnError(`the ${agent} Command setting is not a runnable program`, {
       reason: 'agentCommandNotRunnable'

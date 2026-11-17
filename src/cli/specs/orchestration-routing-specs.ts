@@ -1,4 +1,4 @@
-import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
 import type { CommandSpec } from '../discovery/command-spec'
 
 export const ORCHESTRATION_ROUTING_COMMAND_SPECS: CommandSpec[] = [
@@ -41,7 +41,7 @@ export const ORCHESTRATION_ROUTING_COMMAND_SPECS: CommandSpec[] = [
     ],
     identityFlagRoles: { from: 'caller' },
     notes: [
-      'Without --expected-turn the Dispatch\'s active turn at send time is targeted.',
+      "Without --expected-turn the Dispatch's active turn at send time is targeted.",
       'A refusal (turn ended, no active turn, not a structured session) is a recorded fact bound to the expected turn; the supplement is never re-targeted and no new turn is started.'
     ]
   },

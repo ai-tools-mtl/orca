@@ -168,3 +168,4 @@ ci-shards/
 .zcode/
 
 mobile/**/.gradle/
+tests/tools/optional-decision-routing-p0/.fake-codex-appserver-pinned.mjs

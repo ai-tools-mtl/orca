@@ -1,72 +1,75 @@
 import { describe, expect, it, vi } from 'vitest'
-import { steerExpectedClaudeTurn } from './claude-structured-expected-steer'
-import { sessionFor, userMessage } from './claude-structured-dispatch-test-support'
 import type { ClaudeSession } from './claude-structured-session-state'
 
-const SESSION = '819cf9f8-e43c-4ad7-b50f-54aa158a726a'
-const OPEN_TURN = 'turn-open-1'
+const sentPriority: (true | undefined)[] = []
 
-function runningSession(currentTurnId: string | null): { session: ClaudeSession; sent: unknown[] } {
-  const sent: unknown[] = []
-  const session = sessionFor(
-    vi.fn(async (message: Record<string, unknown>, beforeDispatch?: () => Promise<void>) => {
-      await beforeDispatch?.()
-      sent.push(structuredClone(message))
-    })
+vi.mock('./dispatch/claude-structured-dispatch', () => ({
+  dispatchClaudeTurn: vi.fn(
+    async (
+      _session: ClaudeSession,
+      _input: unknown,
+      beforeDispatch?: () => Promise<{ steers: boolean }>
+    ) => {
+      const forced = await beforeDispatch?.()
+      sentPriority.push(forced?.steers === true ? true : undefined)
+      return { state: 'admitted' }
+    }
   )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the strict steer reads only these translator facts.
-  session.translator = {
-    openTurnHasInputWork: true,
-    commandTurnId: null,
-    currentTurnId
-  } as unknown as ClaudeSession['translator']
-  return { session, sent }
-}
+}))
 
+const { steerExpectedClaudeTurn } = await import('./claude-structured-expected-steer')
+
+const OPEN_TURN = 'turn-open-1'
 const input = {
-  sessionId: SESSION,
+  sessionId: 'session-1',
   clientMessageId: 'client-1',
-  body: userMessage([{ type: 'text', text: 'change course' }]),
+  body: {
+    kind: 'message' as const,
+    role: 'user' as const,
+    blocks: [{ type: 'text' as const, text: 'change course' }]
+  },
   expectedTurnId: OPEN_TURN
 }
 
-describe('targeted delivery for Claude', () => {
-  it('steers the named open turn as a priority message', async () => {
-    const { session, sent } = runningSession(OPEN_TURN)
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the strict steer reads only these translator facts.
+function sessionWith(translator: {
+  openTurnHasInputWork: boolean
+  currentTurnId: string | null
+}): ClaudeSession {
+  return { translator } as unknown as ClaudeSession
+}
 
-    expect(await steerExpectedClaudeTurn(session, input)).toEqual({
-      status: 'delivered',
-      turnId: OPEN_TURN,
-      via: 'steer'
-    })
-    expect(sent).toEqual([expect.objectContaining({ priority: 'now' })])
+describe('targeted delivery for Claude', () => {
+  it('steers the named open turn by forcing the priority send', async () => {
+    sentPriority.length = 0
+    expect(
+      await steerExpectedClaudeTurn(
+        sessionWith({ openTurnHasInputWork: true, currentTurnId: OPEN_TURN }),
+        input
+      )
+    ).toEqual({ status: 'delivered', turnId: OPEN_TURN, via: 'steer' })
+    expect(sentPriority).toEqual([true])
   })
 
   it('refuses without writing when the running turn is not the named one', async () => {
-    const { session, sent } = runningSession('turn-other')
-
-    expect(await steerExpectedClaudeTurn(session, input)).toEqual({
-      status: 'refused',
-      kind: 'turn-not-active',
-      expectedTurnId: OPEN_TURN
-    })
-    expect(sent).toEqual([])
+    sentPriority.length = 0
+    expect(
+      await steerExpectedClaudeTurn(
+        sessionWith({ openTurnHasInputWork: true, currentTurnId: 'turn-other' }),
+        input
+      )
+    ).toEqual({ status: 'refused', kind: 'turn-not-active', expectedTurnId: OPEN_TURN })
+    expect(sentPriority).toEqual([])
   })
 
   it('refuses without writing when no turn carries input work', async () => {
-    const { session, sent } = runningSession(OPEN_TURN)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: narrow the flags under test.
-    session.translator = {
-      openTurnHasInputWork: false,
-      commandTurnId: null,
-      currentTurnId: OPEN_TURN
-    } as unknown as ClaudeSession['translator']
-
-    expect(await steerExpectedClaudeTurn(session, input)).toEqual({
-      status: 'refused',
-      kind: 'turn-not-active',
-      expectedTurnId: OPEN_TURN
-    })
-    expect(sent).toEqual([])
+    sentPriority.length = 0
+    expect(
+      await steerExpectedClaudeTurn(
+        sessionWith({ openTurnHasInputWork: false, currentTurnId: OPEN_TURN }),
+        input
+      )
+    ).toEqual({ status: 'refused', kind: 'turn-not-active', expectedTurnId: OPEN_TURN })
+    expect(sentPriority).toEqual([])
   })
 })

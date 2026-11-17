@@ -63,6 +63,23 @@ export function formatZcodeModelOption(model: { providerId: string; modelId: str
  */
 export const ZCODE_INHERITED_ENV_KEEP = new Set(['ZCODE_HOME', 'ZCODE_CREDENTIAL_SECRET'])
 
+/**
+ * The inherited desktop runtime keys a zcode child must not see. The managed spawn merges the
+ * process environment beneath `launch.env` and applies `envToDelete` after that merge, so keys
+ * the launch itself sets must stay off this list.
+ */
+export function zcodeDesktopEnvKeys(
+  environment: NodeJS.ProcessEnv,
+  launchEnv?: Readonly<Record<string, string>>
+): string[] {
+  return Object.keys(environment).filter(
+    (key) =>
+      key.startsWith('ZCODE_') &&
+      !ZCODE_INHERITED_ENV_KEEP.has(key) &&
+      (launchEnv === undefined || launchEnv[key] === undefined)
+  )
+}
+
 /** Derive resume identity from the durable record; zcode pins its own account home. */
 export function zcodeStructuredLaunchPart(
   deps: ZcodeStructuredLaunchPartDeps
@@ -90,9 +107,6 @@ export function zcodeStructuredLaunchPart(
             pathEnv: environment.PATH ?? environment.Path ?? null,
             ...(environment.HOME ? { homePath: environment.HOME } : {})
           })
-    // A refusal to be retried on the same binary is not a fallback; only the bundle's CLI
-    // sibling (which accepts host pushes the wrapper refuses) is one.
-    const cliFallback = null
     // The provider tables follow the runtime that actually boots: the bundle's own table for a
     // bundled launch, the CLI's for a CLI launch. The bundle's env (its app version) merges in
     // first so a bundled chat keeps the gateway's User-Agent even when a builtin table exists.
@@ -113,9 +127,7 @@ export function zcodeStructuredLaunchPart(
       }
     }
     const model = parseZcodeModelOption(record.options?.model ?? '')
-    const desktopEnvKeys = Object.keys(environment).filter(
-      (key) => key.startsWith('ZCODE_') && !ZCODE_INHERITED_ENV_KEEP.has(key)
-    )
+    const desktopEnvKeys = zcodeDesktopEnvKeys(environment)
     const env = { ...environment }
     for (const key of desktopEnvKeys) {
       delete env[key]
@@ -149,8 +161,7 @@ export function zcodeStructuredLaunchPart(
         ...(head && pendingAgentSessionRewindFork(record.rewind, head.handle.nativeId)
           ? { forkedFromKey: agentSessionProviderHandleKey(head.handle) }
           : {}),
-        providerEnv,
-        fallbackRuntime: cliFallback
+        providerEnv
       },
       env,
       // Clear the enclosing desktop's runtime env plus inherited scratch paths.

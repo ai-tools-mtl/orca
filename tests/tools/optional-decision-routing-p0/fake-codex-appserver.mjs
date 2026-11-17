@@ -15,6 +15,11 @@
 
 import { spawn } from 'node:child_process'
 import { appendFileSync, existsSync, readFileSync } from 'node:fs'
+
+// Unconditional startup marker: proves this process ran, independent of trace env.
+try {
+  appendFileSync('/tmp/p0-fake-started.log', `${Date.now()} argv=${process.argv.join(' ')}\n`)
+} catch {}
 import { createInterface } from 'node:readline'
 
 const trace = process.env.FAKE_CODEX_TRACE
@@ -34,6 +39,7 @@ let nextTurn = 0
 let openTurn = null
 let workerDoneSent = false
 
+trace(`started argv=${process.argv.join(' ')} cwd=${process.cwd()} ppid=${process.ppid}`)
 const write = (payload) => process.stdout.write(`${JSON.stringify(payload)}\n`)
 const respond = (id, result) => write({ id, result })
 const respondError = (id, code, message) => write({ id, error: { code, message } })

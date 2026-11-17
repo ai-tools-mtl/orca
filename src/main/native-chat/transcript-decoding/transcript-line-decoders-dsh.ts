@@ -2,7 +2,7 @@ import type {
   NativeChatBlock,
   NativeChatMessage
 } from '../../../shared/native-chat/native-chat-types'
-import type { AgentSessionTokenUsage } from '../../../shared/agent-session/agent-session-context-usage'
+import type { AgentSessionTokenUsage } from '../../../shared/agent-session/conversation-context/agent-session-context-usage'
 import { asRecord } from '../../ai-vault/parsing/session-record-fields'
 import { extractString } from '../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../ai-vault/parsing/session-json-object'

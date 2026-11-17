@@ -2,7 +2,7 @@ import type { StructuredMessageSteeringInputs } from '../../../../shared/agent-s
 import type {
   AgentSessionMcpOperation,
   AgentSessionMcpResult
-} from '../../../../shared/agent-session/agent-session-mcp'
+} from '../../../../shared/agent-session/options/protocol/agent-session-mcp'
 import type { PrepareStructuredRewind } from './structured-agent-session-rewind-contract'
 import type { ProviderProcessCloseOptions } from '../../../provider-process/provider-process-close'
 import type { NativeCopyCoverage } from '../../agent-session-journal/context-epochs/journal-history-origin'
@@ -19,12 +19,7 @@ import type {
 import type { AgentSessionRewindReason } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind-reasons'
 // The host owns journal/lease authority; adapters report delivery uncertainty without guessing.
 
-import type {
-  AgentJournalAnsweredTurnIdentity,
-  AgentJournalMessageItem,
-  AgentJournalTurnItem
-} from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type {
@@ -34,7 +29,7 @@ import type {
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionAtRestCommands } from '../options/structured-agent-session-at-rest-commands'
 import type { AgentSessionSlashCommand } from '../../../../shared/agent-session/agent-session-wire'
-import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session/agent-session-thread-goal-wire'
+import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session/thread-goals/agent-session-thread-goal-wire'
 import type { SubmissionRejectionFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type {
   AgentSessionExpectedSteerOutcome,
@@ -48,9 +43,8 @@ import type {
 /** `unknown` (no timely, correlated answer) skips this idle stop and asks again later. */
 export type AgentSessionIdleConfirmation = 'idle' | 'busy' | 'unknown'
 
-import type { AgentJournalDispatchRejection } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
-import type { AgentSessionPromptResponse } from '../../../../shared/agent-session/agent-session-question-answer'
+import type { AgentSessionPromptResponse } from '../../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import type {
   StructuredAgentSessionStartupAttempt,
   StructuredAgentSessionAcquisitionReceipt as AcquisitionReceipt
@@ -78,39 +72,17 @@ export type AgentSessionAcquisition = {
   accountHome?: AgentSessionAccountHome
 }
 
-/** The host creates the command’s running turn; the child translator ends it and writes its result. */
-export type StructuredAgentSessionCommandRun = {
-  clientMessageId: string
-  turnId: string
-  identity: AgentJournalItemIdentity
-  resultIdentity: AgentJournalItemIdentity
-  running: AgentJournalTurnItem
-  /** Only agents declaring `compactInstructions` receive this. */
-  instructions?: string
-}
-
-/** Commands may answer in place without echoing provider items. */
-export type AgentSessionCommandAdmission =
-  | AgentSessionDispatchOutcome
-  | { state: 'accepted'; providerIdentity: null }
-
-/** Execution evidence only, never picker defaults; steers report their running turn’s choices. */
-export type AgentSessionRanOptionsEvidence = { ranOptions?: Readonly<Record<string, string>> }
-
-export type AgentSessionDispatchOutcome =
-  | ({
-      state: 'accepted'
-      providerIdentity: AgentJournalItemIdentity
-    } & AgentSessionRanOptionsEvidence)
-  /** Transport admission stays pending until provider acknowledgement; elapsed time never proves unknown delivery. */
-  | ({ state: 'admitted' } & AgentSessionRanOptionsEvidence)
-  /** Generate rejection words with agentSessionFailureWords; answeredInTurn identifies an already-ended answering turn. */
-  | ({
-      state: 'rejected'
-      answeredInTurn?: AgentJournalAnsweredTurnIdentity
-    } & AgentJournalDispatchRejection)
-  /** Unsettled calls never authorize automatic resend. */
-  | { state: 'unknown'; reason: string }
+import type {
+  StructuredAgentSessionCommandRun,
+  AgentSessionCommandAdmission,
+  AgentSessionDispatchOutcome
+} from './structured-agent-session-dispatch-outcome'
+export type {
+  StructuredAgentSessionCommandRun,
+  AgentSessionCommandAdmission,
+  AgentSessionRanOptionsEvidence,
+  AgentSessionDispatchOutcome
+} from './structured-agent-session-dispatch-outcome'
 
 export type StructuredAgentSessionEndedEvent = {
   type: 'ended'
@@ -190,6 +162,13 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     record: AgentSessionRecord,
     operation: AgentSessionMcpOperation
   ): Promise<AgentSessionMcpResult>
+  /** Records the person's approval of one action the agent's automatic review denied; the retry is
+   *  still reviewed. False: no running agent to record it. */
+  approveAutoReviewDenial?(input: {
+    sessionId: string
+    threadId: string
+    event: Record<string, unknown>
+  }): Promise<boolean>
   open: StructuredAgentSessionProviderOpen
   supportsCreate?(location: AgentSessionExecutionLocation, agent: string): boolean
   /** Keep runtime/location support in adapter data for remote enablement. */

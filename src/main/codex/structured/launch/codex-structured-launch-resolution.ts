@@ -110,7 +110,16 @@ async function readCodexStructuredInvocation(
   const invocation = deps.resolveCommand
     ? deps.resolveCommand(options)
     : { command: resolveCodexCommand(options), prefixArgs: [] }
+  console.warn(
+    `[codex-resolve] command=${invocation.command} prefixArgs=${JSON.stringify(invocation.prefixArgs)} override=${String(settingsOverrideForDiagnostics)}`
+  )
   return { ...invocation, environment }
+}
+
+let settingsOverrideForDiagnostics: string | null = null
+/** Test/diagnostic hook: the raw agentCmdOverrides value the host last read. */
+export function setCodexOverrideForDiagnostics(value: string | null): void {
+  settingsOverrideForDiagnostics = value
 }
 
 /** The host compares this with the selection to move an idle chat to a newly picked account. */

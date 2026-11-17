@@ -1,6 +1,6 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { resolveAbsoluteDirOverride } from './absolute-dir-override'
+import { resolveAbsoluteDirOverride } from './file-access/absolute-dir-override'
 
 export type DshSessionPathEnv =
   | NodeJS.ProcessEnv

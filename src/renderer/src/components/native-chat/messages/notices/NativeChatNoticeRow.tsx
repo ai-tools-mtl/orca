@@ -1,7 +1,7 @@
 import {
   CLAUDE_MODEL_FALLBACK_COPY,
   claudeModelFallbackLabels
-} from '../../../../../../shared/native-chat/claude-model-fallback'
+} from '../../../../../../shared/native-chat/transcript/notices/claude-model-fallback'
 import { NativeChatUsageLimitAutoContinue } from '../../usage/NativeChatUsageLimitAutoContinue'
 import { NativeChatUsageLimitActions } from '../../usage/NativeChatUsageLimitActions'
 import { agentSessionGoalControlWords } from '../../session/goals/agent-session-goal-control-words'
@@ -9,8 +9,9 @@ import { ArrowLeftRight, AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useSyncExternalStore } from 'react'
 import { NativeChatForkedFromRow } from './NativeChatForkedFromRow'
+import { NativeChatAutoReviewDenialRow } from './NativeChatAutoReviewDenialRow'
 import { NativeChatPullRequestEventLine } from './NativeChatPullRequestEventLine'
-import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../../../../shared/native-chat/native-chat-pull-request-event'
+import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../../../../shared/native-chat/transcript/notices/native-chat-pull-request-event'
 import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown'
 import { NativeChatCodeBlock } from '../../markdown/code/NativeChatCodeBlock'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -26,11 +27,12 @@ import {
   NATIVE_CHAT_NOTICE_COPY,
   nativeChatNoticeLook,
   type NativeChatNoticeTone
-} from '../../../../../../shared/native-chat/native-chat-notice'
+} from '../../../../../../shared/native-chat/transcript/notices/native-chat-notice'
 import { useNativeChatOrcaStopView } from './native-chat-orca-stop-context'
 import { NativeChatInterruptedContinueButton } from '../../usage/NativeChatInterruptedContinue'
-import { nativeChatOrcaStopRowText } from '../../../../../../shared/native-chat/native-chat-orca-stop-words'
+import { nativeChatOrcaStopRowText } from '../../../../../../shared/native-chat/transcript/continuation/native-chat-orca-stop-words'
 import { sayNativeChatOrcaStopTranslated } from './native-chat-orca-stop-words-text'
+import { agentSessionRestartNoteText } from './agent-session-restart-note-text'
 import {
   NativeChatDetailsDisclosure,
   ProviderFrameRow
@@ -132,7 +134,8 @@ export function NativeChatNoticeRow({
     return (
       <p className="flex min-w-0 items-center justify-center gap-1.5 select-text text-xs text-chat-foreground-faint">
         <ArrowLeftRight className="size-3.5 shrink-0" aria-hidden="true" />
-        <span className="whitespace-normal">
+        {/* Not time-critical: announce politely, once, without stealing the reader's place. */}
+        <span role="status" aria-live="polite" className="whitespace-normal">
           {t(
             'components.native-chat.notices.modelSwitched',
             'Model switched: {{from}} → {{to}}',
@@ -172,6 +175,15 @@ export function NativeChatNoticeRow({
           />
         </CardContent>
       </Card>
+    )
+  }
+  if (look.kind === 'auto-review-denied') {
+    return (
+      <NativeChatAutoReviewDenialRow
+        denial={look.denial}
+        agent={agentName ?? look.agent}
+        itemId={messageId}
+      />
     )
   }
   if (look.kind === 'settled-permission') {
@@ -283,7 +295,7 @@ export function NativeChatNoticeRow({
               { agentName, wslDistro },
               sayAgentSessionFailureTranslated
             )
-          : agentSessionGoalControlWords(block.text)
+          : (agentSessionRestartNoteText(block.text, t) ?? agentSessionGoalControlWords(block.text))
   const failureDetail = agentSessionFailureDetailText(failure)
   const detail = failureDetail?.trim() !== text.trim() ? failureDetail : undefined
   const tone = named ? 'notice' : look.kind === 'line' ? look.tone : null

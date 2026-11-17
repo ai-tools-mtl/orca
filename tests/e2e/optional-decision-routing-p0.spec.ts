@@ -65,6 +65,17 @@ type SupplementReceipt = {
 const results: { scenario: string; condition: string; verdict: 'PASS' | 'FAIL'; evidence?: unknown }[] = []
 const appLog: string[] = []
 
+import { appendFileSync } from 'node:fs'
+let debugFile: string | null = null
+// oxlint-disable-next-line no-console -- mirrored for the streamed log when it survives.
+function debug(line: string): void {
+  // oxlint-disable-next-line no-console
+  console.log(`p0: ${line}`)
+  if (debugFile) {
+    appendFileSync(debugFile, `${new Date().toISOString()} ${line}\n`)
+  }
+}
+
 function record(scenario: string, condition: string, verdict: 'PASS' | 'FAIL', evidence?: unknown): void {
   results.push({ scenario, condition, verdict, evidence })
   // oxlint-disable-next-line no-console -- the driver surfaces per-condition verdicts on the console.
@@ -80,10 +91,16 @@ function toRoutingItems(page: HistoryPage): RoutingConversationItem[] {
 }
 
 function routingAgentOverride(): string | null {
-  // The fake stand-in replaces the codex command wholesale; 'codex' keeps the real CLI.
-  return process.env.P0_ROUTING_AGENT === 'codex'
-    ? null
-    : `node ${path.join(process.cwd(), 'tests/tools/optional-decision-routing-p0/fake-codex-appserver.mjs')}`
+  // The fake stand-in replaces the codex command wholesale. The worker child's PATH may not carry
+  // node, so the override points at a copy whose shebang is this driver's absolute node — one
+  // process, no shell/node indirection, no env dependence.
+  const entry = path.join(process.cwd(), 'tests/tools/optional-decision-routing-p0/fake-codex-appserver.mjs')
+  const source = readFileSync(entry, 'utf8')
+  const pinned = source.replace(/^#!.*$/m, `#!${process.execPath}`)
+  const copy = path.join(process.cwd(), 'tests/tools/optional-decision-routing-p0/.fake-codex-appserver-pinned.mjs')
+  writeFileSync(copy, pinned)
+  chmodSync(copy, 0o755)
+  return process.env.P0_ROUTING_AGENT === 'codex' ? null : copy
 }
 
 const toolCalls = (items: RoutingConversationItem[]) =>
@@ -129,9 +146,10 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
   mkdirSync(shims, { recursive: true })
   const fakeEntry = path.join(process.cwd(), 'tests/tools/optional-decision-routing-p0/fake-codex-appserver.mjs')
   const cliEntry = path.join(process.cwd(), 'out/cli/index.js')
+  const shimLog = `${shims}/codex-shim.log`
   writeFileSync(
     path.join(shims, 'codex'),
-    `#!/bin/bash\nif [ "$1" = "app-server" ] && [ "$P0_ROUTING_AGENT" != "codex" ]; then\n  exec node ${JSON.stringify(fakeEntry)}\nfi\nexec ${process.env.P0_REAL_CODEX ?? 'codex'} "$@"\n`
+    `#!/bin/bash\n{ echo "argv=$* node=$(command -v node) nodeV=$(node --version 2>&1) NODE_OPTIONS=$NODE_OPTIONS ELECTRON_RUN_AS_NODE=$ELECTRON_RUN_AS_NODE pwd=$PWD"; } >> ${JSON.stringify(shimLog)} 2>&1\nif [ "$1" = "app-server" ] && [ "$P0_ROUTING_AGENT" != "codex" ]; then\n  exec ${JSON.stringify(process.execPath)} ${JSON.stringify(fakeEntry)} 2>> ${JSON.stringify(shimLog)}\nfi\nexec ${process.env.P0_REAL_CODEX ?? 'codex'} "$@"\n`
   )
   writeFileSync(
     path.join(shims, 'orca'),
@@ -140,6 +158,7 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
   chmodSync(path.join(shims, 'codex'), 0o755)
   chmodSync(path.join(shims, 'orca'), 0o755)
 
+  debugFile = path.join(testInfo.outputDir, 'p0-debug.log')
   const session = createRestartSession(testInfo, {
     PATH: `${shims}${path.delimiter}${process.env.PATH ?? ''}`,
     FAKE_CODEX_TRACE: path.join(testInfo.outputDir, 'fake-codex-trace.log')
@@ -205,9 +224,8 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
     const launchSettings = await client.call<{ settings: Record<string, unknown> }>(
       'settings.getAgentLaunch'
     )
-    // oxlint-disable-next-line no-console
-    console.log(
-      `p0: agent launch settings after write: ${JSON.stringify(launchSettings.result.settings).slice(0, 500)}`
+    debug(
+      `agent launch settings after write: ${JSON.stringify(launchSettings.result.settings).slice(0, 500)}`
     )
 
     const run = await client.call<{ run: { id: string } }>('orchestration.runCreate', {
@@ -285,12 +303,14 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
         timeoutMs: 180_000,
         from
       })
-      // oxlint-disable-next-line no-console
-      console.log(`p0: worker-start receipt for ${taskId}: ${JSON.stringify(started.result)}`)
+      debug(`worker-start receipt for ${taskId}: ${JSON.stringify(started.result)}`)
+      debug(
+        `app stderr tail: ${appLog.join('').split('\n').slice(-60).join(' || ')}`
+      )
       expect(started.result.dispatchId, `worker-start for ${taskId} returned a dispatch`).toBeTruthy()
       expect(
         started.result.state,
-        `worker-start for ${taskId} reached ready (receipt: ${JSON.stringify(started.result)})`
+        `worker-start for ${taskId} reached ready (receipt: ${JSON.stringify(started.result)}; app log tail: ${appLog.join('').split('\n').filter((line) => /codex|spawn|error|fake/i.test(line)).slice(-15).join(' | ')})`
       ).toBe('ready')
       return started.result.dispatchId
     }
