@@ -13,21 +13,21 @@ journal 证据 + routing 账本 + 编排结算/续接/回执全链路。`P0_ROUT
 
 ## 逐条验收（方案 §9 P0）
 
-| # | 条件 | 结果 | 关键证据 |
-| --- | --- | --- | --- |
-| S1.1 | 放行前：门命令已发起且未发起任何文件读取 | PASS | journal 门命令 item sequence=7，无 read item |
-| S1.2 | 补充收到针对原轮次的投递回执 | PASS | `{outcome:"delivered", expectedTurnId:"turn-1", turnId:"turn-1"}`，与原活动轮一致 |
+| #    | 条件                                                  | 结果 | 关键证据                                                                                               |
+| ---- | ----------------------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------ |
+| S1.1 | 放行前：门命令已发起且未发起任何文件读取              | PASS | journal 门命令 item sequence=7，无 read item                                                           |
+| S1.2 | 补充收到针对原轮次的投递回执                          | PASS | `{outcome:"delivered", expectedTurnId:"turn-1", turnId:"turn-1"}`，与原活动轮一致                      |
 | S1.3 | 首个新动作=读 new.txt，发起于放行后，全程未读 old.txt | PASS | 锚点=门命令（sequence 7），首个新动作 `read` sequence=8 路径 `<worktree>/new.txt`，全程无 old.txt 读取 |
-| S1.4 | 任务结算（worker_done 报告新标记） | PASS | `status:"completed"` |
-| S2.1 | 原轮开启并结算（轮次 ID 取自执行记录） | PASS | journal turn item `turn-1`，任务 completed |
-| S2.2 | 会话空闲：取得绑定原轮的明确拒收 | PASS | `{outcome:"refused", expectedTurnId:"turn-1"}`（turn-not-active，不触 provider） |
-| S2.3 | 另有活动轮：仍拒收并绑定原轮，未改投其他轮 | PASS | 同上，第二新轮 `turn-1'` 未收到补充 |
-| S2.4 | 两次拒收后：会话无补充文本、无因它新开的轮次 | PASS | history 全文无补充文本 |
-| S3.1 | 第一项运行中即提交另一项，两项各有 Dispatch | PASS | ctx_a / ctx_b 并行 ready |
-| S3.2 | 两项结果分别可取回 | PASS | statusA/B 均 completed |
-| S3.3 | 结算后 follow-up 归入同一谱系 | PASS | follow-up send 回执产生新 Dispatch，其 worker-show 指回原 Dispatch（follow_up_of） |
-| S4.1 | 原 request ID 重启后可对账 | PASS | `orchestration.requestShow --request <驱动自选 UUID>` 返回受理状态 |
-| S4.2 | 原 Dispatch 重启后仍可查证，不另起 Worker | PASS | 重启后 `worker-show --dispatch <原ID>` 沿用持久行 |
+| S1.4 | 任务结算（worker_done 报告新标记）                    | PASS | `status:"completed"`                                                                                   |
+| S2.1 | 原轮开启并结算（轮次 ID 取自执行记录）                | PASS | journal turn item `turn-1`，任务 completed                                                             |
+| S2.2 | 会话空闲：取得绑定原轮的明确拒收                      | PASS | `{outcome:"refused", expectedTurnId:"turn-1"}`（turn-not-active，不触 provider）                       |
+| S2.3 | 另有活动轮：仍拒收并绑定原轮，未改投其他轮            | PASS | 同上，第二新轮 `turn-1'` 未收到补充                                                                    |
+| S2.4 | 两次拒收后：会话无补充文本、无因它新开的轮次          | PASS | history 全文无补充文本                                                                                 |
+| S3.1 | 第一项运行中即提交另一项，两项各有 Dispatch           | PASS | ctx_a / ctx_b 并行 ready                                                                               |
+| S3.2 | 两项结果分别可取回                                    | PASS | statusA/B 均 completed                                                                                 |
+| S3.3 | 结算后 follow-up 归入同一谱系                         | PASS | follow-up send 回执产生新 Dispatch，其 worker-show 指回原 Dispatch（follow_up_of）                     |
+| S4.1 | 原 request ID 重启后可对账                            | PASS | `orchestration.requestShow --request <驱动自选 UUID>` 返回受理状态                                     |
+| S4.2 | 原 Dispatch 重启后仍可查证，不另起 Worker             | PASS | 重启后 `worker-show --dispatch <原ID>` 沿用持久行                                                      |
 
 运行时证据（每轮留档）：`test-results/optional-decision-routing-*/p0-evidence.json`、
 `fake-codex-trace.log`（Orca↔替身的完整线协议收发）。
@@ -48,12 +48,33 @@ journal 证据 + routing 账本 + 编排结算/续接/回执全链路。`P0_ROUT
   RPC catalog 已再生。修复过程中补齐：`StructuredAgentSessionAdapterRouter.steerExpectedTurn`
   转发（原 Router 不透传新可选方法 → unsupported）。
 
+## zcode 组合（2026-11-18 合并 origin/feature/zcode-chat 后）
+
+- zcode 结构化 adapter 随合并进入本线（src/main/zcode/structured/**，已注册进
+  STRUCTURED_AGENT_RUNTIME_CATALOG）。
+- `steerExpectedZcodeTurn`（session-lifecycle/zcode-structured-session-steer.ts）：
+  zcode 后端自带 steer 语义——`session/send` 在轮运行期间被后端排入 steer 队列并随
+  `turn.steerDrained` 注入当前轮；严格入口在 `lane.openTurnId === expectedTurnId` 时才发送，
+  否则 turn-not-active 拒绝（协议无 expected-turn 字段，检查→发送间隙的轮切换由
+  routing 账本的逐轮动作归因事后捕捉）。单测 3/3。
+- E2E 跑通 zcode 组合需本机 zcode CLI 可用（`which zcode` ✓ 存在），P0 spec 的
+  P0_ROUTING_AGENT 参数化待扩展到 zcode（机制与 codex shim 相同：shim 掉 zcode 命令）。
+
 ## 真实 codex 组合的限制（诚实记录）
 
 `P0_ROUTING_AGENT=codex`（真实认证 CLI）多轮尝试均被上游配额挡住：
 worker rollout `task_complete.error = usage_limit_exceeded`（"try again at 6:37 PM" 未如期重置，
 21:23 仍复现）。轮次打开后模型调用即被拒，门命令无法发起——**路径本身未被证伪**，
 该组合待额度恢复后复跑：`P0_ROUTING_AGENT=codex SKIP_BUILD=1 P0_ROUTING_RUN=1 node tests/tools/optional-decision-routing-p0/run.mjs`。
+
+## 合并后环境回归（P0 E2E 暂红，源码与单测全绿）
+
+合并 origin/feature/zcode-chat（基于更新的 main）后，worker 启动环境解析变化：
+`agentCmdOverrides`/`agentDefaultEnv` 注入不再到达 worker 子进程 spawn（诊断证据：
+p0-debug.log + codex-shim.log——13228 次 --version 探测走 shim、0 次 app-server、
+hook-trust 写子 stdin EPIPE、`codex app-server started without a pid`）。P0 的 13 条
+验收在合并前的树上全绿；恢复 E2E 需按合并后的 worker 启动链路重新定位命令覆盖注入点
+（fake 本体已验证可执行：pinned shebang + 直跑 initialize 正常）。
 
 ## 踩坑（实施记录）
 

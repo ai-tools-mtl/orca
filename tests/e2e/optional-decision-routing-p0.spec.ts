@@ -26,11 +26,7 @@ import { RuntimeClient } from '../../src/cli/runtime/client'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { createSeededTestRepo, isValidGitRepo } from './helpers/seeded-test-repo'
 import { TEST_REPO_PATH_FILE } from './global-setup'
-import {
-  ensureTerminalVisible,
-  waitForActiveWorktree,
-  waitForSessionReady
-} from './helpers/store'
+import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { waitForActivePaneHookDescriptor, waitForActivePanePtyId } from './helpers/terminal'
 import {
   findSupplementEchoSequence,
@@ -62,7 +58,12 @@ type SupplementReceipt = {
   sessionId?: string
 }
 
-const results: { scenario: string; condition: string; verdict: 'PASS' | 'FAIL'; evidence?: unknown }[] = []
+const results: {
+  scenario: string
+  condition: string
+  verdict: 'PASS' | 'FAIL'
+  evidence?: unknown
+}[] = []
 const appLog: string[] = []
 
 import { appendFileSync } from 'node:fs'
@@ -76,7 +77,12 @@ function debug(line: string): void {
   }
 }
 
-function record(scenario: string, condition: string, verdict: 'PASS' | 'FAIL', evidence?: unknown): void {
+function record(
+  scenario: string,
+  condition: string,
+  verdict: 'PASS' | 'FAIL',
+  evidence?: unknown
+): void {
   results.push({ scenario, condition, verdict, evidence })
   // oxlint-disable-next-line no-console -- the driver surfaces per-condition verdicts on the console.
   console.log(`  [${verdict}] ${scenario} — ${condition}`)
@@ -87,17 +93,26 @@ function record(scenario: string, condition: string, verdict: 'PASS' | 'FAIL', e
 function toRoutingItems(page: HistoryPage): RoutingConversationItem[] {
   return (page.page?.items ?? page.items ?? [])
     .filter((item) => typeof item.sequence === 'number' && item.body !== undefined)
-    .map((item) => ({ sequence: item.sequence as number, body: item.body as RoutingConversationItem['body'] }))
+    .map((item) => ({
+      sequence: item.sequence as number,
+      body: item.body as RoutingConversationItem['body']
+    }))
 }
 
 function routingAgentOverride(): string | null {
   // The fake stand-in replaces the codex command wholesale. The worker child's PATH may not carry
   // node, so the override points at a copy whose shebang is this driver's absolute node — one
   // process, no shell/node indirection, no env dependence.
-  const entry = path.join(process.cwd(), 'tests/tools/optional-decision-routing-p0/fake-codex-appserver.mjs')
+  const entry = path.join(
+    process.cwd(),
+    'tests/tools/optional-decision-routing-p0/fake-codex-appserver.mjs'
+  )
   const source = readFileSync(entry, 'utf8')
   const pinned = source.replace(/^#!.*$/m, `#!${process.execPath}`)
-  const copy = path.join(process.cwd(), 'tests/tools/optional-decision-routing-p0/.fake-codex-appserver-pinned.mjs')
+  const copy = path.join(
+    process.cwd(),
+    'tests/tools/optional-decision-routing-p0/.fake-codex-appserver-pinned.mjs'
+  )
   writeFileSync(copy, pinned)
   chmodSync(copy, 0o755)
   return process.env.P0_ROUTING_AGENT === 'codex' ? null : copy
@@ -112,11 +127,8 @@ const userText = (item: RoutingConversationItem) =>
     .join('')
     .trim()
 
-test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-up lineage, restart re-query', async (
-  // oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
-  {},
-  testInfo
-) => {
+test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-up lineage, restart re-query', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
+{}, testInfo) => {
   test.setTimeout(20 * 60_000)
   // 'fake' runs a protocol-faithful codex app-server stand-in (no model, no quota);
   // 'codex' runs the real authenticated CLI (opt-in quota permitting).
@@ -132,19 +144,28 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
   writeFileSync(path.join(project, 'old.txt'), `${oldMarker}\n`)
   writeFileSync(path.join(project, 'new.txt'), `${newMarker}\n`)
   const gateWaitScript = path.join(project, 'gate-wait.sh')
-  writeFileSync(gateWaitScript, '#!/bin/bash\nwhile [ ! -f "$1" ]; do sleep 0.2; done\necho released\n')
+  writeFileSync(
+    gateWaitScript,
+    '#!/bin/bash\nwhile [ ! -f "$1" ]; do sleep 0.2; done\necho released\n'
+  )
   chmodSync(gateWaitScript, 0o755)
   git(['add', '.'])
   git(['commit', '-m', 'p0 fixture files'])
   // The release gate lives outside every worktree: the worker only waits on an absolute path.
-  const gateFile = path.join(mkdtempSync(path.join(os.tmpdir(), 'p0-routing-gate-')), 'gate-release')
+  const gateFile = path.join(
+    mkdtempSync(path.join(os.tmpdir(), 'p0-routing-gate-')),
+    'gate-release'
+  )
 
   // PATH shims own the agent swap: `codex app-server` resolves to the protocol-faithful stand-in
   // (P0_ROUTING_AGENT=fake, default) or passes through to the real CLI (P0_ROUTING_AGENT=codex);
   // `orca` reaches the served profile through the app's inherited isolated HOME.
   const shims = path.join(testInfo.outputDir, 'p0-shims')
   mkdirSync(shims, { recursive: true })
-  const fakeEntry = path.join(process.cwd(), 'tests/tools/optional-decision-routing-p0/fake-codex-appserver.mjs')
+  const fakeEntry = path.join(
+    process.cwd(),
+    'tests/tools/optional-decision-routing-p0/fake-codex-appserver.mjs'
+  )
   const cliEntry = path.join(process.cwd(), 'out/cli/index.js')
   const shimLog = `${shims}/codex-shim.log`
   writeFileSync(
@@ -190,14 +211,23 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
     }
     // oxlint-disable-next-line no-console
     console.log(
-      `p0: codex home link=${(() => { try { return readlinkSync(codexHome) } catch { return 'none' } })()} authJson=${existsSync(path.join(codexHome, 'auth.json'))}`
+      `p0: codex home link=${(() => {
+        try {
+          return readlinkSync(codexHome)
+        } catch {
+          return 'none'
+        }
+      })()} authJson=${existsSync(path.join(codexHome, 'auth.json'))}`
     )
 
     const client = new RuntimeClient(session.userDataDir, 60_000, null, null)
     const coordinatorPane = await waitForActivePaneHookDescriptor(first.page)
-    const coordinator = await client.call<{ terminal: { handle: string } }>('terminal.resolvePane', {
-      paneKey: coordinatorPane.paneKey
-    })
+    const coordinator = await client.call<{ terminal: { handle: string } }>(
+      'terminal.resolvePane',
+      {
+        paneKey: coordinatorPane.paneKey
+      }
+    )
     const from = coordinator.result.terminal.handle
 
     // Structured workers need the native-chat default surface and hands-off permissions. The
@@ -237,16 +267,25 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
     console.log(`p0: run ${runId}`)
 
     const history = async (sessionId: string) => {
-      const page = await client.call<HistoryPage>('agentSession.history', { sessionId, direction: 'tail' })
+      const page = await client.call<HistoryPage>('agentSession.history', {
+        sessionId,
+        direction: 'tail'
+      })
       return toRoutingItems(page.result)
     }
-    const poll = async <T>(label: string, timeoutMs: number, fn: () => Promise<T | null>): Promise<T> => {
+    const poll = async <T>(
+      label: string,
+      timeoutMs: number,
+      fn: () => Promise<T | null>
+    ): Promise<T> => {
       const deadline = Date.now() + timeoutMs
       let lastError: unknown
       while (Date.now() < deadline) {
         try {
           const value = await fn()
-          if (value !== null) {return value}
+          if (value !== null) {
+            return value
+          }
         } catch (error) {
           lastError = error
         }
@@ -277,7 +316,10 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
           from
         }
       )
-      return { inputId: input.result.input.input_id, subActionId: decision.result.subActions[0]!.sub_action_id }
+      return {
+        inputId: input.result.input.input_id,
+        subActionId: decision.result.subActions[0]!.sub_action_id
+      }
     }
     const createTask = async (title: string, spec: string) => {
       const task = await client.call<{ task: { id: string } }>('orchestration.taskCreate', {
@@ -304,13 +346,19 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
         from
       })
       debug(`worker-start receipt for ${taskId}: ${JSON.stringify(started.result)}`)
-      debug(
-        `app stderr tail: ${appLog.join('').split('\n').slice(-60).join(' || ')}`
-      )
-      expect(started.result.dispatchId, `worker-start for ${taskId} returned a dispatch`).toBeTruthy()
+      debug(`app stderr tail: ${appLog.join('').split('\n').slice(-60).join(' || ')}`)
+      expect(
+        started.result.dispatchId,
+        `worker-start for ${taskId} returned a dispatch`
+      ).toBeTruthy()
       expect(
         started.result.state,
-        `worker-start for ${taskId} reached ready (receipt: ${JSON.stringify(started.result)}; app log tail: ${appLog.join('').split('\n').filter((line) => /codex|spawn|error|fake/i.test(line)).slice(-15).join(' | ')})`
+        `worker-start for ${taskId} reached ready (receipt: ${JSON.stringify(started.result)}; app log tail: ${appLog
+          .join('')
+          .split('\n')
+          .filter((line) => /codex|spawn|error|fake/i.test(line))
+          .slice(-15)
+          .join(' | ')})`
       ).toBe('ready')
       return started.result.dispatchId
     }
@@ -338,11 +386,15 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
       )
       await registerInput('先运行放行门命令，然后只读 old.txt 并报告其中标记。', taskId)
       const dispatchId = await startWorker(taskId)
-      const sessionId = await poll('S1 structured session', 300_000, async () =>
-        (await targetOf(dispatchId)).sessionId
+      const sessionId = await poll(
+        'S1 structured session',
+        300_000,
+        async () => (await targetOf(dispatchId)).sessionId
       )
-      const originalTurn = await poll('S1 first turn active', 300_000, async () =>
-        (await targetOf(dispatchId)).activeTurnId
+      const originalTurn = await poll(
+        'S1 first turn active',
+        300_000,
+        async () => (await targetOf(dispatchId)).activeTurnId
       )
 
       let gateSeen
@@ -402,12 +454,17 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
       ).result
       // oxlint-disable-next-line no-console
       console.log(`p0: S1 supplement receipt: ${JSON.stringify(receipt)}`)
-      record('S1', '补充收到针对原轮次的投递回执', receipt.outcome === 'delivered' ? 'PASS' : 'FAIL', {
-        outcome: receipt.outcome,
-        expectedTurnId: receipt.expectedTurnId,
-        turnId: receipt.turnId,
-        originalTurn
-      })
+      record(
+        'S1',
+        '补充收到针对原轮次的投递回执',
+        receipt.outcome === 'delivered' ? 'PASS' : 'FAIL',
+        {
+          outcome: receipt.outcome,
+          expectedTurnId: receipt.expectedTurnId,
+          turnId: receipt.turnId,
+          originalTurn
+        }
+      )
 
       writeFileSync(gateFile, 'go')
       // oxlint-disable-next-line no-console
@@ -426,9 +483,15 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
         expect: { actionName: 'read', inputPath: path.join(workerCwd, 'new.txt') },
         forbiddenPaths: [path.join(workerCwd, 'old.txt')]
       })
-      record('S1', '首个新动作=读 new.txt 且发起于放行后，全程未读 old.txt',
-        verdict.verdict === 'complied' ? 'PASS' : 'FAIL', { anchor: echoSequence === null ? 'gate-item' : 'echo', anchorSequence: anchor, ...verdict })
-      record('S1', '任务结算（worker_done 报告新标记）', status === 'completed' ? 'PASS' : 'FAIL', { status })
+      record(
+        'S1',
+        '首个新动作=读 new.txt 且发起于放行后，全程未读 old.txt',
+        verdict.verdict === 'complied' ? 'PASS' : 'FAIL',
+        { anchor: echoSequence === null ? 'gate-item' : 'echo', anchorSequence: anchor, ...verdict }
+      )
+      record('S1', '任务结算（worker_done 报告新标记）', status === 'completed' ? 'PASS' : 'FAIL', {
+        status
+      })
     }
 
     // ---------- S2: 原轮结束后拒收 ----------
@@ -439,8 +502,10 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
       )
       await registerInput('只读 old.txt 并报告其中标记。', taskId)
       const dispatchId = await startWorker(taskId)
-      const sessionId = await poll('S2 structured session', 300_000, async () =>
-        (await targetOf(dispatchId)).sessionId
+      const sessionId = await poll(
+        'S2 structured session',
+        300_000,
+        async () => (await targetOf(dispatchId)).sessionId
       )
       // The plain task completes in seconds; discover its turn from the journal after settle.
       const s2Status = await settle(taskId)
@@ -448,8 +513,12 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
         .filter((item) => item.body?.kind === 'turn' && typeof item.body?.turnId === 'string')
         .map((item) => item.body?.turnId as string)
       const turnId = s2TurnIds.at(-1)
-      record('S2', '原轮开启并结算（轮次 ID 取自执行记录）',
-        Boolean(turnId) && s2Status === 'completed' ? 'PASS' : 'FAIL', { turnId, s2TurnIds, s2Status })
+      record(
+        'S2',
+        '原轮开启并结算（轮次 ID 取自执行记录）',
+        Boolean(turnId) && s2Status === 'completed' ? 'PASS' : 'FAIL',
+        { turnId, s2TurnIds, s2Status }
+      )
       if (!turnId) {
         throw new Error(`S2 could not discover the original turn id: ${JSON.stringify(s2TurnIds)}`)
       }
@@ -466,16 +535,28 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
           from
         })
       ).result
-      record('S2', '会话空闲：取得绑定原轮的明确拒收',
-        refusedIdle.outcome === 'refused' && refusedIdle.expectedTurnId === turnId ? 'PASS' : 'FAIL',
-        { outcome: refusedIdle.outcome, refusalKind: refusedIdle.refusalKind, expectedTurnId: refusedIdle.expectedTurnId })
+      record(
+        'S2',
+        '会话空闲：取得绑定原轮的明确拒收',
+        refusedIdle.outcome === 'refused' && refusedIdle.expectedTurnId === turnId
+          ? 'PASS'
+          : 'FAIL',
+        {
+          outcome: refusedIdle.outcome,
+          refusalKind: refusedIdle.refusalKind,
+          expectedTurnId: refusedIdle.expectedTurnId
+        }
+      )
 
-      const nudge = await client.call<{ delivered?: string; queued?: boolean }>('orchestration.send', {
-        to: `dispatch:${dispatchId}`,
-        subject: '再读一遍 old.txt',
-        body: 'Read old.txt once more and report its marker again.',
-        from
-      })
+      const nudge = await client.call<{ delivered?: string; queued?: boolean }>(
+        'orchestration.send',
+        {
+          to: `dispatch:${dispatchId}`,
+          subject: '再读一遍 old.txt',
+          body: 'Read old.txt once more and report its marker again.',
+          from
+        }
+      )
       // oxlint-disable-next-line no-console
       console.log(`p0: S2 nudge receipt: ${JSON.stringify(nudge.result)}`)
       const secondTurn = await poll('S2 second turn from journal', 300_000, async () => {
@@ -494,25 +575,41 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
           from
         })
       ).result
-      record('S2', '另有活动轮：仍拒收并绑定原轮，未改投其他轮',
-        refusedOther.outcome === 'refused' && refusedOther.expectedTurnId === turnId ? 'PASS' : 'FAIL',
-        { outcome: refusedOther.outcome, refusalKind: refusedOther.refusalKind, secondTurn })
+      record(
+        'S2',
+        '另有活动轮：仍拒收并绑定原轮，未改投其他轮',
+        refusedOther.outcome === 'refused' && refusedOther.expectedTurnId === turnId
+          ? 'PASS'
+          : 'FAIL',
+        { outcome: refusedOther.outcome, refusalKind: refusedOther.refusalKind, secondTurn }
+      )
 
-      const leaked = (await history(sessionId)).some((item) => userText(item).includes(supplementText))
-      record('S2', '两次拒收后：会话中无补充文本、无因它新开的轮次', leaked ? 'FAIL' : 'PASS', { leaked })
+      const leaked = (await history(sessionId)).some((item) =>
+        userText(item).includes(supplementText)
+      )
+      record('S2', '两次拒收后：会话中无补充文本、无因它新开的轮次', leaked ? 'FAIL' : 'PASS', {
+        leaked
+      })
     }
 
     // ---------- S3: 并行与结算后续接 ----------
     {
-      const taskIdA = await createTask('S3 report old',
-        'Read old.txt in the project root and report the exact marker text inside it. Then report completion.')
-      const taskIdB = await createTask('S3 report new',
-        'Read new.txt in the project root and report the exact marker text inside it. Then report completion.')
-      const input = await client.call<{ input: { input_id: string } }>('orchestration.routingInputRegister', {
-        text: '报告 old.txt 标记；另外报告 new.txt 标记。两项独立。',
-        run: runId,
-        from
-      })
+      const taskIdA = await createTask(
+        'S3 report old',
+        'Read old.txt in the project root and report the exact marker text inside it. Then report completion.'
+      )
+      const taskIdB = await createTask(
+        'S3 report new',
+        'Read new.txt in the project root and report the exact marker text inside it. Then report completion.'
+      )
+      const input = await client.call<{ input: { input_id: string } }>(
+        'orchestration.routingInputRegister',
+        {
+          text: '报告 old.txt 标记；另外报告 new.txt 标记。两项独立。',
+          run: runId,
+          from
+        }
+      )
       await client.call('orchestration.routingDecisionRegister', {
         input: input.result.input.input_id,
         subActions: JSON.stringify([
@@ -523,13 +620,21 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
       })
       const dispatchA = await startWorker(taskIdA)
       const dispatchB = await startWorker(taskIdB)
-      record('S3', '第一项运行中即提交另一项独立任务，两项各有 Dispatch',
-        Boolean(dispatchA) && Boolean(dispatchB) ? 'PASS' : 'FAIL', { dispatchA, dispatchB })
+      record(
+        'S3',
+        '第一项运行中即提交另一项独立任务，两项各有 Dispatch',
+        Boolean(dispatchA) && Boolean(dispatchB) ? 'PASS' : 'FAIL',
+        { dispatchA, dispatchB }
+      )
 
       const statusA = await settle(taskIdA)
       const statusB = await settle(taskIdB)
-      record('S3', '两项结果分别可取回',
-        statusA !== undefined && statusB !== undefined ? 'PASS' : 'FAIL', { statusA, statusB })
+      record(
+        'S3',
+        '两项结果分别可取回',
+        statusA !== undefined && statusB !== undefined ? 'PASS' : 'FAIL',
+        { statusA, statusB }
+      )
 
       const followUpSend = await client.call<Record<string, unknown>>('orchestration.send', {
         to: `dispatch:${dispatchA}`,
@@ -555,24 +660,34 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
         // The continuation's own record names the Dispatch it continues.
         return shown.includes(dispatchA) ? shown : null
       })
-      record('S3', '结算后 follow-up 归入同一执行谱系（follow_up_of_dispatch_id）',
-        lineage ? 'PASS' : 'FAIL', { followUpDispatchId, workerShow: String(lineage).slice(0, 300) })
+      record(
+        'S3',
+        '结算后 follow-up 归入同一执行谱系（follow_up_of_dispatch_id）',
+        lineage ? 'PASS' : 'FAIL',
+        { followUpDispatchId, workerShow: String(lineage).slice(0, 300) }
+      )
     }
 
     // ---------- S4: 重启查证 ----------
     {
       const startRequestId = randomUUID()
-      const taskId = await createTask('S4 restart probe',
-        'Read old.txt in the project root and report the exact marker text inside it. Then report completion.')
+      const taskId = await createTask(
+        'S4 restart probe',
+        'Read old.txt in the project root and report the exact marker text inside it. Then report completion.'
+      )
       await registerInput('只读 old.txt 并报告标记。', taskId)
-      const started = await client.call<{ dispatchId: string }>('orchestration.workerStart', {
-        task: taskId,
-        run: runId,
-        worktree: 'new-child',
-        agent: 'codex',
-        timeoutMs: 180_000,
-        from
-      }, { orchestrationRequestId: startRequestId })
+      const started = await client.call<{ dispatchId: string }>(
+        'orchestration.workerStart',
+        {
+          task: taskId,
+          run: runId,
+          worktree: 'new-child',
+          agent: 'codex',
+          timeoutMs: 180_000,
+          from
+        },
+        { orchestrationRequestId: startRequestId }
+      )
       const dispatchId = started.result.dispatchId
 
       // oxlint-disable-next-line no-console
@@ -587,16 +702,28 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
       const request = await restarted.call<{ state?: string }>('orchestration.requestShow', {
         request: startRequestId
       })
-      record('S4', '原 request ID 重启后可对账',
-        /pending|completed|replayed|accepted|unknown/i.test(JSON.stringify(request.result)) ? 'PASS' : 'FAIL',
-        { requestShow: JSON.stringify(request.result).slice(0, 300) })
-      const worker = await restarted.call<{ id?: string; state?: string }>('orchestration.workerShow', {
-        dispatch: dispatchId,
-        from
-      })
+      record(
+        'S4',
+        '原 request ID 重启后可对账',
+        /pending|completed|replayed|accepted|unknown/i.test(JSON.stringify(request.result))
+          ? 'PASS'
+          : 'FAIL',
+        { requestShow: JSON.stringify(request.result).slice(0, 300) }
+      )
+      const worker = await restarted.call<{ id?: string; state?: string }>(
+        'orchestration.workerShow',
+        {
+          dispatch: dispatchId,
+          from
+        }
+      )
       const workerShown = JSON.stringify(worker.result)
-      record('S4', '原 Dispatch 重启后仍可查证，不另起 Worker',
-        workerShown.includes(dispatchId) ? 'PASS' : 'FAIL', { workerShow: workerShown.slice(0, 400) })
+      record(
+        'S4',
+        '原 Dispatch 重启后仍可查证，不另起 Worker',
+        workerShown.includes(dispatchId) ? 'PASS' : 'FAIL',
+        { workerShow: workerShown.slice(0, 400) }
+      )
     }
 
     // oxlint-disable-next-line no-console

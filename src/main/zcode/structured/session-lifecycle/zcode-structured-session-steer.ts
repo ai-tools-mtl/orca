@@ -1,4 +1,7 @@
-import type { AgentSessionExpectedSteerOutcome, SteerExpectedTurnInput } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-expected-steer'
+import type {
+  AgentSessionExpectedSteerOutcome,
+  SteerExpectedTurnInput
+} from '../../../native-chat/agent-session-wire/providers/structured-agent-session-expected-steer'
 import { providerDiagnostic } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type { ZcodeStructuredSession } from './zcode-structured-session'
 import { readMessageText } from '../turns/zcode-message-text'

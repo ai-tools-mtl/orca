@@ -59,14 +59,22 @@ function reportWorkerDone(identity, summary) {
   }
   workerDoneSent = true
   const args = [
-    'orchestration', 'send',
-    '--from', identity.workerHandle,
-    '--type', 'worker_done',
-    '--subject', 'fake worker finished',
-    '--body', summary,
-    '--task-id', identity.taskId,
-    '--dispatch-id', identity.dispatchId,
-    '--outcome', 'succeeded',
+    'orchestration',
+    'send',
+    '--from',
+    identity.workerHandle,
+    '--type',
+    'worker_done',
+    '--subject',
+    'fake worker finished',
+    '--body',
+    summary,
+    '--task-id',
+    identity.taskId,
+    '--dispatch-id',
+    identity.dispatchId,
+    '--outcome',
+    'succeeded',
     '--json'
   ]
   const child = spawn('orca', args, { stdio: 'ignore', env: process.env })
@@ -165,7 +173,11 @@ function steerOpenTurn(params, id) {
   const turn = openTurn
   const expected = typeof params?.expectedTurnId === 'string' ? params.expectedTurnId : ''
   if (!turn || turn.id !== expected) {
-    respondError(id, -32000, `expected active turn id \`${expected}\` but found \`${turn?.id ?? 'none'}\``)
+    respondError(
+      id,
+      -32000,
+      `expected active turn id \`${expected}\` but found \`${turn?.id ?? 'none'}\``
+    )
     return
   }
   respond(id, { turnId: turn.id })
@@ -184,7 +196,11 @@ function steerOpenTurn(params, id) {
   }
   turn.steered = true
   emitRead(turn.id, cwd, 'new.txt', `cmd-read-steer-${turn.id}`)
-  emitAgentMessage(turn.id, `The marker inside new.txt is: ${readMarker(cwd, 'new.txt')}`, `msg-steer-${turn.id}`)
+  emitAgentMessage(
+    turn.id,
+    `The marker inside new.txt is: ${readMarker(cwd, 'new.txt')}`,
+    `msg-steer-${turn.id}`
+  )
   const identity = parsePreamble(turn.preambleText ?? '')
   completeTurn(turn.id)
   reportWorkerDone(identity, `Steered to new.txt; read and reported its marker. Nothing left.`)
@@ -225,7 +241,8 @@ server.on('line', (line) => {
         emitItem(turnId, {
           type: 'userMessage',
           id: `echo-${id}`,
-          clientId: typeof params?.clientUserMessageId === 'string' ? params.clientUserMessageId : null,
+          clientId:
+            typeof params?.clientUserMessageId === 'string' ? params.clientUserMessageId : null,
           content: [{ type: 'text', text }]
         })
       if (text.includes('gate-wait.sh')) {
