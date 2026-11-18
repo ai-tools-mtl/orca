@@ -1,12 +1,13 @@
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type { ZcodeAppServerConnection } from '../../app-server/zcode-app-server-connection-types'
+import type { ZcodeCredentialHost } from '../../zcode-v2-plan-credentials'
+import { localZcodeCredentialHost } from '../../zcode-v2-plan-credentials'
 import {
-  localZcodeCredentialHost,
   openZcodeCredentialValue,
   sealZcodeCredentialValue,
-  type ZcodeCredentialHost
-} from '../../zcode-v2-plan-credentials'
+  zcodeV2CredentialsStorePath
+} from '../../zcode-credential-cipher'
 
 // The CLI delegates its sealed-store crypto to the host over this ask; a headless Orca is the
 // host, and without the bridge the CLI cannot read its own OAuth tokens and every model call
@@ -53,16 +54,23 @@ export class ZcodeCredentialCipherAsks {
       return fail('malformed cipher request')
     }
     const host: ZcodeCredentialHost = localZcodeCredentialHost()
+    const credentialsPath = zcodeV2CredentialsStorePath(host)
     try {
       if (parsed.data.operation === 'decrypt') {
         return {
           requestId,
-          result: { ok: true, value: openZcodeCredentialValue(parsed.data.value, host) }
+          result: {
+            ok: true,
+            value: openZcodeCredentialValue(parsed.data.value, host, credentialsPath)
+          }
         }
       }
       return {
         requestId,
-        result: { ok: true, value: sealZcodeCredentialValue(parsed.data.value, host) }
+        result: {
+          ok: true,
+          value: sealZcodeCredentialValue(parsed.data.value, host, credentialsPath)
+        }
       }
     } catch (error) {
       return fail(error instanceof Error ? error.message : 'cipher failed')
