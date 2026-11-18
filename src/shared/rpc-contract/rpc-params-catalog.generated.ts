@@ -1463,6 +1463,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.routingSupplementSend': RoutingSupplementSendParams,
   'orchestration.routingSupplementShow': RoutingSupplementShowParams,
   'orchestration.routingTargetShow': RoutingTargetShowParams,
+  'orchestration.routingWatchdogShow': RoutingInputsShowParams,
   'orchestration.run': RunParams,
   'orchestration.runCreate': RunCreateParams,
   'orchestration.runCurrent': RunCurrentParams,

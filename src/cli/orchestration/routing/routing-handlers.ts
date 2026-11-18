@@ -144,6 +144,48 @@ export const ORCHESTRATION_ROUTING_HANDLERS: Record<string, CommandHandler> = {
     )
   },
 
+  'orchestration routing-watchdog-show': async ({ flags, client, cwd, json }) => {
+    const run = getOptionalStringFlag(flags, 'run')
+    const from = run
+      ? runScopedSessionCaller(flags)
+      : await resolveCoordinatorTerminalHandle(flags, cwd, client)
+    const result = await client.call<{
+      runId: string
+      watchdog: {
+        paused: boolean
+        awaitingVerification: {
+          inputId: string
+          subActionId: string
+          attemptId: string
+          dispatchId: string
+          expectedTurnId: string | null
+        }[]
+        pendingContinuations: { subActionId: string; sourceDispatchId: string; requestId: string }[]
+      }
+    }>('orchestration.routingWatchdogShow', { run, from })
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, {
+        fields: (value) => ({
+          runId: value.runId,
+          paused: value.watchdog.paused,
+          awaitingVerification: value.watchdog.awaitingVerification.length,
+          pendingContinuations: value.watchdog.pendingContinuations.map((entry) => ({
+            subActionId: entry.subActionId,
+            sourceDispatchId: entry.sourceDispatchId,
+            requestId: entry.requestId
+          }))
+        })
+      })
+      return
+    }
+    printResult(
+      result,
+      json,
+      (value) =>
+        `Run ${value.runId} paused=${value.watchdog.paused} awaitingVerification=${value.watchdog.awaitingVerification.length} pendingContinuations=${value.watchdog.pendingContinuations.length}.`
+    )
+  },
+
   'orchestration routing-supplement-show': async ({ flags, client, cwd, json }) => {
     const run = getOptionalStringFlag(flags, 'run')
     const from = run

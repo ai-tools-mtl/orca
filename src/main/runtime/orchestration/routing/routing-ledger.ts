@@ -204,6 +204,55 @@ export function listRunRoutingInputs(this: OrchestrationDb, runId: string): Rout
     .all(runId) as RoutingInputRow[]
 }
 
+export type RoutingWatchdogFacts = {
+  paused: boolean
+  /** Delivered attempts without a consumption verdict — §5.3 待核对. */
+  awaitingVerification: {
+    inputId: string
+    subActionId: string
+    supplementId: string
+    attemptId: string
+    dispatchId: string
+    expectedTurnId: string | null
+  }[]
+  /** Continuations registered but not yet sent (§5.3 row 3 registered-not-sent). */
+  pendingContinuations: { subActionId: string; sourceDispatchId: string; requestId: string }[]
+}
+
+/** Deterministic §8 watchdog facts: stalled deliveries, pending continuations, pause state.
+ *  No judgment beyond the recorded ledger facts. */
+export function routingWatchdogFacts(this: OrchestrationDb, runId: string): RoutingWatchdogFacts {
+  const awaitingVerification: RoutingWatchdogFacts['awaitingVerification'] = []
+  const pendingContinuations: RoutingWatchdogFacts['pendingContinuations'] = []
+  for (const input of this.listRunRoutingInputs(runId)) {
+    for (const subAction of this.listSubActions(input.input_id)) {
+      for (const supplement of this.listSupplements(subAction.sub_action_id)) {
+        for (const attempt of this.listSupplementAttempts(supplement.supplement_id)) {
+          if (attempt.outcome === 'delivered' && attempt.first_action_json === null) {
+            awaitingVerification.push({
+              inputId: input.input_id,
+              subActionId: subAction.sub_action_id,
+              supplementId: supplement.supplement_id,
+              attemptId: attempt.attempt_id,
+              dispatchId: attempt.target_dispatch_id,
+              expectedTurnId: attempt.expected_turn_id
+            })
+          }
+        }
+      }
+      const continuation = this.getRoutingContinuation(subAction.sub_action_id)
+      if (continuation && continuation.follow_up_dispatch_id === null) {
+        pendingContinuations.push({
+          subActionId: subAction.sub_action_id,
+          sourceDispatchId: continuation.source_dispatch_id,
+          requestId: continuation.request_id
+        })
+      }
+    }
+  }
+  return { paused: this.isRoutingRunPaused(runId), awaitingVerification, pendingContinuations }
+}
+
 export type RoutingLedgerMethods = {
   registerRoutingInput: typeof registerRoutingInput
   registerRoutingDecision: typeof registerRoutingDecision
@@ -228,6 +277,7 @@ export type RoutingLedgerMethods = {
   claimSubActionForDispatch: typeof claimSubActionForDispatch
   handbackSubAction: typeof handbackSubAction
   listSubActionHandbacks: typeof listSubActionHandbacks
+  routingWatchdogFacts: typeof routingWatchdogFacts
 }
 
 export function attachRoutingLedger(ctor: { prototype: object }): void {
@@ -252,6 +302,7 @@ export function attachRoutingLedger(ctor: { prototype: object }): void {
     pauseRoutingRun,
     resumeRoutingRun,
     isRoutingRunPaused,
+    routingWatchdogFacts,
     claimSubActionForDispatch,
     handbackSubAction,
     listSubActionHandbacks

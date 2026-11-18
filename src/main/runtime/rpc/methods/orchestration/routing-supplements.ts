@@ -188,6 +188,27 @@ export const ORCHESTRATION_ROUTING_METHODS = [
       })
     }
   }),
+  // §8 watchdog minimal: deterministic ledger facts only — stalled deliveries, pending
+  // continuations, pause state. No judgment, no automatic recovery.
+  defineOrchestrationMethod({
+    name: 'orchestration.routingWatchdogShow',
+    permission: 'workspace',
+    params: RoutingInputsShowParams,
+    access: {
+      kind: 'reads',
+      caller: 'from',
+      targets: { run: 'run' },
+      collection: true,
+      rule: inspectedRunAccess
+    },
+    handler: (_params, { runtime }, { run }) => {
+      const db = runtime.getOrchestrationDb()
+      return {
+        runId: run.id,
+        watchdog: db.routingWatchdogFacts(run.id)
+      }
+    }
+  }),
   defineOrchestrationMethod({
     name: 'orchestration.routingSupplementShow',
     permission: 'workspace',

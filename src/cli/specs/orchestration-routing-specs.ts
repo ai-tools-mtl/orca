@@ -143,6 +143,14 @@ export const ORCHESTRATION_ROUTING_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['orchestration', 'routing-watchdog-show'],
+    summary:
+      'Deterministic routing watchdog facts (§8 minimal): stalls, pending continuations, pause',
+    usage: 'orca orchestration routing-watchdog-show [--run <run_id>] [--from <handle>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'run', 'from'],
+    identityFlagRoles: { from: 'caller' }
+  },
+  {
     path: ['orchestration', 'routing-target-show'],
     summary: 'Show the structured session and active turn a Dispatch currently resolves to',
     usage:
