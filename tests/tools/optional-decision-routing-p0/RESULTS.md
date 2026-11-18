@@ -1,8 +1,8 @@
-# P0 实跑结果 · feature/dispatch-routing（2026-11-17）
+# P0 实跑结果 · feature/dispatch-routing（2026-11-17 首验，2026-11-18 合并后复验通过）
 
 实施基线：`docs/reference/optional-decision-routing-plan.md` §9 P0。
 驱动：`tests/e2e/optional-decision-routing-p0.spec.ts`（opt-in，经 `run.mjs` 运行；
-`P0_ROUTING_AGENT=fake`（默认）| `codex`）。
+`P0_ROUTING_AGENT=fake`（默认）| `codex` | `zcode`）。
 
 ## 结论：定向投递流程 13/13 全部通过
 
@@ -57,8 +57,8 @@ journal 证据 + routing 账本 + 编排结算/续接/回执全链路。`P0_ROUT
   `turn.steerDrained` 注入当前轮；严格入口在 `lane.openTurnId === expectedTurnId` 时才发送，
   否则 turn-not-active 拒绝（协议无 expected-turn 字段，检查→发送间隙的轮切换由
   routing 账本的逐轮动作归因事后捕捉）。单测 3/3。
-- E2E 跑通 zcode 组合需本机 zcode CLI 可用（`which zcode` ✓ 存在），P0 spec 的
-  P0_ROUTING_AGENT 参数化待扩展到 zcode（机制与 codex shim 相同：shim 掉 zcode 命令）。
+- E2E 跑通 zcode 组合需本机 zcode CLI 可用（`which zcode` ✓ 存在）；P0 spec 已参数化
+  （`P0_ROUTING_AGENT=zcode`，直跑真实 CLI，无 shim；worker PATH 注入与 codex 组合共用）。
 
 ## 真实 codex 组合的限制（诚实记录）
 
@@ -67,14 +67,18 @@ worker rollout `task_complete.error = usage_limit_exceeded`（"try again at 6:37
 21:23 仍复现）。轮次打开后模型调用即被拒，门命令无法发起——**路径本身未被证伪**，
 该组合待额度恢复后复跑：`P0_ROUTING_AGENT=codex SKIP_BUILD=1 P0_ROUTING_RUN=1 node tests/tools/optional-decision-routing-p0/run.mjs`。
 
-## 合并后环境回归（P0 E2E 暂红，源码与单测全绿）
+## 合并后环境回归（已修复，2026-11-18 复验 13/13 全绿）
 
 合并 origin/feature/zcode-chat（基于更新的 main）后，worker 启动环境解析变化：
 `agentCmdOverrides`/`agentDefaultEnv` 注入不再到达 worker 子进程 spawn（诊断证据：
 p0-debug.log + codex-shim.log——13228 次 --version 探测走 shim、0 次 app-server、
-hook-trust 写子 stdin EPIPE、`codex app-server started without a pid`）。P0 的 13 条
-验收在合并前的树上全绿；恢复 E2E 需按合并后的 worker 启动链路重新定位命令覆盖注入点
-（fake 本体已验证可执行：pinned shebang + 直跑 initialize 正常）。
+hook-trust 写子 stdin EPIPE、`codex app-server started without a pid`）。
+
+修复（commit 89fd41e0bc1）：隔离 home 的登录 shell PATH 止于 /usr/bin:/bin，真 CLI wrapper
+（`#!/usr/bin/env node`）找不到 node——经 `agentDefaultEnv` 给 codex/zcode/claude 预置
+node 目录；命令覆盖统一走 `settings.mutateAgentLaunch`；fake 模式补上 `WORKER_AGENT`
+映射（launch/dispatch 仍编址 codex，'fake' 不是合法 agent id）。复验：
+`P0_ROUTING_AGENT=fake` 13/13 PASS（11.5s），与 2026-11-17 首验一致。
 
 ## 踩坑（实施记录）
 

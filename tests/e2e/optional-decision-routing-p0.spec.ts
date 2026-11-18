@@ -43,6 +43,9 @@ const ROUTING_AGENT =
     : process.env.P0_ROUTING_AGENT === 'codex'
       ? 'codex'
       : 'fake'
+/** Agent id the runtime validates against: the fake stand-in replaces the codex command wholesale,
+ *  so launch overrides and dispatches still address the codex agent. */
+const WORKER_AGENT = ROUTING_AGENT === 'fake' ? 'codex' : ROUTING_AGENT
 
 test.skip(
   !OPT_IN,
@@ -264,7 +267,7 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
     if (fakeCommand) {
       await client.call('settings.mutateAgentLaunch', {
         type: 'command',
-        agent: ROUTING_AGENT,
+        agent: WORKER_AGENT,
         value: fakeCommand
       })
     }
@@ -370,7 +373,7 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
         task: taskId,
         run: runId,
         worktree: 'new-child',
-        agent: ROUTING_AGENT,
+        agent: WORKER_AGENT,
         timeoutMs: 180_000,
         from
       })
@@ -712,7 +715,7 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
           task: taskId,
           run: runId,
           worktree: 'new-child',
-          agent: ROUTING_AGENT,
+          agent: WORKER_AGENT,
           timeoutMs: 180_000,
           from
         },

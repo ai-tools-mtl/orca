@@ -26,6 +26,8 @@ worker, through the strict routing entry (`orchestration routing-supplement-send
 ```bash
 pnpm build:cli && npx electron-vite build --mode e2e   # or let Playwright's global setup build
 P0_ROUTING_RUN=1 node tests/tools/optional-decision-routing-p0/run.mjs [--keep]
+# P0_ROUTING_AGENT picks the worker: fake (default, codex protocol stand-in, no quota) |
+# codex | zcode (real CLIs; `fake` overrides the codex command via settings.mutateAgentLaunch)
 ```
 
 The wrapper runs `tests/e2e/optional-decision-routing-p0.spec.ts` under the
