@@ -108,6 +108,17 @@ export const ORCHESTRATION_ROUTING_COMMAND_SPECS: CommandSpec[] = [
     identityFlagRoles: { from: 'caller' }
   },
   {
+    path: ['orchestration', 'routing-auto-route'],
+    summary: 'Run the restricted decision step over a received input (§5.1)',
+    usage:
+      'orca orchestration routing-auto-route --input <input_id> [--timeout-ms <ms>] [--run <run_id>] [--from <handle>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'input', 'timeout-ms', 'run', 'from'],
+    identityFlagRoles: { from: 'caller' },
+    notes: [
+      'No decision provider is configured yet: the input stays received for manual assignment. Model-backed providers plug into the same seam.'
+    ]
+  },
+  {
     path: ['orchestration', 'routing-sub-action-verify'],
     summary: 'Record the runtime consumption verdict for a delivered sub-action (§5.3 card facts)',
     usage:

@@ -23,6 +23,16 @@
   按 §5.5「先按输入 ID 读取原始输入」恢复路由流程的查询面。
 - 账本测试 3 例（幂等复用/编号连续/run 级列表）；单测 36/36（含验证器与凭据读取器）。
 
+## A.3：轻量 Router — 受限决策步（§5.1）
+
+- `routing-router.ts`：提供者缝线（Orca 备上下文 → 提供者提议 → Orca 校验 → 原子登记）。
+  缺省提供者 = 手动指派（输入保持 received，绝不臆造子动作）；模型适配后续接入同一缝线。
+- 校验按 §5.1：taskId 必须来自运行时候选集（幻觉引用 → 不路由、留手动）；无动作提议必须
+  附原因（无需处理时记录原因，子动作列表为空）；提供者超时（缺省 30s）作废本次推理。
+- RPC `orchestration.routingAutoRoute` + CLI `orca orchestration routing-auto-route`；重复
+  调用复用已登记决定（幂等）。Router 单测 6/6（手动缺省/原子登记+复用/幻觉引用/空动作
+  带原因/超时作废/缺省暴露）。
+
 ## A.2：§5.3 恢复矩阵第三行 — 结算 Dispatch 的子动作续接
 
 - v48 迁移：`routing_sub_action_continuations`（**sub_action_id 主键 = 方案 §6 唯一续接记录**；

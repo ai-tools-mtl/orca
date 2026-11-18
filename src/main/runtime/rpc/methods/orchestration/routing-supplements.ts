@@ -8,6 +8,7 @@ import { OrchestrationError } from '../../../orchestration/orchestration-error'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { structuredMailboxCustody } from '../../../orchestration/mailbox/routing/structured-session-mail-target'
 import { deliverTargetedSupplement } from '../../../orchestration/routing/targeted-supplement-delivery'
+import { routeRoutingInput } from '../../../orchestration/routing/routing-router'
 import type { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
 import type {
   RoutingInputRow,
@@ -16,6 +17,7 @@ import type {
   RoutingSupplementRow
 } from '../../../orchestration/db/routing-records'
 import {
+  RoutingAutoRouteParams,
   RoutingDecisionRegisterParams,
   RoutingInputRegisterParams,
   RoutingInputsShowParams,
@@ -164,6 +166,26 @@ export const ORCHESTRATION_ROUTING_METHODS = [
         ...(params.expectedTurn ? { expectedTurnId: params.expectedTurn } : {})
       })
       return supplementReceipt(result.supplement, result.attempt, result.session)
+    }
+  }),
+  // §5.1: the restricted decision step. The provider seam is deliberately narrow — Orca prepares
+  // the context, the provider proposes, Orca validates and registers atomically. The default
+  // provider defers to manual assignment; no general agent framework is created.
+  defineOrchestrationMethod({
+    name: 'orchestration.routingAutoRoute',
+    permission: 'workspace',
+    params: RoutingAutoRouteParams,
+    access: {
+      kind: 'writes',
+      caller: 'from',
+      targets: { run: 'run' },
+      rule: coordinatedRunAccess
+    },
+    handler: async (params, { runtime }) => {
+      return routeRoutingInput(runtime.getOrchestrationDb(), {
+        inputId: params.input,
+        ...(params.timeoutMs !== undefined ? { timeoutMs: params.timeoutMs } : {})
+      })
     }
   }),
   defineOrchestrationMethod({

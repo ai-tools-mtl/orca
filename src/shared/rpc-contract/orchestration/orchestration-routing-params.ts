@@ -94,3 +94,10 @@ export const RoutingSubActionHandbackParams = z.object({
   from: OptionalString,
   run: OptionalString
 })
+
+export const RoutingAutoRouteParams = z.object({
+  input: requiredString('Missing --input'),
+  timeoutMs: z.coerce.number().int().positive().optional(),
+  from: OptionalString,
+  run: OptionalString
+})

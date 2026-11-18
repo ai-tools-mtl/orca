@@ -110,6 +110,40 @@ export const ORCHESTRATION_ROUTING_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, (value) => `${value.inputs.length} routing input(s) recorded.`)
   },
 
+  'orchestration routing-auto-route': async ({ flags, client, cwd, json }) => {
+    const result = await client.call<{
+      routed: boolean
+      reused: boolean
+      reason?: string
+      subActions: { sub_action_id: string; text: string; task_id: string | null }[]
+    }>('orchestration.routingAutoRoute', {
+      input: getRequiredStringFlag(flags, 'input'),
+      timeoutMs: getOptionalStringFlag(flags, 'timeout-ms'),
+      run: getOptionalStringFlag(flags, 'run'),
+      from: await resolveCoordinatorTerminalHandle(flags, cwd, client)
+    })
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, {
+        fields: (value) => ({
+          routed: value.routed,
+          reused: value.reused,
+          reason: value.reason,
+          subActions: value.subActions.map((subAction) => ({
+            id: subAction.sub_action_id,
+            text: subAction.text,
+            task: subAction.task_id ?? undefined
+          }))
+        })
+      })
+      return
+    }
+    printResult(result, json, (value) =>
+      value.routed
+        ? `Routed ${value.subActions.length} sub-action(s) for the input${value.reused ? ' (reused)' : ''}.`
+        : `Not routed: ${value.reason ?? 'no reason recorded'}`
+    )
+  },
+
   'orchestration routing-supplement-show': async ({ flags, client, cwd, json }) => {
     const run = getOptionalStringFlag(flags, 'run')
     const from = run
