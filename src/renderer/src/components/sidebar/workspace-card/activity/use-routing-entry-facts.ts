@@ -1,27 +1,82 @@
 import { useCallback, useEffect, useState } from 'react'
+import { z } from 'zod'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import type { RoutingEntryInput, RoutingEntrySubAction } from './RoutingEntryCard'
+import type { RoutingEntryInput } from './RoutingEntryCard'
 
-type RoutingInputsShowResult = {
-  inputs: {
-    input: { input_id: string; received_seq: number; decision_status: string; raw_text: string }
-    subActions: {
-      subAction: { sub_action_id: string; text: string; task_id: string | null }
-      deliveries: {
-        supplement: { supplement_id: string; target_dispatch_id: string }
-        attempts: {
-          outcome: string
-          refusal_kind: string | null
-          first_action_json: string | null
-        }[]
-      }[]
-    }[]
-  }[]
-}
+const attemptSchema = z.object({
+  // The ledger CHECK constrains outcomes to exactly these three (migrate-v49's outcome enum).
+  outcome: z.enum(['delivered', 'refused', 'unverified']),
+  refusal_kind: z.string().nullable(),
+  first_action_json: z.string().nullable()
+})
 
-type RoutingWatchdogResult = {
-  watchdog: { paused: boolean }
+const routingInputsShowResultSchema = z.object({
+  inputs: z.array(
+    z.object({
+      input: z.object({
+        input_id: z.string(),
+        received_seq: z.number(),
+        decision_status: z.string(),
+        raw_text: z.string()
+      }),
+      subActions: z.array(
+        z.object({
+          subAction: z.object({
+            sub_action_id: z.string(),
+            text: z.string(),
+            task_id: z.string().nullable(),
+            state: z.enum([
+              'registered',
+              'delivered',
+              'processed',
+              'violated',
+              'pending_verification'
+            ]),
+            claimed_dispatch_id: z.string().nullable()
+          }),
+          deliveries: z.array(
+            z.object({
+              supplement: z.object({
+                supplement_id: z.string(),
+                target_dispatch_id: z.string()
+              }),
+              attempts: z.array(attemptSchema)
+            })
+          )
+        })
+      )
+    })
+  )
+})
+
+type RoutingInputsShowResult = z.infer<typeof routingInputsShowResultSchema>
+
+const firstActionEvidenceSchema = z.object({
+  verdict: z.string(),
+  reason: z.string().optional(),
+  firstAction: z
+    .object({ name: z.string().optional(), path: z.string().optional() })
+    .partial()
+    .optional()
+})
+
+function firstActionSummaryOf(rawEvidence: string | null): string | undefined {
+  if (!rawEvidence) {
+    return undefined
+  }
+  const parsed = firstActionEvidenceSchema.safeParse(JSON.parse(rawEvidence))
+  if (!parsed.success) {
+    return undefined
+  }
+  if (parsed.data.reason !== undefined) {
+    return parsed.data.reason
+  }
+  const action = parsed.data.firstAction
+  if (!action) {
+    return undefined
+  }
+  return `首个动作 ${action.name ?? ''} ${action.path ?? ''}`.trim()
 }
 
 function toEntryInputs(result: RoutingInputsShowResult): RoutingEntryInput[] {
@@ -33,39 +88,23 @@ function toEntryInputs(result: RoutingInputsShowResult): RoutingEntryInput[] {
     subActions: entry.subActions.map((subAction) => {
       const attempts = subAction.deliveries.flatMap((delivery) => delivery.attempts)
       const last = attempts.at(-1)
-      const evidence = attempts.find((attempt) => attempt.first_action_json !== null)
-      const state: RoutingEntrySubAction['state'] =
-        (subAction.subAction as { state?: RoutingEntrySubAction['state'] }).state ?? 'registered'
-      let firstActionSummary: string | undefined
-      if (evidence?.first_action_json) {
-        try {
-          const parsed = JSON.parse(evidence.first_action_json) as {
-            firstAction?: { name?: string; path?: string }
-            reason?: string
-          }
-          firstActionSummary =
-            parsed.reason ??
-            (parsed.firstAction
-              ? `首个动作 ${parsed.firstAction.name ?? ''} ${parsed.firstAction.path ?? ''}`.trim()
-              : undefined)
-        } catch {
-          firstActionSummary = undefined
-        }
-      }
+      const evidence = attempts.findLast((attempt) => attempt.first_action_json !== null)
       return {
         subActionId: subAction.subAction.sub_action_id,
         text: subAction.subAction.text,
-        state: state ?? 'registered',
-        claimedBy:
-          (subAction.subAction as { claimed_dispatch_id?: string }).claimed_dispatch_id ??
-          undefined,
-        lastOutcome: last?.outcome as RoutingEntryInput['subActions'][number]['lastOutcome'],
+        state: subAction.subAction.state,
+        claimedBy: subAction.subAction.claimed_dispatch_id ?? undefined,
+        lastOutcome: last?.outcome,
         refusalKind: last?.refusal_kind ?? undefined,
-        firstActionSummary
+        firstActionSummary: firstActionSummaryOf(evidence?.first_action_json ?? null)
       }
     })
   }))
 }
+
+const routingWatchdogResultSchema = z.object({
+  watchdog: z.object({ paused: z.boolean() })
+})
 
 /** The §9-A entry facts over the runtime's own RPCs — the renderer keeps no second flow state
  *  (§10): every read goes to orchestration.routingInputsShow / routingWatchdogShow. */
@@ -81,21 +120,20 @@ export function useRoutingEntryFacts(target: RuntimeClientTarget | null, run?: s
     }
     setBusy(true)
     try {
-      const show = await callRuntimeRpc<RoutingInputsShowResult>(
-        target,
-        'orchestration.routingInputsShow',
-        {
+      const show = routingInputsShowResultSchema.parse(
+        await callRuntimeRpc<unknown>(target, 'orchestration.routingInputsShow', {
           ...(run ? { run } : {}),
           from: undefined
-        }
+        })
       )
-      setInputs(toEntryInputs(show as RoutingInputsShowResult))
-      const watchdog = await callRuntimeRpc<RoutingWatchdogResult>(
-        target,
-        'orchestration.routingWatchdogShow',
-        { ...(run ? { run } : {}), from: undefined }
+      setInputs(toEntryInputs(show))
+      const watchdog = routingWatchdogResultSchema.parse(
+        await callRuntimeRpc<unknown>(target, 'orchestration.routingWatchdogShow', {
+          ...(run ? { run } : {}),
+          from: undefined
+        })
       )
-      setPaused((watchdog as RoutingWatchdogResult).watchdog.paused)
+      setPaused(watchdog.watchdog.paused)
       setError(null)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
