@@ -19,6 +19,11 @@ import {
   registerRoutingInput
 } from './routing-input-decisions'
 import {
+  claimSubActionForDispatch,
+  handbackSubAction,
+  listSubActionHandbacks
+} from './routing-claims'
+import {
   isRoutingRunPaused,
   pauseRoutingRun,
   recordSupplementFirstActionEvidence,
@@ -220,6 +225,9 @@ export type RoutingLedgerMethods = {
   pauseRoutingRun: typeof pauseRoutingRun
   resumeRoutingRun: typeof resumeRoutingRun
   isRoutingRunPaused: typeof isRoutingRunPaused
+  claimSubActionForDispatch: typeof claimSubActionForDispatch
+  handbackSubAction: typeof handbackSubAction
+  listSubActionHandbacks: typeof listSubActionHandbacks
 }
 
 export function attachRoutingLedger(ctor: { prototype: object }): void {
@@ -243,6 +251,9 @@ export function attachRoutingLedger(ctor: { prototype: object }): void {
     recordSupplementFirstActionEvidence,
     pauseRoutingRun,
     resumeRoutingRun,
-    isRoutingRunPaused
+    isRoutingRunPaused,
+    claimSubActionForDispatch,
+    handbackSubAction,
+    listSubActionHandbacks
   })
 }

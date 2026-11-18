@@ -12,6 +12,7 @@ import type { AgentSessionExpectedSteerOutcome } from '../../../native-chat/agen
 
 export type TargetedSupplementRefusalReason =
   | 'dispatch-not-active'
+  | 'claimed-elsewhere'
   | 'paused'
   | 'not-structured-here'
   | 'host-unavailable'
@@ -46,6 +47,26 @@ export async function deliverTargetedSupplement(
   if (!dispatch) {
     // recordRoutingSupplement already refuses unknown Dispatches; nothing was delivered.
     throw new Error(`dispatch_not_found: ${params.targetDispatchId}`)
+  }
+  // §5.2: one valid execution target — a sub-action claimed elsewhere refuses this delivery.
+  const claimed = db.getSubAction(params.subActionId)
+  if (claimed?.claimed_dispatch_id && claimed.claimed_dispatch_id !== params.targetDispatchId) {
+    const supplementRow = db.recordRoutingSupplement({
+      inputId: params.inputId,
+      subActionId: params.subActionId,
+      targetDispatchId: params.targetDispatchId,
+      text: params.text
+    })
+    const attempt = db.recordSupplementAttempt({
+      supplementId: supplementRow.supplement_id,
+      requestId: generateId('rtsend'),
+      targetDispatchId: params.targetDispatchId,
+      expectedTurnId: params.expectedTurnId ?? null,
+      outcome: 'refused',
+      refusalKind: 'claimed-elsewhere',
+      detail: `claimed by ${claimed.claimed_dispatch_id}`
+    })
+    return { supplement: supplementRow, attempt }
   }
   const supplement = db.recordRoutingSupplement({
     inputId: params.inputId,

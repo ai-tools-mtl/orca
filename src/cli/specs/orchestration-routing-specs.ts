@@ -78,6 +78,28 @@ export const ORCHESTRATION_ROUTING_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['orchestration', 'routing-sub-action-claim'],
+    summary: 'Claim a sub-action for a Dispatch (one valid execution target, §5.2)',
+    usage:
+      'orca orchestration routing-sub-action-claim --input <input_id> --sub-action <sa_id> --dispatch <dispatch_id> [--run <run_id>] [--from <handle>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'input', 'sub-action', 'dispatch', 'run', 'from'],
+    identityFlagRoles: { from: 'caller' },
+    notes: [
+      'First claim wins; re-claiming the same Dispatch is idempotent; a different live claim conflicts until handed back.'
+    ]
+  },
+  {
+    path: ['orchestration', 'routing-sub-action-handback'],
+    summary: 'Hand an unexecuted claimed sub-action back for re-assignment (§5.2)',
+    usage:
+      'orca orchestration routing-sub-action-handback --input <input_id> --sub-action <sa_id> --dispatch <dispatch_id> [--reason <text>] [--run <run_id>] [--from <handle>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'input', 'sub-action', 'dispatch', 'reason', 'run', 'from'],
+    identityFlagRoles: { from: 'caller' },
+    notes: [
+      'Only unexecuted sub-actions hand back; delivered ones stay in 待核对. Re-assignment excludes handed-back targets.'
+    ]
+  },
+  {
     path: ['orchestration', 'routing-continuation-bind'],
     summary: 'Bind a sub-action\u2019s continuation to its follow-up Dispatch (once)',
     usage:

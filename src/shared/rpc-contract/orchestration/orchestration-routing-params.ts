@@ -77,3 +77,20 @@ export const RoutingSubActionVerifyParams = z.object({
   from: OptionalString,
   run: OptionalString
 })
+
+export const RoutingSubActionClaimParams = z.object({
+  input: requiredString('Missing --input'),
+  subAction: requiredString('Missing --sub-action'),
+  dispatch: requiredString('Missing --dispatch'),
+  from: OptionalString,
+  run: OptionalString
+})
+
+export const RoutingSubActionHandbackParams = z.object({
+  input: requiredString('Missing --input'),
+  subAction: requiredString('Missing --sub-action'),
+  dispatch: requiredString('Missing --dispatch'),
+  reason: OptionalString,
+  from: OptionalString,
+  run: OptionalString
+})

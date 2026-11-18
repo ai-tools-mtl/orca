@@ -27,6 +27,9 @@ export type RoutingSubActionRow = {
   text: string
   constraints_json: string
   task_id: string | null
+  /** §5.2: the one valid execution target while the sub-action is claimed; null = unclaimed. */
+  claimed_dispatch_id: string | null
+  claim_version: number
   /** Card state per §5.3: 已收到(registered)/已投递(delivered)/本轮已处理(processed)/
    *  本轮未按补充执行(violated)/待核对(pending_verification). */
   state: RoutingSubActionState
@@ -69,5 +72,13 @@ export type RoutingContinuationRow = {
   /** Null while the continuation is registered but the follow-up send has not accepted. */
   follow_up_dispatch_id: string | null
   request_id: string
+  created_at: string
+}
+
+export type RoutingHandbackRow = {
+  sub_action_id: string
+  claim_version: number
+  handed_back_from: string
+  reason: string | null
   created_at: string
 }

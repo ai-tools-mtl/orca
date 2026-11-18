@@ -212,3 +212,69 @@ describe('sub-action card state + run pause (plan §5.3/§5.5)', () => {
     expect(db.isRoutingRunPaused(run.id)).toBe(false)
   })
 })
+
+describe('sub-action claims and handbacks (plan §5.2 phase B)', () => {
+  it('claims once, refuses a second live claim, and re-claims after handback', () => {
+    const db = createDb()
+    const run = db.createRun({
+      objective: 'audit',
+      coordinatorHandle: 'coord',
+      coordinatorPaneKey: null
+    })
+    const input = db.registerRoutingInput({ runId: run.id, text: '修登录' })
+    db.registerRoutingDecision({ inputId: input.input_id, subActions: [{ text: '修登录' }] })
+    const subActionId = db.listSubActions(input.input_id)[0]!.sub_action_id
+    const claimed = db.claimSubActionForDispatch(subActionId, 'ctx_a')
+    expect(claimed.claimed_dispatch_id).toBe('ctx_a')
+    expect(claimed.claim_version).toBe(1)
+    expect(() => db.claimSubActionForDispatch(subActionId, 'ctx_b')).toThrowError(
+      /claimed by ctx_a/
+    )
+    const result = db.handbackSubAction({
+      subActionId,
+      fromDispatchId: 'ctx_a',
+      reason: 'worker handed back'
+    })
+    expect(result.released).toBe(true)
+    expect(result.subAction.claimed_dispatch_id).toBeNull()
+    expect(result.subAction.claim_version).toBe(2)
+    expect(result.handback?.reason).toBe('worker handed back')
+    const reclaimed = db.claimSubActionForDispatch(subActionId, 'ctx_b')
+    expect(reclaimed.claimed_dispatch_id).toBe('ctx_b')
+    expect(reclaimed.claim_version).toBe(3)
+    expect(db.listSubActionHandbacks(subActionId)).toHaveLength(1)
+  })
+
+  it('is idempotent when re-claiming the same dispatch', () => {
+    const db = createDb()
+    const run = db.createRun({
+      objective: 'audit',
+      coordinatorHandle: 'coord',
+      coordinatorPaneKey: null
+    })
+    const input = db.registerRoutingInput({ runId: run.id, text: '修登录' })
+    db.registerRoutingDecision({ inputId: input.input_id, subActions: [{ text: '修登录' }] })
+    const subActionId = db.listSubActions(input.input_id)[0]!.sub_action_id
+    const first = db.claimSubActionForDispatch(subActionId, 'ctx_a')
+    const second = db.claimSubActionForDispatch(subActionId, 'ctx_a')
+    expect(second.claim_version).toBe(first.claim_version)
+  })
+
+  it('releases nothing when the handback names a dispatch that holds no claim', () => {
+    const db = createDb()
+    const run = db.createRun({
+      objective: 'audit',
+      coordinatorHandle: 'coord',
+      coordinatorPaneKey: null
+    })
+    const input = db.registerRoutingInput({ runId: run.id, text: '修登录' })
+    db.registerRoutingDecision({ inputId: input.input_id, subActions: [{ text: '修登录' }] })
+    const subActionId = db.listSubActions(input.input_id)[0]!.sub_action_id
+    const result = db.handbackSubAction({
+      subActionId,
+      fromDispatchId: 'ctx_nobody',
+      reason: 'stale'
+    })
+    expect(result.released).toBe(false)
+  })
+})
