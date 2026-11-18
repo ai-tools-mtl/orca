@@ -13,6 +13,7 @@ import { ORCHESTRATION_GATE_METHODS } from './gates/gates'
 import { ORCHESTRATION_ROUTING_METHODS } from './routing-supplements'
 import { ORCHESTRATION_ROUTING_CONTINUATION_METHODS } from './routing-continuations'
 import { ORCHESTRATION_ROUTING_SUB_ACTION_VERIFY_METHODS } from './routing-sub-action-verify'
+import { ORCHESTRATION_REVIEW_CYCLE_METHODS } from './review-cycle'
 import { ORCHESTRATION_RESET_METHODS } from './runs/reset-methods'
 import { ORCHESTRATION_CALLER_METHODS } from './caller-show'
 import type { OrchestrationMethodAccessDeclaration } from './access/orchestration-method-access'
@@ -33,6 +34,7 @@ export const ORCHESTRATION_METHODS = requiringOrcadFeature('orchestration', [
   ...ORCHESTRATION_ROUTING_METHODS,
   ...ORCHESTRATION_ROUTING_CONTINUATION_METHODS,
   ...ORCHESTRATION_ROUTING_SUB_ACTION_VERIFY_METHODS,
+  ...ORCHESTRATION_REVIEW_CYCLE_METHODS,
   ...ORCHESTRATION_RESET_METHODS,
   ...ORCHESTRATION_CALLER_METHODS
 ] satisfies readonly { readonly orchestrationAccess: OrchestrationMethodAccessDeclaration }[])

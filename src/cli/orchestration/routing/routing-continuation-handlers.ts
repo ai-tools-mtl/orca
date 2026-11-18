@@ -5,7 +5,122 @@ import { getOptionalStringFlag, getRequiredStringFlag } from '../../arguments/fl
 import { callOrchestrationMutation } from '../recovery/mutation-request'
 import { resolveCoordinatorTerminalHandle } from '../identity/terminal-identity'
 
+type ReviewCycleRow = {
+  cycle_id: string
+  task_id: string
+  writer_dispatch_id: string
+  reviewer_dispatch_id: string
+  current_revision: number
+  state: string
+}
+
 export const ORCHESTRATION_ROUTING_CONTINUATION_HANDLERS: Record<string, CommandHandler> = {
+  'orchestration review-cycle-start': async ({ flags, client, cwd, json }) => {
+    const result = await callOrchestrationMutation<{ cycle: ReviewCycleRow }>(
+      client,
+      flags,
+      'orchestration.reviewCycleStart',
+      {
+        task: getRequiredStringFlag(flags, 'task'),
+        writerDispatch: getRequiredStringFlag(flags, 'writer-dispatch'),
+        reviewerDispatch: getRequiredStringFlag(flags, 'reviewer-dispatch'),
+        run: getOptionalStringFlag(flags, 'run'),
+        from: await resolveCoordinatorTerminalHandle(flags, cwd, client)
+      }
+    )
+    printOrchestrationResult(result, json, {
+      fields: (value) => ({
+        cycleId: value.cycle.cycle_id,
+        revision: value.cycle.current_revision,
+        state: value.cycle.state
+      })
+    })
+  },
+
+  'orchestration review-revision-submit': async ({ flags, client, cwd, json }) => {
+    const result = await callOrchestrationMutation<{ cycle: ReviewCycleRow }>(
+      client,
+      flags,
+      'orchestration.reviewRevisionSubmit',
+      {
+        cycle: getRequiredStringFlag(flags, 'cycle'),
+        run: getOptionalStringFlag(flags, 'run'),
+        from: await resolveCoordinatorTerminalHandle(flags, cwd, client)
+      }
+    )
+    printOrchestrationResult(result, json, {
+      fields: (value) => ({
+        cycleId: value.cycle.cycle_id,
+        revision: value.cycle.current_revision,
+        state: value.cycle.state
+      })
+    })
+  },
+
+  'orchestration review-opinion-record': async ({ flags, client, cwd, json }) => {
+    const result = await callOrchestrationMutation<{
+      opinion: { opinion_id: string; revision: number; body: string; state: string }
+      cycle: ReviewCycleRow
+    }>(client, flags, 'orchestration.reviewOpinionRecord', {
+      cycle: getRequiredStringFlag(flags, 'cycle'),
+      body: getRequiredStringFlag(flags, 'body'),
+      blocking: flags.has('non-blocking') ? false : undefined,
+      run: getOptionalStringFlag(flags, 'run'),
+      from: await resolveCoordinatorTerminalHandle(flags, cwd, client)
+    })
+    printOrchestrationResult(result, json, {
+      fields: (value) => ({
+        opinionId: value.opinion.opinion_id,
+        revision: value.opinion.revision,
+        state: value.opinion.state,
+        cycleState: value.cycle.state
+      })
+    })
+  },
+
+  'orchestration review-cycle-show': async ({ flags, client, cwd, json }) => {
+    const result = await client.call<{
+      cycle: ReviewCycleRow
+      opinions: { opinion_id: string; revision: number; body: string; state: string }[]
+    }>('orchestration.reviewCycleShow', {
+      cycle: getRequiredStringFlag(flags, 'cycle'),
+      run: getOptionalStringFlag(flags, 'run'),
+      from: await resolveCoordinatorTerminalHandle(flags, cwd, client)
+    })
+    printOrchestrationResult(result, json, {
+      fields: (value) => ({
+        cycleId: value.cycle.cycle_id,
+        revision: value.cycle.current_revision,
+        state: value.cycle.state,
+        opinions: value.opinions.map((opinion) => ({
+          id: opinion.opinion_id,
+          revision: opinion.revision,
+          state: opinion.state,
+          body: opinion.body
+        }))
+      })
+    })
+  },
+
+  'orchestration review-cycle-accept': async ({ flags, client, cwd, json }) => {
+    const result = await callOrchestrationMutation<{ cycle: ReviewCycleRow }>(
+      client,
+      flags,
+      'orchestration.reviewCycleAccept',
+      {
+        cycle: getRequiredStringFlag(flags, 'cycle'),
+        run: getOptionalStringFlag(flags, 'run'),
+        from: await resolveCoordinatorTerminalHandle(flags, cwd, client)
+      }
+    )
+    printOrchestrationResult(result, json, {
+      fields: (value) => ({
+        cycleId: value.cycle.cycle_id,
+        state: value.cycle.state
+      })
+    })
+  },
+
   'orchestration routing-sub-action-claim': async ({ flags, client, cwd, json }) => {
     const result = await callOrchestrationMutation<{
       subAction: {

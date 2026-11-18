@@ -465,6 +465,9 @@ import {
   PeerMailPullParams
 } from './orchestration/orchestration-peer-mail-params'
 import {
+  ReviewCycleParams,
+  ReviewCycleStartParams,
+  ReviewOpinionRecordParams,
   RoutingAutoRouteParams,
   RoutingContinuationBindParams,
   RoutingDecisionRegisterParams,
@@ -1451,6 +1454,11 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.reply': ReplyParams,
   'orchestration.requestShow': RequestShowParams,
   'orchestration.reset': ResetParams,
+  'orchestration.reviewCycleAccept': ReviewCycleParams,
+  'orchestration.reviewCycleShow': ReviewCycleParams,
+  'orchestration.reviewCycleStart': ReviewCycleStartParams,
+  'orchestration.reviewOpinionRecord': ReviewOpinionRecordParams,
+  'orchestration.reviewRevisionSubmit': ReviewCycleParams,
   'orchestration.routingAutoRoute': RoutingAutoRouteParams,
   'orchestration.routingContinuationBind': RoutingContinuationBindParams,
   'orchestration.routingDecisionRegister': RoutingDecisionRegisterParams,

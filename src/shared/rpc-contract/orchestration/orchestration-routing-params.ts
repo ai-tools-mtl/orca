@@ -101,3 +101,25 @@ export const RoutingAutoRouteParams = z.object({
   from: OptionalString,
   run: OptionalString
 })
+
+export const ReviewCycleStartParams = z.object({
+  task: requiredString('Missing --task'),
+  writerDispatch: requiredString('Missing --writer-dispatch'),
+  reviewerDispatch: requiredString('Missing --reviewer-dispatch'),
+  from: OptionalString,
+  run: OptionalString
+})
+
+export const ReviewCycleParams = z.object({
+  cycle: requiredString('Missing --cycle'),
+  from: OptionalString,
+  run: OptionalString
+})
+
+export const ReviewOpinionRecordParams = z.object({
+  cycle: requiredString('Missing --cycle'),
+  body: requiredString('Missing --body'),
+  blocking: z.boolean().optional(),
+  from: OptionalString,
+  run: OptionalString
+})

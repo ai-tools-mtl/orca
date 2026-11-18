@@ -143,6 +143,46 @@ export const ORCHESTRATION_ROUTING_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['orchestration', 'review-cycle-start'],
+    summary: 'Start a write-review cycle binding writer and reviewer Dispatches (§7)',
+    usage:
+      'orca orchestration review-cycle-start --task <task_id> --writer-dispatch <id> --reviewer-dispatch <id> [--run <run_id>] [--from <handle>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'task', 'writer-dispatch', 'reviewer-dispatch', 'run', 'from'],
+    identityFlagRoles: { from: 'caller' }
+  },
+  {
+    path: ['orchestration', 'review-revision-submit'],
+    summary: 'Submit the next revision (R{n}) for a review cycle',
+    usage:
+      'orca orchestration review-revision-submit --cycle <cycle_id> [--run <run_id>] [--from <handle>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'cycle', 'run', 'from'],
+    identityFlagRoles: { from: 'caller' }
+  },
+  {
+    path: ['orchestration', 'review-opinion-record'],
+    summary: 'Record a reviewer opinion (blocking opinions drive rework)',
+    usage:
+      'orca orchestration review-opinion-record --cycle <cycle_id> --body <text> [--non-blocking] [--run <run_id>] [--from <handle>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'cycle', 'body', 'non-blocking', 'run', 'from'],
+    identityFlagRoles: { from: 'caller' }
+  },
+  {
+    path: ['orchestration', 'review-cycle-show'],
+    summary: 'Show a review cycle with all opinions',
+    usage:
+      'orca orchestration review-cycle-show --cycle <cycle_id> [--run <run_id>] [--from <handle>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'cycle', 'run', 'from'],
+    identityFlagRoles: { from: 'caller' }
+  },
+  {
+    path: ['orchestration', 'review-cycle-accept'],
+    summary: 'User acceptance closes the cycle (only with no blocking opinions on R{current})',
+    usage:
+      'orca orchestration review-cycle-accept --cycle <cycle_id> [--run <run_id>] [--from <handle>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'cycle', 'run', 'from'],
+    identityFlagRoles: { from: 'caller' }
+  },
+  {
     path: ['orchestration', 'routing-watchdog-show'],
     summary:
       'Deterministic routing watchdog facts (§8 minimal): stalls, pending continuations, pause',
