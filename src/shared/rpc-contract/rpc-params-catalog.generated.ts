@@ -467,6 +467,7 @@ import {
 import {
   RoutingDecisionRegisterParams,
   RoutingInputRegisterParams,
+  RoutingInputsShowParams,
   RoutingSupplementSendParams,
   RoutingSupplementShowParams,
   RoutingTargetShowParams
@@ -1446,6 +1447,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.reset': ResetParams,
   'orchestration.routingDecisionRegister': RoutingDecisionRegisterParams,
   'orchestration.routingInputRegister': RoutingInputRegisterParams,
+  'orchestration.routingInputsShow': RoutingInputsShowParams,
   'orchestration.routingSupplementSend': RoutingSupplementSendParams,
   'orchestration.routingSupplementShow': RoutingSupplementShowParams,
   'orchestration.routingTargetShow': RoutingTargetShowParams,

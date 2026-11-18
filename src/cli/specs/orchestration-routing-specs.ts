@@ -21,7 +21,18 @@ export const ORCHESTRATION_ROUTING_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'input', 'sub-actions', 'run', 'from', 'retry-request'],
     identityFlagRoles: { from: 'caller' },
     notes: [
-      '--sub-actions is a JSON array of {text, constraints?, task?}; ids sa-{n}-{k} stay stable across restarts and re-decisions.'
+      '--sub-actions is a JSON array of {text, constraints?, task?}; ids sa-{n}-{k} stay stable across restarts and re-decisions.',
+      'A decision already recorded for the input is reused (same sub-action ids), never duplicated.'
+    ]
+  },
+  {
+    path: ['orchestration', 'routing-inputs-show'],
+    summary: 'List recorded routing inputs with decisions, sub-actions and delivery attempts',
+    usage: 'orca orchestration routing-inputs-show [--run <run_id>] [--from <handle>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'run', 'from'],
+    identityFlagRoles: { from: 'caller' },
+    notes: [
+      'Recovery surface: after a restart, re-read every recorded input before resuming the routing flow.'
     ]
   },
   {

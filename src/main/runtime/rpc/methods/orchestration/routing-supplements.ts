@@ -18,6 +18,7 @@ import type {
 import {
   RoutingDecisionRegisterParams,
   RoutingInputRegisterParams,
+  RoutingInputsShowParams,
   RoutingSupplementSendParams,
   RoutingSupplementShowParams,
   RoutingTargetShowParams
@@ -95,6 +96,35 @@ export const ORCHESTRATION_ROUTING_METHODS = [
       return { input }
     }
   }),
+  // §5.5 recovery surface: after a restart the entry re-reads every recorded input with its
+  // decision state, sub-actions and delivery attempts before resuming the routing flow.
+  defineOrchestrationMethod({
+    name: 'orchestration.routingInputsShow',
+    permission: 'workspace',
+    params: RoutingInputsShowParams,
+    access: {
+      kind: 'reads',
+      caller: 'from',
+      targets: { run: 'run' },
+      collection: true,
+      rule: coordinatedRunAccess
+    },
+    handler: (_params, { runtime }, { run }) => {
+      const db = runtime.getOrchestrationDb()
+      return {
+        inputs: db.listRunRoutingInputs(run.id).map((input) => ({
+          input,
+          subActions: db.listSubActions(input.input_id).map((subAction) => ({
+            subAction,
+            deliveries: db.listSupplements(subAction.sub_action_id).map((supplement) => ({
+              supplement,
+              attempts: db.listSupplementAttempts(supplement.supplement_id)
+            }))
+          }))
+        }))
+      }
+    }
+  }),
   defineOrchestrationMethod({
     name: 'orchestration.routingDecisionRegister',
     permission: 'workspace',
@@ -107,11 +137,11 @@ export const ORCHESTRATION_ROUTING_METHODS = [
     },
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
-      const subActions = db.registerRoutingDecision({
+      const decision = db.registerRoutingDecision({
         inputId: params.input,
         subActions: parseSubActions(params.subActions)
       })
-      return { inputId: params.input, subActions }
+      return { inputId: params.input, subActions: decision.subActions, reused: decision.reused }
     }
   }),
   defineOrchestrationMethod({

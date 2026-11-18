@@ -45,7 +45,7 @@ export function registerRoutingDecision(
     subActions: { text: string; constraints?: string[]; taskId?: string | null }[]
     decision?: unknown
   }
-): RoutingSubActionRow[] {
+): { subActions: RoutingSubActionRow[]; reused: boolean } {
   const source = this.getRoutingInput(input.inputId)
   if (!source) {
     throw new OrchestrationError(
@@ -56,6 +56,13 @@ export function registerRoutingDecision(
   }
   this.db.exec('SAVEPOINT register_routing_decision')
   try {
+    // §5.1: one decision per input version. A re-registration after a restart reuses the
+    // recorded sub-actions (same stable ids) instead of minting a second set.
+    if (source.decision_status === 'decided') {
+      const existing = this.listSubActions(input.inputId)
+      this.db.exec('RELEASE register_routing_decision')
+      return { subActions: existing, reused: true }
+    }
     // The stable id's num comes from the input row's ordinal, so `sa-{num}-{k}` is globally unique.
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the COUNT(*) projection is exactly { seq: number }.
     const num = this.db
@@ -95,7 +102,7 @@ export function registerRoutingDecision(
       return this.getSubAction(id) as RoutingSubActionRow
     })
     this.db.exec('RELEASE register_routing_decision')
-    return rows
+    return { subActions: rows, reused: false }
   } catch (error) {
     this.db.exec('ROLLBACK TO register_routing_decision')
     this.db.exec('RELEASE register_routing_decision')
@@ -276,6 +283,13 @@ export function listSupplementAttempts(
     .all(supplementId) as RoutingSupplementAttemptRow[]
 }
 
+export function listRunRoutingInputs(this: OrchestrationDb, runId: string): RoutingInputRow[] {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
+  return this.db
+    .prepare('SELECT * FROM routing_inputs WHERE run_id = ? ORDER BY received_seq, rowid')
+    .all(runId) as RoutingInputRow[]
+}
+
 export type RoutingLedgerMethods = {
   registerRoutingInput: typeof registerRoutingInput
   registerRoutingDecision: typeof registerRoutingDecision
@@ -288,6 +302,7 @@ export type RoutingLedgerMethods = {
   listSupplements: typeof listSupplements
   getSupplementAttempt: typeof getSupplementAttempt
   listSupplementAttempts: typeof listSupplementAttempts
+  listRunRoutingInputs: typeof listRunRoutingInputs
 }
 
 export function attachRoutingLedger(ctor: { prototype: object }): void {
@@ -302,6 +317,7 @@ export function attachRoutingLedger(ctor: { prototype: object }): void {
     getSupplement,
     listSupplements,
     getSupplementAttempt,
-    listSupplementAttempts
+    listSupplementAttempts,
+    listRunRoutingInputs
   })
 }

@@ -14,6 +14,15 @@
 任务动作只在该轮内判定（zcode 检查→发送间隙误投递由此显式判 violation，不再只是注释宣称）；
 同一 supplement 的重试复用最近一次 attempt 的 request ID（方案 §6）。
 
+## A 阶段开工（A.1：持久输入、手动指派与重启找回的基础）
+
+- **决定登记幂等**（§5.1「同一版输入复用已登记的决定和子动作」）：重开/重放后对已决定输入
+  的再次登记不再撞主键，而是原样复用已登记的子动作 ID（返回 `reused: true`）。
+- **恢复查询面**：新增 `orchestration.routingInputsShow`（run 级列出全部输入 + 决定状态 +
+  子动作 + 每条补充的投递尝试），CLI `orca orchestration routing-inputs-show`——重启后入口
+  按 §5.5「先按输入 ID 读取原始输入」恢复路由流程的查询面。
+- 账本测试 3 例（幂等复用/编号连续/run 级列表）；单测 36/36（含验证器与凭据读取器）。
+
 真实 headless 运行时（Playwright electron，隔离 profile）+ 真实 Codex 结构化会话适配器 +
 journal 证据 + routing 账本 + 编排结算/续接/回执全链路。`P0_ROUTING_AGENT=fake` 为协议级
 替身：讲真 app-server 线协议（NDJSON initialize/thread/turn/item 通知），按脚本确定性执行

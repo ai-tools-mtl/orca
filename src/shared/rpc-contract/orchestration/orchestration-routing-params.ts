@@ -38,3 +38,8 @@ export const RoutingTargetShowParams = z.object({
   from: OptionalString,
   run: OptionalString
 })
+
+export const RoutingInputsShowParams = z.object({
+  from: OptionalString,
+  run: OptionalString
+})

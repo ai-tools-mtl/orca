@@ -53,6 +53,7 @@ export const ORCHESTRATION_ROUTING_HANDLERS: Record<string, CommandHandler> = {
     const result = await callOrchestrationMutation<{
       inputId: string
       subActions: { sub_action_id: string; text: string; constraints_json: string }[]
+      reused: boolean
     }>(client, flags, 'orchestration.routingDecisionRegister', {
       input: getRequiredStringFlag(flags, 'input'),
       subActions: getRequiredStringFlag(flags, 'sub-actions'),
@@ -79,10 +80,49 @@ export const ORCHESTRATION_ROUTING_HANDLERS: Record<string, CommandHandler> = {
       result,
       json,
       (value) =>
-        `Decision registered for ${value.inputId}: ${value.subActions
+        `Decision ${value.reused ? 'reused' : 'registered'} for ${value.inputId}: ${value.subActions
           .map((subAction) => subAction.sub_action_id)
           .join(', ')}`
     )
+  },
+
+  'orchestration routing-inputs-show': async ({ flags, client, cwd, json }) => {
+    const run = getOptionalStringFlag(flags, 'run')
+    const from = run
+      ? runScopedSessionCaller(flags)
+      : await resolveCoordinatorTerminalHandle(flags, cwd, client)
+    const result = await client.call<{
+      inputs: {
+        input: { input_id: string; received_seq: number; decision_status: string }
+        subActions: {
+          subAction: { sub_action_id: string; text: string; task_id: string | null }
+          deliveries: {
+            supplement: { supplement_id: string; target_dispatch_id: string }
+            attempts: { outcome: string; refusal_kind: string | null; request_id: string }[]
+          }[]
+        }[]
+      }[]
+    }>('orchestration.routingInputsShow', { run, from })
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, {
+        fields: (value) => ({
+          inputs: value.inputs.map((entry) => ({
+            inputId: entry.input.input_id,
+            decision: entry.input.decision_status,
+            subActions: entry.subActions.map((subAction) => ({
+              id: subAction.subAction.sub_action_id,
+              task: subAction.subAction.task_id ?? undefined,
+              deliveries: subAction.deliveries.map((delivery) => ({
+                dispatch: delivery.supplement.target_dispatch_id,
+                lastOutcome: delivery.attempts.at(-1)?.outcome ?? 'none'
+              }))
+            }))
+          }))
+        })
+      })
+      return
+    }
+    printResult(result, json, (value) => `${value.inputs.length} routing input(s) recorded.`)
   },
 
   'orchestration routing-supplement-send': async ({ flags, client, cwd, json }) => {
