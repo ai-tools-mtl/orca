@@ -1,9 +1,6 @@
 import { generateId } from '../db/generated-id'
 import type { OrchestrationDb } from '../db/orchestration-db'
-import type {
-  RoutingSupplementAttemptRow,
-  RoutingSupplementRow
-} from '../db/orchestration-records'
+import type { RoutingSupplementAttemptRow, RoutingSupplementRow } from '../db/routing-records'
 import { structuredMailboxCustody } from '../mailbox/routing/structured-session-mail-target'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { steerExpectedTurnViaAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-expected-steer'
@@ -64,15 +61,15 @@ export async function deliverTargetedSupplement(
   ): TargetedSupplementResult => ({
     supplement,
     ...(session ? { session } : {}),
-      attempt: db.recordSupplementAttempt({
-        supplementId: supplement.supplement_id,
-        requestId,
-        targetDispatchId: dispatch.id,
-        expectedTurnId: expectedTurnId ?? null,
-        outcome: 'refused',
-        refusalKind: reason,
-        detail: detail ?? null
-      })
+    attempt: db.recordSupplementAttempt({
+      supplementId: supplement.supplement_id,
+      requestId,
+      targetDispatchId: dispatch.id,
+      expectedTurnId: expectedTurnId ?? null,
+      outcome: 'refused',
+      refusalKind: reason,
+      detail: detail ?? null
+    })
   })
   if (dispatch.status !== 'dispatched') {
     return recordRefusal(

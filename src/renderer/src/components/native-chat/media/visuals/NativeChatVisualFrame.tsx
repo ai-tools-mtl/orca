@@ -157,6 +157,7 @@ export function NativeChatVisualFrame({
           unansweredRef.current = null
         }
       },
+      // oxlint-disable-next-line react-hooks/exhaustive-deps -- the cleanup re-arms per channel; it reads only refs.
       [built.channel]
     )
   )

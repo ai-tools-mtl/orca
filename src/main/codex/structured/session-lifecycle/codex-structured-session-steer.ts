@@ -16,6 +16,7 @@ export async function steerExpectedCodexSessionTurn(
     signal?: AbortSignal
   }
 ): Promise<AgentSessionExpectedSteerOutcome> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: requireLiveCodexSession only reads the map; the read-only view holds exactly CodexSession values.
   const session = requireLiveCodexSession(sessions as Map<string, CodexSession>, input.sessionId)
   session.dispatchPending = true
   try {

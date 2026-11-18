@@ -1,4 +1,7 @@
-import type { AgentSessionExpectedSteerOutcome, SteerExpectedTurnInput } from '../../native-chat/agent-session-wire/providers/structured-agent-session-expected-steer'
+import type {
+  AgentSessionExpectedSteerOutcome,
+  SteerExpectedTurnInput
+} from '../../native-chat/agent-session-wire/providers/structured-agent-session-expected-steer'
 import { acpDispatchPrompt } from './acp-prompt-content'
 import type { AcpStructuredSession } from '../session/acp-structured-session-contract'
 

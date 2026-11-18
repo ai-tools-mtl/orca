@@ -14,7 +14,7 @@ import type {
   RoutingSubActionRow,
   RoutingSupplementAttemptRow,
   RoutingSupplementRow
-} from '../../../orchestration/db/orchestration-records'
+} from '../../../orchestration/db/routing-records'
 import {
   RoutingDecisionRegisterParams,
   RoutingInputRegisterParams,
@@ -43,12 +43,17 @@ function parseSubActions(raw: string): RoutingSubActionInput[] {
       (entry) =>
         entry &&
         typeof entry === 'object' &&
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this predicate is the runtime proof of the shape asserted here.
         typeof (entry as RoutingSubActionInput).text === 'string' &&
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the line above proved text is a string.
         (entry as RoutingSubActionInput).text.length > 0
     )
   ) {
-    throw new Error('Invalid --sub-actions: expected a non-empty array of {text, constraints?, task?}')
+    throw new Error(
+      'Invalid --sub-actions: expected a non-empty array of {text, constraints?, task?}'
+    )
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every() above validated exactly this shape.
   return parsed as RoutingSubActionInput[]
 }
 
@@ -178,7 +183,12 @@ export const ORCHESTRATION_ROUTING_METHODS = [
       }
       const custody = structuredMailboxCustody(`dispatch:${dispatch.id}`, db)
       if (typeof custody !== 'object') {
-        return { dispatchId: dispatch.id, dispatchStatus: dispatch.status, sessionId: null, activeTurnId: null }
+        return {
+          dispatchId: dispatch.id,
+          dispatchStatus: dispatch.status,
+          sessionId: null,
+          activeTurnId: null
+        }
       }
       const host = getStructuredAgentSessionHost()
       const activeTurnId = host

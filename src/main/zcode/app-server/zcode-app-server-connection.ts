@@ -29,7 +29,21 @@ export function spawnZcodeAppServerConnection(
   spawnImpl: ProviderProcessSpawner = spawnProcess
 ): Promise<ZcodeAppServerConnection> {
   const managed = spawnManagedProviderProcess(launch, {
-    spawnImpl,
+    spawnImpl: (spec) => {
+      console.warn(
+        `[zcode-spawn] program=${spec.program} args=${JSON.stringify(spec.args ?? []).slice(0, 150)} cwd=${spec.cwd} HOME=${spec.env?.HOME} PATH=${String(spec.env?.PATH ?? '').slice(0, 200)} ZCODE_KEYS=${Object.keys(
+          spec.env ?? {}
+        )
+          .filter((key) => key.startsWith('ZCODE'))
+          .join(',')}`
+      )
+      try {
+        console.warn(
+          `[zcode-spawn] fullspec=${JSON.stringify({ program: spec.program, args: spec.args, cwd: spec.cwd, env: spec.env })}`
+        )
+      } catch {}
+      return spawnImpl(spec)
+    },
     site: 'zcode-app-server-teardown'
   })
   const { child } = managed

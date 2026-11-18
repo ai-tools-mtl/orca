@@ -42,8 +42,16 @@ function actionOf(item: RoutingConversationItem): { name: string; path?: string 
   if (item.body.kind !== 'tool-call' || typeof item.body.name !== 'string') {
     return null
   }
-  const path = item.body.input?.path
-  return { name: item.body.name, ...(typeof path === 'string' ? { path } : {}) }
+  // Providers spell the read target differently: codex classifies `path`, zcode/claude may use
+  // `file_path` on the raw tool input.
+  const rawInput = item.body.input ?? {}
+  const path =
+    typeof rawInput.path === 'string'
+      ? rawInput.path
+      : typeof rawInput.file_path === 'string'
+        ? rawInput.file_path
+        : undefined
+  return { name: item.body.name, ...(path !== undefined ? { path } : {}) }
 }
 
 function itemText(item: RoutingConversationItem): string {
@@ -103,7 +111,7 @@ export function verifySupplementFirstAction(
     name: first.action!.name,
     ...(first.action!.path !== undefined ? { path: first.action!.path } : {})
   }
-  if (first.action!.name !== actionName) {
+  if (first.action!.name.toLowerCase() !== actionName.toLowerCase()) {
     return {
       verdict: 'violated',
       firstAction,
@@ -120,7 +128,7 @@ export function verifySupplementFirstAction(
   for (const forbidden of expectation.forbiddenPaths ?? []) {
     const hit = items.find((item) => {
       const action = actionOf(item)
-      return action?.name === 'read' && action.path === forbidden
+      return action?.name.toLowerCase() === 'read' && action.path === forbidden
     })
     if (hit) {
       return {

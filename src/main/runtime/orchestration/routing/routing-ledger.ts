@@ -4,7 +4,7 @@ import type {
   RoutingSupplementAttemptRow,
   RoutingSupplementOutcome,
   RoutingSupplementRow
-} from '../db/orchestration-records'
+} from '../db/routing-records'
 import { OrchestrationError } from '../orchestration-error'
 import { generateId } from '../db/generated-id'
 import type { OrchestrationDb } from '../db/orchestration-db'
@@ -26,6 +26,7 @@ export function registerRoutingInput(
          VALUES (?, ?, ?, (SELECT COALESCE(MAX(received_seq), 0) + 1 FROM routing_inputs WHERE run_id = ?), 'received', NULL)`
       )
       .run(id, input.runId, input.text, input.runId)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fetch reads back exactly the row just inserted.
     const row = this.getRoutingInput(id) as RoutingInputRow
     this.db.exec('RELEASE register_routing_input')
     return row
@@ -56,6 +57,7 @@ export function registerRoutingDecision(
   this.db.exec('SAVEPOINT register_routing_decision')
   try {
     // The stable id's num comes from the input row's ordinal, so `sa-{num}-{k}` is globally unique.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the COUNT(*) projection is exactly { seq: number }.
     const num = this.db
       .prepare(
         'SELECT COUNT(*) AS seq FROM routing_inputs WHERE rowid <= (SELECT rowid FROM routing_inputs WHERE input_id = ?)'
@@ -89,6 +91,7 @@ export function registerRoutingDecision(
           JSON.stringify(subAction.constraints ?? []),
           subAction.taskId ?? null
         )
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fetch reads back exactly the row just inserted.
       return this.getSubAction(id) as RoutingSubActionRow
     })
     this.db.exec('RELEASE register_routing_decision')
@@ -141,6 +144,7 @@ export function recordRoutingSupplement(
         supplement.targetDispatchId,
         supplement.text
       )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fetch reads back exactly the row just inserted.
     const row = this.getSupplement(id) as RoutingSupplementRow
     this.db.exec('RELEASE record_routing_supplement')
     return row
@@ -192,6 +196,7 @@ export function recordSupplementAttempt(
         attempt.detail ?? null,
         attempt.turnId ?? null
       )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fetch reads back exactly the row just inserted.
     const row = this.getSupplementAttempt(id) as RoutingSupplementAttemptRow
     this.db.exec('RELEASE record_supplement_attempt')
     return row
@@ -206,6 +211,7 @@ export function getRoutingInput(
   this: OrchestrationDb,
   inputId: string
 ): RoutingInputRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
   return this.db.prepare('SELECT * FROM routing_inputs WHERE input_id = ?').get(inputId) as
     | RoutingInputRow
     | undefined
@@ -215,12 +221,14 @@ export function getSubAction(
   this: OrchestrationDb,
   subActionId: string
 ): RoutingSubActionRow | undefined {
-  return this.db.prepare('SELECT * FROM routing_sub_actions WHERE sub_action_id = ?').get(subActionId) as
-    | RoutingSubActionRow
-    | undefined
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
+  return this.db
+    .prepare('SELECT * FROM routing_sub_actions WHERE sub_action_id = ?')
+    .get(subActionId) as RoutingSubActionRow | undefined
 }
 
 export function listSubActions(this: OrchestrationDb, inputId: string): RoutingSubActionRow[] {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
   return this.db
     .prepare('SELECT * FROM routing_sub_actions WHERE input_id = ? ORDER BY seq')
     .all(inputId) as RoutingSubActionRow[]
@@ -230,12 +238,17 @@ export function getSupplement(
   this: OrchestrationDb,
   supplementId: string
 ): RoutingSupplementRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
   return this.db
     .prepare('SELECT * FROM routing_supplements WHERE supplement_id = ?')
     .get(supplementId) as RoutingSupplementRow | undefined
 }
 
-export function listSupplements(this: OrchestrationDb, subActionId: string): RoutingSupplementRow[] {
+export function listSupplements(
+  this: OrchestrationDb,
+  subActionId: string
+): RoutingSupplementRow[] {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
   return this.db
     .prepare('SELECT * FROM routing_supplements WHERE sub_action_id = ? ORDER BY created_at, rowid')
     .all(subActionId) as RoutingSupplementRow[]
@@ -245,6 +258,7 @@ export function getSupplementAttempt(
   this: OrchestrationDb,
   attemptId: string
 ): RoutingSupplementAttemptRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
   return this.db
     .prepare('SELECT * FROM routing_supplement_attempts WHERE attempt_id = ?')
     .get(attemptId) as RoutingSupplementAttemptRow | undefined
@@ -254,6 +268,7 @@ export function listSupplementAttempts(
   this: OrchestrationDb,
   supplementId: string
 ): RoutingSupplementAttemptRow[] {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
   return this.db
     .prepare(
       'SELECT * FROM routing_supplement_attempts WHERE supplement_id = ? ORDER BY created_at, rowid'

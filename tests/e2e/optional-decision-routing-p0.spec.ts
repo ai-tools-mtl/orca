@@ -16,7 +16,8 @@ import {
   readlinkSync,
   rmSync,
   symlinkSync,
-  writeFileSync
+  writeFileSync,
+  appendFileSync
 } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -35,6 +36,13 @@ import {
 } from '../../src/main/runtime/orchestration/routing/first-action-verification'
 
 const OPT_IN = process.env.P0_ROUTING_RUN === '1'
+/** Which structured agent the P0 workers run: 'codex' (real CLI) | 'zcode' (real CLI) | 'fake' (codex protocol stand-in). */
+const ROUTING_AGENT =
+  process.env.P0_ROUTING_AGENT === 'zcode'
+    ? 'zcode'
+    : process.env.P0_ROUTING_AGENT === 'codex'
+      ? 'codex'
+      : 'fake'
 
 test.skip(
   !OPT_IN,
@@ -66,11 +74,8 @@ const results: {
 }[] = []
 const appLog: string[] = []
 
-import { appendFileSync } from 'node:fs'
 let debugFile: string | null = null
-// oxlint-disable-next-line no-console -- mirrored for the streamed log when it survives.
 function debug(line: string): void {
-  // oxlint-disable-next-line no-console
   console.log(`p0: ${line}`)
   if (debugFile) {
     appendFileSync(debugFile, `${new Date().toISOString()} ${line}\n`)
@@ -84,9 +89,7 @@ function record(
   evidence?: unknown
 ): void {
   results.push({ scenario, condition, verdict, evidence })
-  // oxlint-disable-next-line no-console -- the driver surfaces per-condition verdicts on the console.
   console.log(`  [${verdict}] ${scenario} — ${condition}`)
-  // oxlint-disable-next-line no-console -- evidence stays greppable beside the verdict.
   console.log(`p0: evidence ${scenario} — ${condition}: ${JSON.stringify(evidence ?? null)}`)
 }
 
@@ -94,7 +97,9 @@ function toRoutingItems(page: HistoryPage): RoutingConversationItem[] {
   return (page.page?.items ?? page.items ?? [])
     .filter((item) => typeof item.sequence === 'number' && item.body !== undefined)
     .map((item) => ({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the filter above proved sequence is a number.
       sequence: item.sequence as number,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the same filter proved body is present.
       body: item.body as RoutingConversationItem['body']
     }))
 }
@@ -115,7 +120,7 @@ function routingAgentOverride(): string | null {
   )
   writeFileSync(copy, pinned)
   chmodSync(copy, 0o755)
-  return process.env.P0_ROUTING_AGENT === 'codex' ? null : copy
+  return ROUTING_AGENT === 'fake' ? copy : null
 }
 
 const toolCalls = (items: RoutingConversationItem[]) =>
@@ -129,6 +134,8 @@ const userText = (item: RoutingConversationItem) =>
 
 test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-up lineage, restart re-query', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
 {}, testInfo) => {
+  // P0 drives a real spawned app through three steered turns plus a restart; the ceiling bounds
+  // end-to-end app boot and agent turns, not a hanging assertion.
   test.setTimeout(20 * 60_000)
   // 'fake' runs a protocol-faithful codex app-server stand-in (no model, no quota);
   // 'codex' runs the real authenticated CLI (opt-in quota permitting).
@@ -206,10 +213,8 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
     try {
       symlinkSync(path.join(os.homedir(), '.codex'), codexHome)
     } catch (error) {
-      // oxlint-disable-next-line no-console
       console.warn(`p0: could not link ~/.codex (${String(error)}); codex may be unauthenticated`)
     }
-    // oxlint-disable-next-line no-console
     console.log(
       `p0: codex home link=${(() => {
         try {
@@ -233,22 +238,34 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
     // Structured workers need the native-chat default surface and hands-off permissions. The
     // fake stand-in replaces the codex command wholesale so the worker never spawns the real
     // quota-gated CLI; the command override goes through the runtime's own mutation vocabulary.
-    await first.page.evaluate(async () => {
-      await window.__store?.getState().updateSettings({
-        agentDefaultSurface: 'chat',
-        nativeChatPermissionMode: 'full-access',
-        disabledTuiAgents: []
-      })
-    })
+    // Real CLI wrappers (`#!/usr/bin/env node`) need node on the child PATH: the isolated home's
+    // login shell PATH stops at /usr/bin:/bin, so every real agent gets node's dir prepended.
+    const nodeBinDir = path.dirname(process.execPath)
+    await first.page.evaluate(
+      async ({ surface, mode, envPath }) => {
+        await window.__store?.getState().updateSettings({
+          agentDefaultSurface: surface,
+          nativeChatPermissionMode: mode,
+          disabledTuiAgents: [],
+          agentDefaultEnv: {
+            codex: { PATH: envPath },
+            zcode: { PATH: envPath },
+            claude: { PATH: envPath }
+          }
+        })
+      },
+      {
+        surface: 'chat' as const,
+        mode: 'full-access' as const,
+        envPath: `${nodeBinDir}${path.delimiter}${process.env.PATH ?? ''}`
+      }
+    )
     const fakeCommand = routingAgentOverride()
     if (fakeCommand) {
       await client.call('settings.mutateAgentLaunch', {
         type: 'command',
-        agent: 'codex',
+        agent: ROUTING_AGENT,
         value: fakeCommand
-      })
-      await client.call('settings.update', {
-        agentDefaultEnv: { codex: { PATH: `${shims}${path.delimiter}${process.env.PATH ?? ''}` } }
       })
     }
     const launchSettings = await client.call<{ settings: Record<string, unknown> }>(
@@ -263,7 +280,6 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
       from
     })
     const runId = run.result.run.id
-    // oxlint-disable-next-line no-console
     console.log(`p0: run ${runId}`)
 
     const history = async (sessionId: string) => {
@@ -278,22 +294,35 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
       timeoutMs: number,
       fn: () => Promise<T | null>
     ): Promise<T> => {
-      const deadline = Date.now() + timeoutMs
+      let result: T | null = null
       let lastError: unknown
-      while (Date.now() < deadline) {
-        try {
-          const value = await fn()
-          if (value !== null) {
-            return value
-          }
-        } catch (error) {
-          lastError = error
-        }
-        await new Promise((resolve) => setTimeout(resolve, 1_000))
+      try {
+        await expect
+          .poll(
+            async () => {
+              try {
+                const value = await fn()
+                if (value !== null) {
+                  result = value
+                }
+                return value
+              } catch (error) {
+                lastError = error
+                return null
+              }
+            },
+            { timeout: timeoutMs, intervals: [1_000] }
+          )
+          .not.toBeNull()
+      } catch {
+        throw new Error(
+          `timed out waiting for ${label}${lastError instanceof Error ? `: ${lastError.message}` : ''}`
+        )
       }
-      throw new Error(
-        `timed out waiting for ${label}${lastError instanceof Error ? `: ${lastError.message}` : ''}`
-      )
+      if (result === null) {
+        throw new Error(`timed out waiting for ${label}`)
+      }
+      return result
     }
     const targetOf = async (dispatchId: string) => {
       const shown = await client.call<{
@@ -341,11 +370,13 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
         task: taskId,
         run: runId,
         worktree: 'new-child',
-        agent: 'codex',
+        agent: ROUTING_AGENT,
         timeoutMs: 180_000,
         from
       })
       debug(`worker-start receipt for ${taskId}: ${JSON.stringify(started.result)}`)
+      // Full stderr to a file: agent-cli-version spam floods any bounded tail.
+      writeFileSync(path.join(testInfo.outputDir, `app-stderr-${taskId}.log`), appLog.join(''))
       debug(`app stderr tail: ${appLog.join('').split('\n').slice(-60).join(' || ')}`)
       expect(
         started.result.dispatchId,
@@ -430,7 +461,6 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
           .filter((line) => /codex|error|warn|approval|sandbox|auth/i.test(line))
           .slice(-50)
           .join('\n')
-        // oxlint-disable-next-line no-console
         console.log(
           `p0: S1 gate poll failed; history dump: ${JSON.stringify(dump, null, 1)}\np0: currentRequests: ${JSON.stringify(requests, null, 1)}\np0: app log tail:\n${logTail}`
         )
@@ -439,6 +469,7 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
       record('S1', '放行前：门命令已发起且未发起任何文件读取', 'PASS', {
         gateSequence: gateSeen.sequence
       })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the gate command's input carries cwd by protocol.
       const workerCwd = (gateSeen.body?.input as { cwd?: string } | undefined)?.cwd ?? project
 
       const supplementText = '下一步只读 new.txt，跳过 old.txt，报告 new.txt 中的标记。'
@@ -452,7 +483,6 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
           from
         })
       ).result
-      // oxlint-disable-next-line no-console
       console.log(`p0: S1 supplement receipt: ${JSON.stringify(receipt)}`)
       record(
         'S1',
@@ -467,7 +497,6 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
       )
 
       writeFileSync(gateFile, 'go')
-      // oxlint-disable-next-line no-console
       console.log('p0: gate released')
       const status = await settle(taskId)
 
@@ -511,6 +540,7 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
       const s2Status = await settle(taskId)
       const s2TurnIds = (await history(sessionId))
         .filter((item) => item.body?.kind === 'turn' && typeof item.body?.turnId === 'string')
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the filter above proved turnId is a string.
         .map((item) => item.body?.turnId as string)
       const turnId = s2TurnIds.at(-1)
       record(
@@ -557,11 +587,11 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
           from
         }
       )
-      // oxlint-disable-next-line no-console
       console.log(`p0: S2 nudge receipt: ${JSON.stringify(nudge.result)}`)
       const secondTurn = await poll('S2 second turn from journal', 300_000, async () => {
         const ids = (await history(sessionId))
           .filter((item) => item.body?.kind === 'turn' && typeof item.body?.turnId === 'string')
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the filter above proved turnId is a string.
           .map((item) => item.body?.turnId as string)
         return ids.length >= 2 && ids.at(-1) !== turnId ? ids.at(-1) : null
       })
@@ -643,10 +673,10 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
         body: 'Read old.txt again and report its marker one more time. Then report completion.',
         from
       })
-      // oxlint-disable-next-line no-console
       console.log(
         `p0: S3 follow-up send receipt: ${JSON.stringify(followUpSend.result).slice(0, 400)}`
       )
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the send receipt carries dispatchId by RPC contract.
       const followUpDispatchId = (followUpSend.result as { dispatchId?: string }).dispatchId
       const lineage = await poll('S3 follow-up continues the lineage', 300_000, async () => {
         if (!followUpDispatchId) {
@@ -682,7 +712,7 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
           task: taskId,
           run: runId,
           worktree: 'new-child',
-          agent: 'codex',
+          agent: ROUTING_AGENT,
           timeoutMs: 180_000,
           from
         },
@@ -690,7 +720,6 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
       )
       const dispatchId = started.result.dispatchId
 
-      // oxlint-disable-next-line no-console
       console.log('p0: restarting runtime...')
       await session.close(current)
       current = null
@@ -726,10 +755,8 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
       )
     }
 
-    // oxlint-disable-next-line no-console
     console.log('\n===== P0 结果 =====')
     for (const entry of results) {
-      // oxlint-disable-next-line no-console
       console.log(`[${entry.verdict}] ${entry.scenario} — ${entry.condition}`)
     }
     const failed = results.filter((entry) => entry.verdict !== 'PASS')

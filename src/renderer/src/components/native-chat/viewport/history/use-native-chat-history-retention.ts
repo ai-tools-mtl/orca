@@ -41,6 +41,7 @@ export function useNativeChatHistoryRetention({
   )
   const release = useRef<(() => void) | null>(null)
   useNativeChatPaneLifetimeEffect(
+    // trimHistory belongs to the live session, so a source change re-arms this teardown through it.
     useCallback(
       () => () => {
         const held = release.current
@@ -50,7 +51,7 @@ export function useNativeChatHistoryRetention({
           trimHistory?.()
         }
       },
-      [retainHistory, trimHistory, sourceKey]
+      [trimHistory]
     )
   )
   const leaveEnd = useCallback(() => {

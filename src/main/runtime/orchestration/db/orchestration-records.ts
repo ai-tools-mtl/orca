@@ -338,55 +338,6 @@ export type DecisionGateRow = {
   resolved_at: string | null
 }
 
-export type RoutingDecisionStatus = 'received' | 'decided'
-
-export type RoutingInputRow = {
-  input_id: string
-  run_id: string
-  raw_text: string
-  received_seq: number
-  decision_status: RoutingDecisionStatus
-  decision_json: string | null
-  created_at: string
-}
-
-export type RoutingSubActionRow = {
-  sub_action_id: string
-  input_id: string
-  run_id: string
-  seq: number
-  text: string
-  constraints_json: string
-  task_id: string | null
-  created_at: string
-}
-
-export type RoutingSupplementRow = {
-  supplement_id: string
-  input_id: string
-  sub_action_id: string
-  run_id: string
-  target_dispatch_id: string
-  raw_text: string
-  created_at: string
-}
-
-export type RoutingSupplementOutcome = 'delivered' | 'refused' | 'unverified'
-
-export type RoutingSupplementAttemptRow = {
-  attempt_id: string
-  supplement_id: string
-  request_id: string
-  target_dispatch_id: string
-  /** Null only on refusals recorded before any expected turn was established. */
-  expected_turn_id: string | null
-  outcome: RoutingSupplementOutcome
-  refusal_kind: string | null
-  detail: string | null
-  turn_id: string | null
-  created_at: string
-}
-
 export type CoordinatorRun = {
   id: string
   spec: string

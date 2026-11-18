@@ -1,7 +1,9 @@
-import type { AgentJournalAnsweredTurnIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalAnsweredTurnIdentity,
+  AgentJournalTurnItem
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalDispatchRejection } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentJournalTurnItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
 export type StructuredAgentSessionCommandRun = {
   clientMessageId: string

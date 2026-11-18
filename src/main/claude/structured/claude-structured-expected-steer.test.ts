@@ -31,11 +31,11 @@ const input = {
   expectedTurnId: OPEN_TURN
 }
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the strict steer reads only these translator facts.
 function sessionWith(translator: {
   openTurnHasInputWork: boolean
   currentTurnId: string | null
 }): ClaudeSession {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub reads only these translator facts.
   return { translator } as unknown as ClaudeSession
 }
 

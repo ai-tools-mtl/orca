@@ -169,3 +169,6 @@ ci-shards/
 
 mobile/**/.gradle/
 tests/tools/optional-decision-routing-p0/.fake-codex-appserver-pinned.mjs
+
+# Local scratch: the interactive dispatch prototype stays out of the repo.
+原型/

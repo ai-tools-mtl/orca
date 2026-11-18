@@ -28,7 +28,7 @@ export async function steerCodexTurn(
   input: CodexTurnSteerInput
 ): Promise<{ turnId: string; via: 'steer' } | null> {
   try {
-    return { via: 'steer' as const, ...await sendCodexTurnSteer(host, expectedTurnId, input) }
+    return { via: 'steer' as const, ...(await sendCodexTurnSteer(host, expectedTurnId, input)) }
   } catch (error) {
     if (isCodexAppServerRequestError(error) || isCodexAppServerUnsupportedError(error)) {
       return null
@@ -44,14 +44,17 @@ export async function steerExpectedCodexTurn(
   expectedTurnId: string,
   input: CodexTurnSteerInput
 ): Promise<AgentSessionExpectedSteerOutcome> {
-  if (host.abortedTurnIds?.has(expectedTurnId) || host.activeTurnIds?.has(expectedTurnId) === false) {
+  if (
+    host.abortedTurnIds?.has(expectedTurnId) ||
+    host.activeTurnIds?.has(expectedTurnId) === false
+  ) {
     return { status: 'refused', kind: 'turn-not-active', expectedTurnId }
   }
   try {
     return {
       status: 'delivered',
       via: 'steer' as const,
-      ...await sendCodexTurnSteer(host, expectedTurnId, input)
+      ...(await sendCodexTurnSteer(host, expectedTurnId, input))
     }
   } catch (error) {
     if (isCodexAppServerRequestError(error)) {

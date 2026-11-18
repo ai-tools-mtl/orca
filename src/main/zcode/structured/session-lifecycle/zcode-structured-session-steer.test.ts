@@ -9,9 +9,9 @@ const body = {
   blocks: [{ type: 'text' as const, text: 'change course' }]
 }
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the strict steer touches only lane/turns/dispatch facts.
 function sessionStub(options: { openTurnId: string | null }): ZcodeStructuredSession {
   const dispatch = vi.fn(() => ({ state: 'admitted' as const }))
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub touches only lane/turns/dispatch facts.
   return {
     lane: { openTurnId: options.openTurnId },
     turns: { dispatch },

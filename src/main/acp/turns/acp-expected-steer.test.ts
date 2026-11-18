@@ -10,14 +10,19 @@ const body = {
   blocks: [{ type: 'text' as const, text: 'change course' }]
 }
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the strict steer touches only turns/lane/prompt facts.
-function sessionStub(options: { running: boolean; openTurnId: string | null }): AcpStructuredSession {
+function sessionStub(options: {
+  running: boolean
+  openTurnId: string | null
+}): AcpStructuredSession {
   const dispatch = vi.fn()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub touches only turns/lane/prompt facts.
   return {
     turns: { running: options.running, dispatch },
     lane: { openTurnId: options.openTurnId },
     spec: { agent: 'grok', dialect: {} },
-    connection: { initialize: async () => ({ agentCapabilities: { promptCapabilities: { image: true } } }) },
+    connection: {
+      initialize: async () => ({ agentCapabilities: { promptCapabilities: { image: true } } })
+    },
     cwd: '/work/repo',
     dispatch
   } as unknown as AcpStructuredSession & { turns: { dispatch: typeof dispatch } }
@@ -42,9 +47,9 @@ describe('targeted delivery for ACP agents', () => {
     expect(session.turns.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({ clientMessageId: 'client-1', requestedAt: 1 })
     )
-    expect(
-      vi.mocked(session.turns.dispatch).mock.calls[0]?.[0].prompt
-    ).toEqual([{ type: 'text', text: 'change course' }])
+    expect(vi.mocked(session.turns.dispatch).mock.calls[0]?.[0].prompt).toEqual([
+      { type: 'text', text: 'change course' }
+    ])
   })
 
   it('refuses without writing when nothing is running', async () => {

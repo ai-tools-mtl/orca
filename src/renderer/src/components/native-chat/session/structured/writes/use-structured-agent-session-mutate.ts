@@ -92,7 +92,8 @@ export function useStructuredAgentSessionMutate(args: {
   const hostKey = structuredAgentSessionHostKey(target)
   useNativeChatPaneLifetimeEffect(
     useCallback(() => {
-      presentation.current = enabled ? {} : null
+      // The armed fence carries its host/session identity so a host or session change re-arms it.
+      presentation.current = enabled ? { hostKey, sessionId } : null
       return () => {
         presentation.current = null
       }

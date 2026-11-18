@@ -29,7 +29,13 @@ if (spawnSync('codex', ['--version'], { encoding: 'utf8' }).status !== 0) {
 
 const result = spawnSync(
   path.join(REPO, 'node_modules', '.bin', 'playwright'),
-  ['test', 'tests/e2e/optional-decision-routing-p0.spec.ts', '--config', 'tests/playwright.config.ts', '--project=electron-headless'],
+  [
+    'test',
+    'tests/e2e/optional-decision-routing-p0.spec.ts',
+    '--config',
+    'tests/playwright.config.ts',
+    '--project=electron-headless'
+  ],
   {
     stdio: 'inherit',
     cwd: REPO,

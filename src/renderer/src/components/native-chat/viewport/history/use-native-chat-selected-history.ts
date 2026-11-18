@@ -74,6 +74,7 @@ export function useNativeChatSelectedHistory({
         release.current = null
         owesTrim.current = false
       },
+      // oxlint-disable-next-line react-hooks/exhaustive-deps -- retainHistory/sourceKey re-key the pane lifetime; the cleanup reads only refs.
       [retainHistory, sourceKey]
     )
   )

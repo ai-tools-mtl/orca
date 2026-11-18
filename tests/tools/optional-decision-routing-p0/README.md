@@ -6,12 +6,12 @@ worker, through the strict routing entry (`orchestration routing-supplement-send
 
 ## What it runs
 
-| Scenario | Acceptance condition (plan §9 P0) |
-| --- | --- |
+| Scenario            | Acceptance condition (plan §9 P0)                                                                                                                                                                                                                                           |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | S1 同一轮改变下一步 | gate command initiated, no reads yet → supplement delivered to the named active turn (typed receipt with turn id) → gate released → worker's first new task action reads `new.txt`, never `old.txt` (checked over projected history by `routing/first-action-verification`) |
-| S2 原轮结束后拒收 | supplement sent with the original turn id after it ends — once while the session is idle, once while another turn runs. Both must return a typed refusal bound to the original turn; history must show the supplement text nowhere and no turn opened because of it |
-| S3 并行与结算后续接 | two independent tasks each get a Dispatch while the first still runs; both settle with retrievable results; an explicit follow-up to the settled Dispatch continues its lineage (`follow_up_of_dispatch_id`) |
-| S4 重启查证 | worker-start accepted with a driver-chosen `--retry-request` UUID; runtime killed and re-served; `orchestration request-show --request` and `worker-show --dispatch` re-query the original request id and Dispatch |
+| S2 原轮结束后拒收   | supplement sent with the original turn id after it ends — once while the session is idle, once while another turn runs. Both must return a typed refusal bound to the original turn; history must show the supplement text nowhere and no turn opened because of it         |
+| S3 并行与结算后续接 | two independent tasks each get a Dispatch while the first still runs; both settle with retrievable results; an explicit follow-up to the settled Dispatch continues its lineage (`follow_up_of_dispatch_id`)                                                                |
+| S4 重启查证         | worker-start accepted with a driver-chosen `--retry-request` UUID; runtime killed and re-served; `orchestration request-show --request` and `worker-show --dispatch` re-query the original request id and Dispatch                                                          |
 
 ## Prerequisites
 

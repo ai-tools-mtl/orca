@@ -42,7 +42,11 @@ export const ORCHESTRATION_ROUTING_HANDLERS: Record<string, CommandHandler> = {
       })
       return
     }
-    printResult(result, json, (value) => `Input ${value.input.input_id} received in run ${value.input.run_id}.`)
+    printResult(
+      result,
+      json,
+      (value) => `Input ${value.input.input_id} received in run ${value.input.run_id}.`
+    )
   },
 
   'orchestration routing-decision-register': async ({ flags, client, cwd, json }) => {
@@ -59,11 +63,14 @@ export const ORCHESTRATION_ROUTING_HANDLERS: Record<string, CommandHandler> = {
       printOrchestrationResult(result, json, {
         fields: (value) => ({
           inputId: value.inputId,
-          subActions: value.subActions.map((subAction) => ({
-            id: subAction.sub_action_id,
-            text: subAction.text,
-            constraints: JSON.parse(subAction.constraints_json) as string[]
-          }))
+          subActions: value.subActions.map((subAction) => {
+            const constraints: string[] = JSON.parse(subAction.constraints_json)
+            return {
+              id: subAction.sub_action_id,
+              text: subAction.text,
+              constraints
+            }
+          })
         })
       })
       return
@@ -157,8 +164,9 @@ export const ORCHESTRATION_ROUTING_HANDLERS: Record<string, CommandHandler> = {
         : value.supplements
             .map(
               (entry) =>
-                `${entry.supplement.supplement_id} sub-action=${entry.supplement.sub_action_id} ${ 
-                entry.attempts.map((attempt) => attemptRowLine(attempt)).join('; ')}`
+                `${entry.supplement.supplement_id} sub-action=${entry.supplement.sub_action_id} ${entry.attempts
+                  .map((attempt) => attemptRowLine(attempt))
+                  .join('; ')}`
             )
             .join('\n')
     )
@@ -215,10 +223,20 @@ function supplementReceiptFields(value: SupplementReceipt) {
 }
 
 function sendReceiptLine(value: SupplementReceipt): string {
-  const parts = [`attempt ${value.attemptId}`, `outcome=${value.outcome}`, `request ${value.requestId}`]
-  if (value.expectedTurnId) {parts.push(`expectedTurn ${value.expectedTurnId}`)}
-  if (value.turnId) {parts.push(`turn ${value.turnId}`)}
-  if (value.refusalKind) {parts.push(`refused:${value.refusalKind}`)}
+  const parts = [
+    `attempt ${value.attemptId}`,
+    `outcome=${value.outcome}`,
+    `request ${value.requestId}`
+  ]
+  if (value.expectedTurnId) {
+    parts.push(`expectedTurn ${value.expectedTurnId}`)
+  }
+  if (value.turnId) {
+    parts.push(`turn ${value.turnId}`)
+  }
+  if (value.refusalKind) {
+    parts.push(`refused:${value.refusalKind}`)
+  }
   return parts.join(' ')
 }
 
@@ -232,9 +250,19 @@ type AttemptRow = {
 }
 
 function attemptRowLine(attempt: AttemptRow): string {
-  const parts = [`attempt ${attempt.attempt_id}`, `outcome=${attempt.outcome}`, `request ${attempt.request_id}`]
-  if (attempt.expected_turn_id) {parts.push(`expectedTurn ${attempt.expected_turn_id}`)}
-  if (attempt.turn_id) {parts.push(`turn ${attempt.turn_id}`)}
-  if (attempt.refusal_kind) {parts.push(`refused:${attempt.refusal_kind}`)}
+  const parts = [
+    `attempt ${attempt.attempt_id}`,
+    `outcome=${attempt.outcome}`,
+    `request ${attempt.request_id}`
+  ]
+  if (attempt.expected_turn_id) {
+    parts.push(`expectedTurn ${attempt.expected_turn_id}`)
+  }
+  if (attempt.turn_id) {
+    parts.push(`turn ${attempt.turn_id}`)
+  }
+  if (attempt.refusal_kind) {
+    parts.push(`refused:${attempt.refusal_kind}`)
+  }
   return parts.join(' ')
 }
