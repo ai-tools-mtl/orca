@@ -75,3 +75,65 @@ describe('routing ledger (plan §5.1/§6)', () => {
     ).toThrowError(/not found/)
   })
 })
+
+describe('routing sub-action continuations (plan §5.3 row 3 / §6)', () => {
+  it('registers one continuation per sub-action and reuses it', () => {
+    const db = createDb()
+    const run = db.createRun({
+      objective: 'audit',
+      coordinatorHandle: 'coord',
+      coordinatorPaneKey: null
+    })
+    const input = db.registerRoutingInput({ runId: run.id, text: '调查' })
+    db.registerRoutingDecision({ inputId: input.input_id, subActions: [{ text: '调查项' }] })
+    const first = db.recordRoutingContinuation({
+      subActionId: 'sa-1-1',
+      inputId: input.input_id,
+      sourceDispatchId: 'ctx_source',
+      requestId: 'rtcont_1'
+    })
+    expect(first.reused).toBe(false)
+    expect(first.continuation.follow_up_dispatch_id).toBeNull()
+    const second = db.recordRoutingContinuation({
+      subActionId: 'sa-1-1',
+      inputId: input.input_id,
+      sourceDispatchId: 'ctx_source',
+      requestId: 'rtcont_1'
+    })
+    expect(second.reused).toBe(true)
+    expect(db.getRoutingContinuation('sa-1-1')?.request_id).toBe('rtcont_1')
+  })
+
+  it('binds the follow-up dispatch once; re-binding the same is idempotent, another conflicts', () => {
+    const db = createDb()
+    const run = db.createRun({
+      objective: 'audit',
+      coordinatorHandle: 'coord',
+      coordinatorPaneKey: null
+    })
+    const input = db.registerRoutingInput({ runId: run.id, text: '调查' })
+    db.registerRoutingDecision({ inputId: input.input_id, subActions: [{ text: '调查项' }] })
+    db.recordRoutingContinuation({
+      subActionId: 'sa-1-1',
+      inputId: input.input_id,
+      sourceDispatchId: 'ctx_source',
+      requestId: 'rtcont_1'
+    })
+    const bound = db.bindRoutingContinuationFollowUp('sa-1-1', 'ctx_follow')
+    expect(bound.follow_up_dispatch_id).toBe('ctx_follow')
+    expect(db.bindRoutingContinuationFollowUp('sa-1-1', 'ctx_follow').follow_up_dispatch_id).toBe(
+      'ctx_follow'
+    )
+    expect(() => db.bindRoutingContinuationFollowUp('sa-1-1', 'ctx_other')).toThrowError(
+      /already continues/
+    )
+  })
+
+  it('refuses continuations for sub-actions without a record', () => {
+    const db = createDb()
+    expect(db.getRoutingContinuation('sa_missing')).toBeUndefined()
+    expect(() => db.bindRoutingContinuationFollowUp('sa_missing', 'ctx_x')).toThrowError(
+      /not found/
+    )
+  })
+})

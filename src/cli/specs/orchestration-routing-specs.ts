@@ -66,6 +66,26 @@ export const ORCHESTRATION_ROUTING_COMMAND_SPECS: CommandSpec[] = [
     notes: ['Attempts carry outcome delivered/refused, refusal kind, expected turn and request id.']
   },
   {
+    path: ['orchestration', 'routing-supplement-continue'],
+    summary:
+      'Register (or reuse) the one continuation for a settled Dispatch\u2019s unconsumed sub-action',
+    usage:
+      'orca orchestration routing-supplement-continue --input <input_id> --sub-action <sa_id> --dispatch <dispatch_id> [--run <run_id>] [--from <handle>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'input', 'sub-action', 'dispatch', 'run', 'from'],
+    identityFlagRoles: { from: 'caller' },
+    notes: [
+      'Send the follow-up via orchestration.send reusing the printed request id as --retry-request, then bind the new Dispatch with routing-continuation-bind.'
+    ]
+  },
+  {
+    path: ['orchestration', 'routing-continuation-bind'],
+    summary: 'Bind a sub-action\u2019s continuation to its follow-up Dispatch (once)',
+    usage:
+      'orca orchestration routing-continuation-bind --sub-action <sa_id> --dispatch <dispatch_id> [--run <run_id>] [--from <handle>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'sub-action', 'dispatch', 'run', 'from'],
+    identityFlagRoles: { from: 'caller' }
+  },
+  {
     path: ['orchestration', 'routing-target-show'],
     summary: 'Show the structured session and active turn a Dispatch currently resolves to',
     usage:

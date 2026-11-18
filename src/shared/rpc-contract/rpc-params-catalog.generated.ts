@@ -465,9 +465,11 @@ import {
   PeerMailPullParams
 } from './orchestration/orchestration-peer-mail-params'
 import {
+  RoutingContinuationBindParams,
   RoutingDecisionRegisterParams,
   RoutingInputRegisterParams,
   RoutingInputsShowParams,
+  RoutingSupplementContinueParams,
   RoutingSupplementSendParams,
   RoutingSupplementShowParams,
   RoutingTargetShowParams
@@ -1445,9 +1447,11 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.reply': ReplyParams,
   'orchestration.requestShow': RequestShowParams,
   'orchestration.reset': ResetParams,
+  'orchestration.routingContinuationBind': RoutingContinuationBindParams,
   'orchestration.routingDecisionRegister': RoutingDecisionRegisterParams,
   'orchestration.routingInputRegister': RoutingInputRegisterParams,
   'orchestration.routingInputsShow': RoutingInputsShowParams,
+  'orchestration.routingSupplementContinue': RoutingSupplementContinueParams,
   'orchestration.routingSupplementSend': RoutingSupplementSendParams,
   'orchestration.routingSupplementShow': RoutingSupplementShowParams,
   'orchestration.routingTargetShow': RoutingTargetShowParams,

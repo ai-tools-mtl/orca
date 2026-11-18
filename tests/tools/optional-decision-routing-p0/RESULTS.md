@@ -23,6 +23,19 @@
   按 §5.5「先按输入 ID 读取原始输入」恢复路由流程的查询面。
 - 账本测试 3 例（幂等复用/编号连续/run 级列表）；单测 36/36（含验证器与凭据读取器）。
 
+## A.2：§5.3 恢复矩阵第三行 — 结算 Dispatch 的子动作续接
+
+- v48 迁移：`routing_sub_action_continuations`（**sub_action_id 主键 = 方案 §6 唯一续接记录**；
+  `follow_up_dispatch_id` 可空 = 已登记未发送，重启后仍是待改投事实）。
+- 账本：`recordRoutingContinuation`（INSERT OR IGNORE，第二次登记复用）、
+  `bindRoutingContinuationFollowUp`（一次性绑定；换目标 = lifecycle_conflict）。
+- RPC：`orchestration.routingSupplementContinue`（结算 Dispatch 的未消费子动作 → 登记/复用
+  续接并返回 request id；活性校验：Dispatch 仍 dispatched → 指回 targeted-delivery 路径、
+  原.Dispatch 上已 delivered → 拒绝续接）；`orchestration.routingContinuationBind`（绑定
+  follow-up Dispatch）。follow-up 发送本体复用既有 `orchestration.send`（自带 mutation
+  幂等，request id 作 `--retry-request`）；入口恢复/邮箱自动续接的自动重驱（B 阶段）从
+  续接行继续。账本测试 6/6。
+
 真实 headless 运行时（Playwright electron，隔离 profile）+ 真实 Codex 结构化会话适配器 +
 journal 证据 + routing 账本 + 编排结算/续接/回执全链路。`P0_ROUTING_AGENT=fake` 为协议级
 替身：讲真 app-server 线协议（NDJSON initialize/thread/turn/item 通知），按脚本确定性执行

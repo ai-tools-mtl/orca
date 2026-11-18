@@ -43,3 +43,18 @@ export const RoutingInputsShowParams = z.object({
   from: OptionalString,
   run: OptionalString
 })
+
+export const RoutingSupplementContinueParams = z.object({
+  input: requiredString('Missing --input'),
+  subAction: requiredString('Missing --sub-action'),
+  dispatch: requiredString('Missing --dispatch'),
+  from: OptionalString,
+  run: OptionalString
+})
+
+export const RoutingContinuationBindParams = z.object({
+  subAction: requiredString('Missing --sub-action'),
+  dispatch: requiredString('Missing --dispatch'),
+  from: OptionalString,
+  run: OptionalString
+})

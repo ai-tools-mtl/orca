@@ -8,6 +8,11 @@ import type {
 import { OrchestrationError } from '../orchestration-error'
 import { generateId } from '../db/generated-id'
 import type { OrchestrationDb } from '../db/orchestration-db'
+import {
+  bindRoutingContinuationFollowUp,
+  getRoutingContinuation,
+  recordRoutingContinuation
+} from './routing-continuations'
 
 /** Routing ledger (optional-decision-routing plan §6): the input→sub-action→supplement→attempt
  *  linkage only. Execution state stays in tasks/dispatch_contexts/worker_dispatches. */
@@ -303,6 +308,9 @@ export type RoutingLedgerMethods = {
   getSupplementAttempt: typeof getSupplementAttempt
   listSupplementAttempts: typeof listSupplementAttempts
   listRunRoutingInputs: typeof listRunRoutingInputs
+  recordRoutingContinuation: typeof recordRoutingContinuation
+  getRoutingContinuation: typeof getRoutingContinuation
+  bindRoutingContinuationFollowUp: typeof bindRoutingContinuationFollowUp
 }
 
 export function attachRoutingLedger(ctor: { prototype: object }): void {
@@ -318,6 +326,9 @@ export function attachRoutingLedger(ctor: { prototype: object }): void {
     listSupplements,
     getSupplementAttempt,
     listSupplementAttempts,
-    listRunRoutingInputs
+    listRunRoutingInputs,
+    recordRoutingContinuation,
+    getRoutingContinuation,
+    bindRoutingContinuationFollowUp
   })
 }

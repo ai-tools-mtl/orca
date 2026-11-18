@@ -48,3 +48,14 @@ export type RoutingSupplementAttemptRow = {
   turn_id: string | null
   created_at: string
 }
+
+export type RoutingContinuationRow = {
+  /** Primary key: plan §6 唯一续接记录 — one continuation per sub-action. */
+  sub_action_id: string
+  input_id: string
+  source_dispatch_id: string
+  /** Null while the continuation is registered but the follow-up send has not accepted. */
+  follow_up_dispatch_id: string | null
+  request_id: string
+  created_at: string
+}
