@@ -31,7 +31,6 @@ import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } fro
 import { waitForActivePaneHookDescriptor, waitForActivePanePtyId } from './helpers/terminal'
 import {
   findSupplementEchoSequence,
-  verifySupplementFirstAction,
   type RoutingConversationItem
 } from '../../src/main/runtime/orchestration/routing/first-action-verification'
 
@@ -534,17 +533,42 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
       const gateSequence = gateSeen.sequence
       const echoSequence = findSupplementEchoSequence(items, supplementText)
       const anchor = echoSequence ?? gateSequence
-      const verdict = verifySupplementFirstAction(items, {
-        afterSequence: anchor,
-        expect: { actionName: 'read', inputPath: path.join(workerCwd, 'new.txt') },
-        forbiddenPaths: [path.join(workerCwd, 'old.txt')],
-        expectedTurnId: receipt.expectedTurnId ?? originalTurn
-      })
+      // §5.3 任务卡的证据: the runtime owns the verdict — it judges per-turn and records the
+      // card state (processed/violated/pending_verification) plus the first-action evidence.
+      const verified = (
+        await client.call<{
+          verdict: {
+            verdict: string
+            reason?: string
+            firstAction?: { sequence: number; name: string; path?: string }
+          }
+          subAction: { sub_action_id: string; state: string }
+          echoSequence: number | null
+        }>('orchestration.routingSubActionVerify', {
+          input: supplementDelivery.inputId,
+          subAction: supplementDelivery.subActionId,
+          dispatch: dispatchId,
+          expectedTurn: receipt.expectedTurnId ?? originalTurn,
+          text: supplementText,
+          expectAction: 'read',
+          expectPath: path.join(workerCwd, 'new.txt'),
+          forbiddenPaths: JSON.stringify([path.join(workerCwd, 'old.txt')]),
+          items: JSON.stringify(items),
+          anchorSequence: gateSequence,
+          from
+        })
+      ).result
+      const verdict = verified.verdict
       record(
         'S1',
         '首个新动作=读 new.txt 且发起于放行后，全程未读 old.txt',
         verdict.verdict === 'complied' ? 'PASS' : 'FAIL',
-        { anchor: echoSequence === null ? 'gate-item' : 'echo', anchorSequence: anchor, ...verdict }
+        {
+          anchor: echoSequence === null ? 'gate-item' : 'echo',
+          anchorSequence: anchor,
+          ...verdict,
+          subActionState: verified.subAction.state
+        }
       )
       record('S1', '任务结算（worker_done 报告新标记）', status === 'completed' ? 'PASS' : 'FAIL', {
         status

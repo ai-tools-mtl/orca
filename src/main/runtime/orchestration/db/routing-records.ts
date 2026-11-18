@@ -12,6 +12,13 @@ export type RoutingInputRow = {
   created_at: string
 }
 
+export type RoutingSubActionState =
+  | 'registered'
+  | 'delivered'
+  | 'processed'
+  | 'violated'
+  | 'pending_verification'
+
 export type RoutingSubActionRow = {
   sub_action_id: string
   input_id: string
@@ -20,6 +27,9 @@ export type RoutingSubActionRow = {
   text: string
   constraints_json: string
   task_id: string | null
+  /** Card state per §5.3: 已收到(registered)/已投递(delivered)/本轮已处理(processed)/
+   *  本轮未按补充执行(violated)/待核对(pending_verification). */
+  state: RoutingSubActionState
   created_at: string
 }
 
@@ -46,6 +56,8 @@ export type RoutingSupplementAttemptRow = {
   refusal_kind: string | null
   detail: string | null
   turn_id: string | null
+  /** §6 任务补充与交回: the first post-delivery task action and its result, when verified. */
+  first_action_json: string | null
   created_at: string
 }
 

@@ -86,6 +86,30 @@ export const ORCHESTRATION_ROUTING_COMMAND_SPECS: CommandSpec[] = [
     identityFlagRoles: { from: 'caller' }
   },
   {
+    path: ['orchestration', 'routing-sub-action-verify'],
+    summary: 'Record the runtime consumption verdict for a delivered sub-action (§5.3 card facts)',
+    usage:
+      'orca orchestration routing-sub-action-verify --input <input_id> --sub-action <sa_id> --dispatch <dispatch_id> --expected-turn <turn_id> --text <text> --expect-action <name> [--expect-path <path>] [--forbidden-paths <json>] --items <json> [--run <run_id>] [--from <handle>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'input',
+      'sub-action',
+      'dispatch',
+      'expected-turn',
+      'text',
+      'expect-action',
+      'expect-path',
+      'forbidden-paths',
+      'items',
+      'run',
+      'from'
+    ],
+    identityFlagRoles: { from: 'caller' },
+    notes: [
+      '--items is the projected agentSession.history array; the verdict and the card state (processed/violated/pending_verification) are recorded in the ledger.'
+    ]
+  },
+  {
     path: ['orchestration', 'routing-target-show'],
     summary: 'Show the structured session and active turn a Dispatch currently resolves to',
     usage:

@@ -12,6 +12,7 @@ import type { AgentSessionExpectedSteerOutcome } from '../../../native-chat/agen
 
 export type TargetedSupplementRefusalReason =
   | 'dispatch-not-active'
+  | 'paused'
   | 'not-structured-here'
   | 'host-unavailable'
   | 'session-unavailable'
@@ -82,6 +83,11 @@ export async function deliverTargetedSupplement(
       `Dispatch ${dispatch.id} is ${dispatch.status}; the supplement stays recorded with it.`
     )
   }
+  // §5.5: the send re-checks the entry pause after the ledger write — a paused entry holds the
+  // supplement as refused-paused, re-driven by resume without a new supplement row.
+  if (db.isRoutingRunPaused(dispatch.run_id)) {
+    return recordRefusal('paused', params.expectedTurnId ?? null, undefined)
+  }
   const custody = structuredMailboxCustody(`dispatch:${dispatch.id}`, db)
   if (typeof custody !== 'object' || custody.dispatchId !== dispatch.id) {
     return recordRefusal(
@@ -125,6 +131,7 @@ export async function deliverTargetedSupplement(
     return recordRefusal('session-unavailable', expectedTurnId, sessionId, message)
   }
   if (outcome.status === 'delivered') {
+    db.setSubActionState(params.subActionId, 'delivered')
     return {
       supplement,
       session: sessionId,

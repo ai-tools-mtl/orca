@@ -8,21 +8,6 @@ import {
   runScopedSessionCaller
 } from '../identity/terminal-identity'
 
-type SupplementReceipt = {
-  inputId: string
-  supplementId: string
-  subActionId: string
-  dispatchId: string
-  attemptId: string
-  requestId: string
-  expectedTurnId: string | null
-  outcome: string
-  refusalKind?: string
-  detail?: string
-  turnId?: string
-  sessionId?: string
-}
-
 export const ORCHESTRATION_ROUTING_HANDLERS: Record<string, CommandHandler> = {
   'orchestration routing-input-register': async ({ flags, client, cwd, json }) => {
     const result = await callOrchestrationMutation<{
@@ -125,29 +110,6 @@ export const ORCHESTRATION_ROUTING_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, (value) => `${value.inputs.length} routing input(s) recorded.`)
   },
 
-  'orchestration routing-supplement-send': async ({ flags, client, cwd, json }) => {
-    const result = await callOrchestrationMutation<SupplementReceipt>(
-      client,
-      flags,
-      'orchestration.routingSupplementSend',
-      {
-        input: getRequiredStringFlag(flags, 'input'),
-        subAction: getRequiredStringFlag(flags, 'sub-action'),
-        dispatch: getRequiredStringFlag(flags, 'dispatch'),
-        text: getRequiredStringFlag(flags, 'text'),
-        expectedTurn: getOptionalStringFlag(flags, 'expected-turn'),
-        from: await resolveCoordinatorTerminalHandle(flags, cwd, client)
-      }
-    )
-    if (!flags.has('full')) {
-      printOrchestrationResult(result, json, {
-        fields: (value) => supplementReceiptFields(value)
-      })
-      return
-    }
-    printResult(result, json, (value) => sendReceiptLine(value))
-  },
-
   'orchestration routing-supplement-show': async ({ flags, client, cwd, json }) => {
     const run = getOptionalStringFlag(flags, 'run')
     const from = run
@@ -245,64 +207,4 @@ export const ORCHESTRATION_ROUTING_HANDLERS: Record<string, CommandHandler> = {
         `Dispatch ${value.dispatchId} [${value.dispatchStatus}] session=${value.sessionId ?? 'none'} activeTurn=${value.activeTurnId ?? 'none'}`
     )
   }
-}
-
-function supplementReceiptFields(value: SupplementReceipt) {
-  return {
-    outcome: value.outcome,
-    supplementId: value.supplementId,
-    subActionId: value.subActionId,
-    dispatchId: value.dispatchId,
-    attemptId: value.attemptId,
-    requestId: value.requestId,
-    expectedTurnId: value.expectedTurnId ?? undefined,
-    turnId: value.turnId,
-    refusalKind: value.refusalKind,
-    detail: value.detail
-  }
-}
-
-function sendReceiptLine(value: SupplementReceipt): string {
-  const parts = [
-    `attempt ${value.attemptId}`,
-    `outcome=${value.outcome}`,
-    `request ${value.requestId}`
-  ]
-  if (value.expectedTurnId) {
-    parts.push(`expectedTurn ${value.expectedTurnId}`)
-  }
-  if (value.turnId) {
-    parts.push(`turn ${value.turnId}`)
-  }
-  if (value.refusalKind) {
-    parts.push(`refused:${value.refusalKind}`)
-  }
-  return parts.join(' ')
-}
-
-type AttemptRow = {
-  attempt_id: string
-  request_id: string
-  expected_turn_id: string | null
-  outcome: string
-  refusal_kind: string | null
-  turn_id: string | null
-}
-
-function attemptRowLine(attempt: AttemptRow): string {
-  const parts = [
-    `attempt ${attempt.attempt_id}`,
-    `outcome=${attempt.outcome}`,
-    `request ${attempt.request_id}`
-  ]
-  if (attempt.expected_turn_id) {
-    parts.push(`expectedTurn ${attempt.expected_turn_id}`)
-  }
-  if (attempt.turn_id) {
-    parts.push(`turn ${attempt.turn_id}`)
-  }
-  if (attempt.refusal_kind) {
-    parts.push(`refused:${attempt.refusal_kind}`)
-  }
-  return parts.join(' ')
 }

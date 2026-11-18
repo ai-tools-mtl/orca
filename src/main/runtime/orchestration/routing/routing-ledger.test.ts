@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../db/orchestration-db'
+import { createRootDispatch } from '../db/root-dispatch-test-fixture'
 
 const harnesses: { db: OrchestrationDb; dir: string }[] = []
 afterAll(() => {
@@ -135,5 +136,79 @@ describe('routing sub-action continuations (plan §5.3 row 3 / §6)', () => {
     expect(() => db.bindRoutingContinuationFollowUp('sa_missing', 'ctx_x')).toThrowError(
       /not found/
     )
+  })
+})
+
+describe('sub-action card state + run pause (plan §5.3/§5.5)', () => {
+  it('walks registered → delivered → processed and refuses terminal moves', () => {
+    const db = createDb()
+    const run = db.createRun({
+      objective: 'audit',
+      coordinatorHandle: 'coord',
+      coordinatorPaneKey: null
+    })
+    const input = db.registerRoutingInput({ runId: run.id, text: '修登录' })
+    db.registerRoutingDecision({ inputId: input.input_id, subActions: [{ text: '修登录' }] })
+    const subActionId = db.listSubActions(input.input_id)[0]!.sub_action_id
+    expect(db.getSubAction(subActionId)?.state).toBe('registered')
+    db.setSubActionState(subActionId, 'delivered')
+    db.setSubActionState(subActionId, 'processed')
+    expect(db.getSubAction(subActionId)?.state).toBe('processed')
+    expect(() => db.setSubActionState(subActionId, 'delivered')).toThrowError(/cannot move/)
+  })
+
+  it('records first-action evidence on the attempt with the card state', () => {
+    const db = createDb()
+    const run = db.createRun({
+      objective: 'audit',
+      coordinatorHandle: 'coord',
+      coordinatorPaneKey: null
+    })
+    const input = db.registerRoutingInput({ runId: run.id, text: '修登录' })
+    db.registerRoutingDecision({ inputId: input.input_id, subActions: [{ text: '修登录' }] })
+    const subActionId = db.listSubActions(input.input_id)[0]!.sub_action_id
+    db.setSubActionState(subActionId, 'delivered')
+    const task = db.createTask({ runId: run.id, spec: 'audit task' })
+    const dispatch = createRootDispatch(db, task.id, 'term_worker')
+    const supplement = db.recordRoutingSupplement({
+      inputId: input.input_id,
+      subActionId,
+      targetDispatchId: dispatch.id,
+      text: '修登录'
+    })
+    const attempt = db.recordSupplementAttempt({
+      supplementId: supplement.supplement_id,
+      requestId: 'rtsend_1',
+      targetDispatchId: dispatch.id,
+      expectedTurnId: 'turn-1',
+      outcome: 'delivered',
+      turnId: 'turn-1'
+    })
+    const recorded = db.recordSupplementFirstActionEvidence({
+      attemptId: attempt.attempt_id,
+      subActionId,
+      verdict: {
+        verdict: 'complied',
+        firstAction: { sequence: 9, name: 'read', path: '/w/new.txt' }
+      }
+    })
+    expect(recorded.subAction.state).toBe('processed')
+    expect(JSON.parse(recorded.attempt.first_action_json ?? '{}').firstAction?.path).toBe(
+      '/w/new.txt'
+    )
+  })
+
+  it('pauses and resumes a run’s entry admission', () => {
+    const db = createDb()
+    const run = db.createRun({
+      objective: 'audit',
+      coordinatorHandle: 'coord',
+      coordinatorPaneKey: null
+    })
+    expect(db.isRoutingRunPaused(run.id)).toBe(false)
+    db.pauseRoutingRun(run.id)
+    expect(db.isRoutingRunPaused(run.id)).toBe(true)
+    db.resumeRoutingRun(run.id)
+    expect(db.isRoutingRunPaused(run.id)).toBe(false)
   })
 })
