@@ -42,6 +42,8 @@ export type ZcodeStructuredLaunch = {
   forkedFromKey?: string
   /** Provider tables and app-version env the spawn must carry (agent env additions). */
   providerEnv: Record<string, string>
+  /** Sealed child environment; envToDelete removes inherited desktop keys. */
+  envToDelete?: readonly string[]
 }
 
 /** One zcode app-server frame bound to the Orca session it belongs to. */

@@ -137,9 +137,10 @@ const userText = (item: RoutingConversationItem) =>
 
 test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-up lineage, restart re-query', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
 {}, testInfo) => {
-  // P0 drives a real spawned app through three steered turns plus a restart; the ceiling bounds
-  // end-to-end app boot and agent turns, not a hanging assertion.
-  test.setTimeout(20 * 60_000)
+  // P0 drives a real spawned app through three steered turns plus a restart; the 40m ceiling
+  // bounds end-to-end app boot plus REAL model turns (each can take minutes), not a hanging
+  // assertion — the fake agent path finishes in well under a minute.
+  test.setTimeout(40 * 60_000)
   // 'fake' runs a protocol-faithful codex app-server stand-in (no model, no quota);
   // 'codex' runs the real authenticated CLI (opt-in quota permitting).
 
@@ -227,6 +228,26 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
         }
       })()} authJson=${existsSync(path.join(codexHome, 'auth.json'))}`
     )
+    if (ROUTING_AGENT === 'zcode') {
+      // The zcode worker boots beside its personal provider config and authenticates model calls
+      // from the account state under ~/.zcode; the isolated home has neither, so link the real
+      // directory (same trust model as the codex auth link above).
+      const zcodeHome = path.join(isolatedHome, '.zcode')
+      try {
+        const existing = lstatSync(zcodeHome)
+        if (!existing.isSymbolicLink()) {
+          rmSync(zcodeHome, { recursive: true })
+        }
+      } catch {}
+      try {
+        symlinkSync(path.join(os.homedir(), '.zcode'), zcodeHome)
+        console.log(
+          `p0: zcode home link=${readlinkSync(zcodeHome)} config=${existsSync(path.join(zcodeHome, 'v2', 'provider_config.json'))}`
+        )
+      } catch (error) {
+        console.warn(`p0: could not link ~/.zcode (${String(error)})`)
+      }
+    }
 
     const client = new RuntimeClient(session.userDataDir, 60_000, null, null)
     const coordinatorPane = await waitForActivePaneHookDescriptor(first.page)
@@ -437,6 +458,9 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
           const items = toolCalls(await history(sessionId))
           const gate = items.find((item) => inputText(item).includes('gate-wait.sh'))
           const reads = items.filter((item) => item.body?.name === 'read')
+          debug(
+            `S1 poll: items=${items.length} names=${JSON.stringify(items.map((item) => item.body?.name))} gate=${gate !== undefined} reads=${reads.length}`
+          )
           return gate && reads.length === 0 ? gate : null
         })
       } catch (error) {

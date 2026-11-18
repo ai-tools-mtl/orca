@@ -127,7 +127,9 @@ export function zcodeStructuredLaunchPart(
       }
     }
     const model = parseZcodeModelOption(record.options?.model ?? '')
-    const desktopEnvKeys = zcodeDesktopEnvKeys(environment)
+    // Provider-set keys must stay off the delete list: the managed spawn applies it after the
+    // process-env merge, so listing them would strip the tables this launch just added.
+    const desktopEnvKeys = zcodeDesktopEnvKeys(environment, providerEnv)
     const env = { ...environment }
     for (const key of desktopEnvKeys) {
       delete env[key]

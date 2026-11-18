@@ -169,7 +169,10 @@ async function spawnWiredChild(
       args: launch.args,
       cwd: launch.cwd,
       // The composed agent environment carries the seal and PATH; provider tables ride on top.
-      env: { ...launch.env, ...launch.providerEnv }
+      env: { ...launch.env, ...launch.providerEnv },
+      // Without this the managed spawn's process-env merge reinstates the desktop's ZCODE_* and
+      // the backend boots as a managed desktop surface instead of a standalone app-server.
+      ...(launch.envToDelete ? { envToDelete: launch.envToDelete } : {})
     },
     {
       onNotification: (method, params) => routes.notification(method, params),

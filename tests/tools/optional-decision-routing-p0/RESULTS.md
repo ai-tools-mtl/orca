@@ -57,8 +57,23 @@ journal 证据 + routing 账本 + 编排结算/续接/回执全链路。`P0_ROUT
   `turn.steerDrained` 注入当前轮；严格入口在 `lane.openTurnId === expectedTurnId` 时才发送，
   否则 turn-not-active 拒绝（协议无 expected-turn 字段，检查→发送间隙的轮切换由
   routing 账本的逐轮动作归因事后捕捉）。单测 3/3。
-- E2E 跑通 zcode 组合需本机 zcode CLI 可用（`which zcode` ✓ 存在）；P0 spec 已参数化
-  （`P0_ROUTING_AGENT=zcode`，直跑真实 CLI，无 shim；worker PATH 注入与 codex 组合共用）。
+- E2E 已参数化（`P0_ROUTING_AGENT=zcode`，直跑真实 CLI + 真实账户模型）。基础设施链路
+  已全部修通并实测（2026-11-18）：provider-exec bootstrap（status→ownership→gate→pid 发布）
+  → worker `ready` → dispatch preamble 投递接受（turnStart observed）→ journal 投影 user
+  message + turn。修复的三个产品 bug：
+  1. `zcode-structured-start` 未转发 `launch.envToDelete` → 桌面全套 `ZCODE_*`（含
+     `ZCODE_SESSION_ID`/endpoint socket）经 managed spawn 的 process-env merge 复活，后端
+     以受管桌面模式自启；
+  2. `zcodeStructuredLaunchPart` 的删除清单未豁免 `providerEnv`（`zcodeDesktopEnvKeys`
+     缺 launchEnv 实参）→ 启动层自设的 builtin/personal provider 表键被 post-merge 删除，
+     CLI 报「无法定位 Built-in Provider Config」拒启；
+  3. zcode 连接的 `onSpawned` 用一次性同步 `child.pid` 检查，而 pid 在 bootstrap 握手后才
+     发布 → 永远错过（codex 用 `awaitProviderChildSpawn` 等待，已对齐）。
+  - E2E 需将真实 `~/.zcode` 软链进隔离 home（同 `~/.codex` 信任模型），CLI 才有个人
+    provider 配置与账户状态。
+- 剩余卡点（诚实记录）：worker 就绪后模型层无输出（>7min，journal 仅 user message + turn、
+  无 assistant/tool 条目，app 日志零错误）。属 zcode 后端在无头隔离环境的模型认证/网关
+  问题，与路由机制无关——路由侧 S1 已推进到「等待门命令」一步。
 
 ## 真实 codex 组合的限制（诚实记录）
 

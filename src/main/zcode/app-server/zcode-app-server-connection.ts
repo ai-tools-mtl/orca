@@ -1,5 +1,6 @@
 import { spawnProcess } from '@orca/process-host'
 import { spawnManagedProviderProcess } from '../../provider-process/managed-provider-process'
+import { awaitProviderChildSpawn } from '../../provider-process/provider-child'
 import { createClaudeChildTreeReaper } from '../../claude/child-process/claude-agent-sdk-exit-proof'
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
 import type { ProviderProcessSpawner } from '../../provider-process/provider-process-spawn'
@@ -29,21 +30,7 @@ export function spawnZcodeAppServerConnection(
   spawnImpl: ProviderProcessSpawner = spawnProcess
 ): Promise<ZcodeAppServerConnection> {
   const managed = spawnManagedProviderProcess(launch, {
-    spawnImpl: (spec) => {
-      console.warn(
-        `[zcode-spawn] program=${spec.program} args=${JSON.stringify(spec.args ?? []).slice(0, 150)} cwd=${spec.cwd} HOME=${spec.env?.HOME} PATH=${String(spec.env?.PATH ?? '').slice(0, 200)} ZCODE_KEYS=${Object.keys(
-          spec.env ?? {}
-        )
-          .filter((key) => key.startsWith('ZCODE'))
-          .join(',')}`
-      )
-      try {
-        console.warn(
-          `[zcode-spawn] fullspec=${JSON.stringify({ program: spec.program, args: spec.args, cwd: spec.cwd, env: spec.env })}`
-        )
-      } catch {}
-      return spawnImpl(spec)
-    },
+    spawnImpl,
     site: 'zcode-app-server-teardown'
   })
   const { child } = managed
@@ -256,17 +243,20 @@ export function spawnZcodeAppServerConnection(
     close
   }
 
-  // A spawn that failed has no pid; a failing owner recording reaps the child here.
+  // A spawn that failed has no pid; a failing owner recording reaps the child here. The pid is
+  // published only after the bootstrap handshake, so the wait must precede the check — a
+  // synchronous check races the gate and loses the pid for protocols that send nothing first.
   return (async () => {
-    if (child.pid !== undefined) {
-      try {
+    try {
+      await awaitProviderChildSpawn(child)
+      if (child.pid !== undefined) {
         await handlers.onSpawned?.(child.pid)
-      } catch (error) {
-        if ((await close()) !== true) {
-          throw error
-        }
-        throw error instanceof Error ? error : new Error(String(error))
       }
+    } catch (error) {
+      if ((await close()) !== true) {
+        throw error
+      }
+      throw error instanceof Error ? error : new Error(String(error))
     }
     return connection
   })()
