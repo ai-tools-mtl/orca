@@ -24,6 +24,10 @@ export type SupplementFirstActionExpectation = {
   expect: { actionName: string; inputPath?: string }
   /** Paths no item in the supplied scope may read; a hit is 未按补充执行 evidence. */
   forbiddenPaths?: string[]
+  /** The turn the supplement was steered into. When set, the echo must land in it and the
+   *  first task action is judged inside it only — the zcode check→send gap can accept a steer
+   *  as a NEW turn, and misdelivery must read as violation, not compliance. */
+  expectedTurnId?: string
 }
 
 export type SupplementFirstActionVerdict =
@@ -78,6 +82,21 @@ export function findSupplementEchoSequence(
   return latest && Number.isFinite(latest.sequence) ? latest.sequence : null
 }
 
+/** Maps each item's creation sequence to the journal turn row it belongs to (the turn row
+ *  covers every later item until the next turn row). */
+function turnScopeOf(items: RoutingConversationItem[]): Map<number, string | null> {
+  const ordered = [...items].sort((left, right) => left.sequence - right.sequence)
+  const scope = new Map<number, string | null>()
+  let current: string | null = null
+  for (const item of ordered) {
+    if (item.body.kind === 'turn' && typeof item.body.turnId === 'string') {
+      current = item.body.turnId
+    }
+    scope.set(item.sequence, current)
+  }
+  return scope
+}
+
 export function verifySupplementFirstAction(
   items: RoutingConversationItem[],
   expectation: SupplementFirstActionExpectation
@@ -96,8 +115,23 @@ export function verifySupplementFirstAction(
       }
     }
   }
+  const turnScope = turnScopeOf(items)
+  if (expectation.expectedTurnId !== undefined) {
+    const landedTurn = turnScope.get(expectation.afterSequence) ?? null
+    if (landedTurn !== expectation.expectedTurnId) {
+      return {
+        verdict: 'violated',
+        reason: `the supplement echo landed in turn ${landedTurn ?? 'none'}, expected ${expectation.expectedTurnId}`
+      }
+    }
+  }
   const after = items
     .filter((item) => item.sequence > expectation.afterSequence)
+    .filter((item) =>
+      expectation.expectedTurnId === undefined
+        ? true
+        : turnScope.get(item.sequence) === expectation.expectedTurnId
+    )
     .map((item) => ({ item, action: actionOf(item) }))
     .filter((entry) => entry.action !== null)
     .sort((left, right) => left.item.sequence - right.item.sequence)

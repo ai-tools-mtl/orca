@@ -1,10 +1,18 @@
-# P0 实跑结果 · feature/dispatch-routing（2026-11-17 首验，2026-11-18 合并后复验通过）
+# P0 实跑结果 · feature/dispatch-routing（2026-11-17 首验，2026-11-18 真实 codex 组合正式通过）
 
 实施基线：`docs/reference/optional-decision-routing-plan.md` §9 P0。
 驱动：`tests/e2e/optional-decision-routing-p0.spec.ts`（opt-in，经 `run.mjs` 运行；
 `P0_ROUTING_AGENT=fake`（默认）| `codex` | `zcode`）。
 
-## 结论：定向投递流程 13/13 全部通过
+## 结论：P0 正式门槛达成 — 真实 codex 组合 26 项全 PASS（2026-11-18）
+
+§9 P0 要求「至少一种本地组合在同一条定向投递路径通过」。真实认证 codex CLI（配额恢复后）
+在最终代码上跑通全部验收：同轮改向（门命令→补充投递→首动作读 new.txt→结算）、两态拒收、
+并行与结算后续接、重启对账。fake 组合同样 13/13。方案 P0 关闭，可进入 A 阶段。
+
+同时落地：首动作验证器支持 `expectedTurnId` 逐轮归属——补充回声必须落在被点名轮内、首个
+任务动作只在该轮内判定（zcode 检查→发送间隙误投递由此显式判 violation，不再只是注释宣称）；
+同一 supplement 的重试复用最近一次 attempt 的 request ID（方案 §6）。
 
 真实 headless 运行时（Playwright electron，隔离 profile）+ 真实 Codex 结构化会话适配器 +
 journal 证据 + routing 账本 + 编排结算/续接/回执全链路。`P0_ROUTING_AGENT=fake` 为协议级

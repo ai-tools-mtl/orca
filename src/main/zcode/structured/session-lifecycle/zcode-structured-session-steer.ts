@@ -11,7 +11,9 @@ import { readMessageText } from '../turns/zcode-message-text'
  * delivers them as steer events into that open turn, so delivering into the named turn means
  * sending only while the lane's open turn is exactly the named one. The wire has no expected-turn
  * field — a turn that ends inside the check→send gap would accept the send as a new turn — so
- * misdelivery is caught post-hoc by the routing ledger's per-turn action attribution.
+ * misdelivery is caught post-hoc: the supplement echo's enclosing journal turn must equal the
+ * named turn, and the first task action is judged inside it (verifySupplementFirstAction's
+ * expectedTurnId scope).
  */
 export async function steerExpectedZcodeTurn(
   session: ZcodeStructuredSession,

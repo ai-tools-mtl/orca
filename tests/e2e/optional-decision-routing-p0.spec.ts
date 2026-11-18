@@ -537,7 +537,8 @@ test('P0 targeted delivery: steer the named turn, refuse after it ends, follow-u
       const verdict = verifySupplementFirstAction(items, {
         afterSequence: anchor,
         expect: { actionName: 'read', inputPath: path.join(workerCwd, 'new.txt') },
-        forbiddenPaths: [path.join(workerCwd, 'old.txt')]
+        forbiddenPaths: [path.join(workerCwd, 'old.txt')],
+        expectedTurnId: receipt.expectedTurnId ?? originalTurn
       })
       record(
         'S1',

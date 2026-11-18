@@ -52,7 +52,10 @@ export async function deliverTargetedSupplement(
     targetDispatchId: params.targetDispatchId,
     text: params.text
   })
-  const requestId = generateId('rtsend')
+  // Retrying the same delivery reuses the last attempt's request id (plan §6): retries and
+  // re-sends of one supplement stay one logical call; only a re-target mints a new id.
+  const requestId =
+    db.listSupplementAttempts(supplement.supplement_id).at(-1)?.request_id ?? generateId('rtsend')
   const recordRefusal = (
     reason: TargetedSupplementRefusalReason,
     expectedTurnId: string | null,
