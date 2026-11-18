@@ -71,9 +71,17 @@ journal 证据 + routing 账本 + 编排结算/续接/回执全链路。`P0_ROUT
      发布 → 永远错过（codex 用 `awaitProviderChildSpawn` 等待，已对齐）。
   - E2E 需将真实 `~/.zcode` 软链进隔离 home（同 `~/.codex` 信任模型），CLI 才有个人
     provider 配置与账户状态。
-- 剩余卡点（诚实记录）：worker 就绪后模型层无输出（>7min，journal 仅 user message + turn、
-  无 assistant/tool 条目，app 日志零错误）。属 zcode 后端在无头隔离环境的模型认证/网关
-  问题，与路由机制无关——路由侧 S1 已推进到「等待门命令」一步。
+  4. Orca 的 v2 凭据读取器只认 `enc:v1:`，而当前桌面写入 `enc:v2:os:`（OS 钥匙串密钥
+     「ZCode Credential Encryption」）；已实现 v2:os 解密（macOS keychain）+ OAuth
+     access_token 回退 + `interaction/requestCredentialCipher` 加解密桥（CLI 把自己凭据
+     存储的加解密委托给宿主，无头 Orca 现在能承接）。
+- 剩余卡点（根因已定位，边界在 zcode CLI/桌面契约）：worker 就绪后轮次启动
+  （`prompt_started`、executionStartedAt 有值）但网关调用挂死——CLI 从不请求
+  provider-headers/凭证桥，且手动驱动实验（plain / 官方 token / 桌面 endpoint socket
+  三变体）全部 accepted-但-零输出。结论：当前 zcode CLI 的网关传输依赖桌面 endpoint
+  代理服务的完整协议，独立（headless）传输要么不存在要么需要桌面侧更多握手。要打通需
+  zcode CLI 提供独立传输契约，或 Orca 实现桌面 endpoint 代理协议（规模远超本轮）。
+  路由侧 S1 已推进到「等待门命令」一步；fake 组合在全部修复后回归 13/13。
 
 ## 真实 codex 组合的限制（诚实记录）
 

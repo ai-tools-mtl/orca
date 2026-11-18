@@ -7,11 +7,13 @@ import { ZcodeAppServerUnsupportedError } from '../../app-server/zcode-app-serve
 import { createZcodeAppServerCapabilityCache } from '../../app-server/zcode-app-server-capability-cache'
 import { readRecord, readString } from '../catalog/zcode-model-catalog-rows'
 import { requestZcodeSkillCatalog } from '../catalog/zcode-skill-catalog'
+import { answerZcodeBookkeepingAsk } from './zcode-session-bookkeeping-asks'
 import type { ZcodeStructuredLane } from '../timeline/zcode-structured-lane'
 import { ZcodeStructuredOptions } from '../options/zcode-structured-options'
 import { ZcodeStructuredPrompts } from '../prompts/zcode-structured-prompts'
 import { ZcodeStructuredTurns } from '../turns/zcode-structured-turns'
 import { openZcodeSession } from './zcode-structured-session-open'
+import { ZcodeCredentialCipherAsks } from './zcode-credential-cipher-ask'
 import { ZcodeRuntimeHeadersAsks } from './zcode-runtime-headers-ask'
 import type { ZcodeStructuredSessionDeps } from './zcode-structured-session-state'
 
@@ -30,6 +32,7 @@ export class ZcodeStructuredSession {
   declaredModels: readonly { providerId: string; modelId: string }[] = []
   /** The turn id and routed model of the last seen headers ask, for one notice per real switch. */
   private readonly headersAsks = new ZcodeRuntimeHeadersAsks()
+  private readonly cipherAsks = new ZcodeCredentialCipherAsks()
   private readonly capabilities = createZcodeAppServerCapabilityCache()
   /** The live child's `/` skills, probed once after open; undefined keeps the client catalog. */
   commands: AgentSessionSlashCommand[] | undefined = undefined
@@ -145,14 +148,6 @@ export class ZcodeStructuredSession {
 
   /** Routes one server→client request and answers bookkeeping asks directly. */
   onServerRequest(method: string, params: unknown, id: number | string): void {
-    if (method === 'session/requestRuntimePreferences') {
-      this.connection.respond(id, {
-        nativeSearchEnhancementsEnabled: false,
-        memoryEnabled: false,
-        askUserQuestionAutoResolutionEnabled: false
-      })
-      return
-    }
     if (method === 'interaction/requestProviderRuntimeHeaders') {
       this.headersAsks.answer({
         connection: this.connection,
@@ -166,8 +161,8 @@ export class ZcodeStructuredSession {
       })
       return
     }
-    if (method === 'interaction/requestOfficialMcpAuthHeaders') {
-      this.connection.respondWithError(id, -32000, 'official MCP auth is unavailable in Orca chats')
+    if (method === 'interaction/requestCredentialCipher') {
+      this.cipherAsks.answer({ connection: this.connection, params, id })
       return
     }
     if (method === 'interaction/requestPermission' || method === 'interaction/requestUserInput') {
@@ -185,11 +180,12 @@ export class ZcodeStructuredSession {
         })
       return
     }
-    this.deps.logger?.warn('zcode app-server sent an unknown request', {
-      scope: 'zcode-request-unknown',
-      method
+    answerZcodeBookkeepingAsk({
+      connection: this.connection,
+      logger: this.deps.logger,
+      method,
+      id
     })
-    this.connection.respondWithError(id, -32601, `Orca does not answer ${method}`)
   }
 
   /** The open handshake lives in zcode-structured-session-open.ts. */
