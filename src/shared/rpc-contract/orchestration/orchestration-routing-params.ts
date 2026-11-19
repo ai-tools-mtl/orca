@@ -163,3 +163,8 @@ export const EntryReviewParams = z.object({
 export const EntryApprovalsParams = z.object({
   group: requiredString('Missing --group')
 })
+
+export const EntryAutoRouteParams = z.object({
+  group: requiredString('Missing --group'),
+  input: requiredString('Missing --input')
+})

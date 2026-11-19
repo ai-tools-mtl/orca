@@ -144,6 +144,17 @@ export default function DispatchEntryChat({
                       : t(`${ENTRY}.awaitingRouting`, 'Awaiting routing')}
                   </span>
                   <span className="font-mono text-[10px] opacity-60">{input.inputId}</span>
+                  {input.decisionStatus !== 'decided' ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="ms-1"
+                      disabled={facts.busy}
+                      onClick={() => void facts.autoRoute(input.inputId)}
+                    >
+                      {t(`${ENTRY}.autoRoute`, 'Auto-route')}
+                    </Button>
+                  ) : null}
                 </div>
                 {input.subActions.length > 0 ? (
                   <RoutingRequestCard

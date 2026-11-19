@@ -28,7 +28,15 @@ export type ZcodeCredentialHost = {
 
 export type ZcodeV2PlanCredential =
   | { status: 'absent' | 'unavailable' | 'error' }
-  | { status: 'ok'; apiKey: string; baseUrl: string; identity: string; configPath: string }
+  | {
+      status: 'ok'
+      apiKey: string
+      baseUrl: string
+      identity: string
+      configPath: string
+      /** The v2 selection's model — the decision provider routes on the user's own model. */
+      modelId: string
+    }
 
 export function localZcodeCredentialHost(): ZcodeCredentialHost {
   let username = 'unknown'
@@ -96,7 +104,8 @@ export async function readZcodeV2PlanCredential(
       apiKey,
       baseUrl: ZCODE_PLAN_SITE_BASE_URLS[site],
       identity: JSON.stringify([selection.providerId, identity]),
-      configPath
+      configPath,
+      modelId: selection.modelId
     }
   } catch {
     return { status: 'error' }

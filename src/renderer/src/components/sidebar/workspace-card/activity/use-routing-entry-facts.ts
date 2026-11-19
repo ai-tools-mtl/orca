@@ -146,6 +146,20 @@ export function useRoutingEntryFacts(target: RuntimeClientTarget | null, group: 
     [target, group, refresh]
   )
 
+  const autoRoute = useCallback(
+    (inputId: string) => {
+      if (!target) {
+        return Promise.resolve()
+      }
+      return runWithBusy(setBusy, () =>
+        callEntryAction(target, 'orchestration.entryAutoRoute', { group, input: inputId }).then(
+          refresh
+        )
+      )
+    },
+    [target, group, refresh]
+  )
+
   const setPausedState = useCallback(
     (pausedNext: boolean) => {
       if (!target) {
@@ -203,6 +217,7 @@ export function useRoutingEntryFacts(target: RuntimeClientTarget | null, group: 
     approvals,
     refresh,
     submit,
+    autoRoute,
     handback,
     sendSupplement,
     setPaused: setPausedState,

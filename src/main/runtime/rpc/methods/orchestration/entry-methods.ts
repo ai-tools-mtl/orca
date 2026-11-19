@@ -7,10 +7,13 @@ import {
   desktopEntryAddress
 } from '../../../orchestration/addressing/desktop-entry-identity'
 import { deliverTargetedSupplement } from '../../../orchestration/routing/targeted-supplement-delivery'
+import { autoRouteWithModelProvider } from '../../../orchestration/routing/model-decision-provider'
+import { readZcodeV2PlanCredential } from '../../../../zcode/zcode-v2-plan-credentials'
 import { recentOpenApprovalReports } from '../../../orchestration/workers/approvals/worker-approval-report'
 import { routingInputsPayload, supplementReceipt } from './routing-supplements'
 import {
   EntryApprovalsParams,
+  EntryAutoRouteParams,
   EntryHandbackParams,
   EntryPauseParams,
   EntryReviewParams,
@@ -217,6 +220,20 @@ export const ORCHESTRATION_ENTRY_METHODS = [
         })
       }
       return { cycle: db.acceptReviewCycle(cycle.cycle_id) }
+    }
+  }),
+  // §5.1's model-backed routing, on the entry's own authority: the desktop's coding-plan
+  // credential proposes sub-actions over the received input; the Router validates and registers.
+  // Without a serving credential this resolves to the manual reason — the input stays received.
+  defineOrchestrationMethod({
+    name: 'orchestration.entryAutoRoute',
+    permission: 'workspace',
+    params: EntryAutoRouteParams,
+    access: { kind: 'writes', targets: {} },
+    handler: async ({ group, input }, { runtime }) => {
+      const db = runtime.getOrchestrationDb()
+      entryRunOfInput(db, group, input)
+      return autoRouteWithModelProvider(db, { inputId: input }, await readZcodeV2PlanCredential())
     }
   }),
   // The prototype's 授权追问卡: approvals Orca reported open for this Run's workers, from the

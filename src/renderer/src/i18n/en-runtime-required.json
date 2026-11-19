@@ -952,6 +952,7 @@
           "accept": "Accept",
           "allow": "Allow",
           "approvalTitle": "The worker asks for approval",
+          "autoRoute": "Auto-route",
           "awaitingRouting": "Awaiting routing",
           "composerAria": "Task input",
           "composerPlaceholder": "Describe a request for this project",

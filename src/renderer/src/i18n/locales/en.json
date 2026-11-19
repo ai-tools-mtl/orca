@@ -8258,7 +8258,8 @@
           "accept": "Accept",
           "approvalTitle": "The worker asks for approval",
           "allow": "Allow",
-          "deny": "Deny"
+          "deny": "Deny",
+          "autoRoute": "Auto-route"
         }
       },
       "shared": {
