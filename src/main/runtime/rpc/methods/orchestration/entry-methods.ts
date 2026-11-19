@@ -271,18 +271,28 @@ export const ORCHESTRATION_ENTRY_METHODS = [
       return { subAction: claimed, claimVersion: claimed.claim_version }
     }
   }),
-  // §5.1's model-backed routing, on the entry's own authority: the desktop's coding-plan
-  // credential proposes sub-actions over the received input; the Router validates and registers.
-  // Without a serving credential this resolves to the manual reason — the input stays received.
+  // §5.1's model-backed routing, on the entry's own authority. Two credential sources: the
+  // settings-configured custom provider (any OpenAI-compatible endpoint), or — the default —
+  // the desktop's own ZCode coding plan credential with the v2 selection's model. Without a
+  // serving credential this resolves to the manual reason; the input stays received.
   defineOrchestrationMethod({
     name: 'orchestration.entryAutoRoute',
     permission: 'workspace',
     params: EntryAutoRouteParams,
     access: { kind: 'writes', targets: {} },
-    handler: async ({ group, input }, { runtime }) => {
+    handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
-      entryRunOfInput(db, group, input)
-      return autoRouteWithModelProvider(db, { inputId: input }, await readZcodeV2PlanCredential())
+      entryRunOfInput(db, params.group, params.input)
+      const credential =
+        params.decisionModel?.provider === 'custom'
+          ? {
+              status: 'ok' as const,
+              apiKey: params.decisionModel.apiKey ?? '',
+              baseUrl: params.decisionModel.baseUrl ?? '',
+              modelId: params.decisionModel.modelId ?? ''
+            }
+          : await readZcodeV2PlanCredential()
+      return autoRouteWithModelProvider(db, { inputId: params.input }, credential)
     }
   }),
   // The prototype's 授权追问卡: approvals Orca reported open for this Run's workers, from the

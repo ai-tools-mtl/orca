@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Check, SendHorizonal, Sparkles, TriangleAlert } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import RoutingRequestCard from '../workspace-card/activity/RoutingEntryCard'
@@ -27,6 +28,7 @@ export default function DispatchEntryChat({
   const target = ipcOrRuntimeTargetForHostId(hostId)
   const facts = useRoutingEntryFacts(target, repoId)
   const [draft, setDraft] = useState('')
+  const [routingHint, setRoutingHint] = useState<string | null>(null)
   const streamRef = useRef<HTMLDivElement | null>(null)
 
   const inputCount = facts.inputs.length
@@ -150,7 +152,13 @@ export default function DispatchEntryChat({
                       size="sm"
                       className="ms-1"
                       disabled={facts.busy}
-                      onClick={() => void facts.autoRoute(input.inputId)}
+                      onClick={() =>
+                        void facts.autoRoute(input.inputId).then((result) => {
+                          if (result && result.routed === false && result.reason) {
+                            setRoutingHint(result.reason)
+                          }
+                        })
+                      }
                     >
                       {t(`${ENTRY}.autoRoute`, 'Auto-route')}
                     </Button>
@@ -198,6 +206,25 @@ export default function DispatchEntryChat({
           )}
         </div>
       </div>
+      {routingHint ? (
+        <div className="mx-auto w-full max-w-[760px] px-5 pb-1">
+          <div className="flex flex-col gap-1.5 rounded-lg border border-status-warning/30 bg-status-warning/5 p-2.5">
+            <p className="text-sm">
+              {t(`${ENTRY}.routingHintTitle`, 'Auto-routing is unavailable.')}
+            </p>
+            <p className="text-muted-foreground text-xs">{routingHint}</p>
+            <div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => useAppStore.getState().setActiveView('settings')}
+              >
+                {t(`${ENTRY}.goConfigure`, 'Configure the decision model')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <div className="px-5 pb-4 pt-2">
         <form
           className="mx-auto w-full max-w-[760px] rounded-xl border border-input bg-card p-2 pb-1 shadow-xs"

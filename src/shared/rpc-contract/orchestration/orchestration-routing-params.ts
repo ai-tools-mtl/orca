@@ -164,9 +164,18 @@ export const EntryApprovalsParams = z.object({
   group: requiredString('Missing --group')
 })
 
+export const DecisionModelParams = z.object({
+  provider: z.enum(['zcode-plan', 'custom']),
+  baseUrl: z.string().optional(),
+  apiKey: z.string().optional(),
+  modelId: z.string().optional()
+})
+
 export const EntryAutoRouteParams = z.object({
   group: requiredString('Missing --group'),
-  input: requiredString('Missing --input')
+  input: requiredString('Missing --input'),
+  /** custom: the settings-configured decision model; omitted routes on the ZCode plan credential. */
+  decisionModel: DecisionModelParams.optional()
 })
 
 export const EntryWorkersParams = z.object({

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcContext } from '../../core'
 import { createOrchestrationRpcHarness } from './rpc-test-harness'
 import type { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
@@ -178,5 +178,42 @@ describe('desktop entry methods (plan §1/§9-A per-project 入口)', () => {
     })
     expect(accepted.cycle.state).toBe('accepted')
     void ctx
+  })
+
+  it('auto-routes with a custom decision model endpoint', async () => {
+    ;({ ctx } = h.setup(false))
+    const submitted = await call<{ run: { id: string }; input: { input_id: string } }>(
+      'orchestration.entrySubmit',
+      { group: 'proj_alpha', text: '自定义端点拆分' }
+    )
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              choices: [{ message: { content: '{"subActions":[{"text":"拆分A"}]}' } }]
+            }),
+            { status: 200 }
+          )
+      )
+    )
+    const routed = await call<{ routed: boolean; subActions: { text: string }[] }>(
+      'orchestration.entryAutoRoute',
+      {
+        group: 'proj_alpha',
+        input: submitted.input.input_id,
+        decisionModel: {
+          provider: 'custom',
+          baseUrl: 'https://custom.example/v1',
+          apiKey: 'synthetic-custom-key',
+          modelId: 'custom-model'
+        }
+      }
+    )
+    expect(routed.routed).toBe(true)
+    expect(routed.subActions.map((subAction) => subAction.text)).toEqual(['拆分A'])
+    const call0 = vi.mocked(fetch).mock.calls[0]
+    expect(String(call0[0])).toContain('custom.example')
   })
 })

@@ -668,7 +668,21 @@
         "searchTerminal": "terminal",
         "antigravityAccount": "Account"
       },
-      "permissionsDescriptionOwnAgents": "New chats follow each agent’s permission in Settings → Agents."
+      "permissionsDescriptionOwnAgents": "New chats follow each agent’s permission in Settings → Agents.",
+      "decisionModel": {
+        "title": "Task entry · decision model",
+        "description": "The model the task entry uses to split requests into sub-actions for auto-routing.",
+        "provider": "Provider",
+        "providerZcodePlan": "ZCode coding plan credential (its own model selection)",
+        "providerCustom": "Custom OpenAI-compatible provider",
+        "baseUrl": "Base URL",
+        "apiKey": "API key",
+        "modelId": "Model",
+        "save": "Save",
+        "unsaved": "Unsaved changes",
+        "baseUrlPlaceholder": "https://api.example.com/v1",
+        "modelIdPlaceholder": "gpt-4o-mini / deepseek-chat / …"
+      }
     },
     "terminal": {
       "optionLayoutAlt": "ABC or U.S. — Option sends Alt/Esc sequences",
@@ -8261,7 +8275,9 @@
           "deny": "Deny",
           "autoRoute": "Auto-route",
           "reassign": "Reassign",
-          "noOtherWorkers": "No other worker to reassign to."
+          "noOtherWorkers": "No other worker to reassign to.",
+          "routingHintTitle": "Auto-routing is unavailable.",
+          "goConfigure": "Configure the decision model"
         }
       },
       "shared": {

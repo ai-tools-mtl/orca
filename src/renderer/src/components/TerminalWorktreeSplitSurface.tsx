@@ -94,7 +94,6 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
         <DispatchEntryPaneLayer
           hostId={dispatchEntry.target.hostId}
           repoId={dispatchEntry.target.repoId}
-          onClose={dispatchEntry.close}
         />
       ) : null}
     </div>

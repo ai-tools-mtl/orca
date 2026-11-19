@@ -18,13 +18,13 @@ import type {
 } from './routing-entry-model'
 
 // Module-level so hooks stay React-Compiler compatible (no in-hook try/finally).
-async function runWithBusy(
+async function runWithBusy<T>(
   setBusy: (busy: boolean) => void,
-  action: () => Promise<void>
-): Promise<void> {
+  action: () => Promise<T>
+): Promise<T> {
   setBusy(true)
   try {
-    await action()
+    return await action()
   } finally {
     setBusy(false)
   }
@@ -154,13 +154,17 @@ export function useRoutingEntryFacts(target: RuntimeClientTarget | null, group: 
   const autoRoute = useCallback(
     (inputId: string) => {
       if (!target) {
-        return Promise.resolve()
+        return Promise.resolve({ routed: true as const })
       }
-      return runWithBusy(setBusy, () =>
-        callEntryAction(target, 'orchestration.entryAutoRoute', { group, input: inputId }).then(
-          refresh
+      return runWithBusy(setBusy, async () => {
+        const result = await callRuntimeRpc<{ routed: boolean; reason?: string }>(
+          target,
+          'orchestration.entryAutoRoute',
+          { group, input: inputId }
         )
-      )
+        await refresh()
+        return result
+      })
     },
     [target, group, refresh]
   )

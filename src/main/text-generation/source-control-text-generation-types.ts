@@ -82,6 +82,8 @@ export type GenerateBranchNameResult =
   | {
       success: false
       error: string
+      /** Coded failures (e.g. agentBinaryNotFound) keep their code for background fallback decisions. */
+      errorCode?: string
       canceled?: boolean
       failureOutput?: AgentGenerationFailureOutput
     }

@@ -42,8 +42,12 @@ export type GeneratePullRequestFieldsResult =
   GenericGeneratePullRequestFieldsResult<GeneratedPullRequestFields>
 
 type ResolveCommitMessageSettingsResult =
-  | { ok: true; params: ResolvedSourceControlAiGenerationParams }
-  | ({ ok: false } & TextGenerationFailureFields)
+  | {
+      ok: true
+      params: ResolvedSourceControlAiGenerationParams
+      agentIsFactoryDefault: boolean
+    }
+  | ({ ok: false; agentIsFactoryDefault: boolean } & TextGenerationFailureFields)
 
 export function resolveCommitMessageSettings(
   settings: Parameters<typeof resolveSourceControlAiForOperation>[0]['settings'],
@@ -57,7 +61,13 @@ export function resolveCommitMessageSettings(
     operation,
     discoveryHostKey
   })
-  return resolved.ok ? { ok: true, params: resolved.value.params } : resolved
+  return resolved.ok
+    ? {
+        ok: true,
+        params: resolved.value.params,
+        agentIsFactoryDefault: resolved.value.agentIsFactoryDefault
+      }
+    : resolved
 }
 
 export function discoverCommitMessageModelsLocal(

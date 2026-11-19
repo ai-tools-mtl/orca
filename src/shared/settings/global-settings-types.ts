@@ -26,6 +26,7 @@ import type {
   CodexManagedAccountRuntimeSelection
 } from '../agent-accounts/managed-account-types'
 import type { NotificationSettings } from '../notifications/notification-settings-types'
+import type { DecisionModelSettings } from './decision-model-settings'
 import type { CtrlTabOrderMode } from '../workspace-layout/tab-groups/tab-types'
 import type { TerminalQuickCommand } from '../terminal/quick-commands/terminal-quick-command-types'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
@@ -488,6 +489,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   commitMessageAi?: CommitMessageAiSettings
   /** Source-control AI generation settings for commit messages and hosted-review drafts. */
   sourceControlAi?: SourceControlAiSettings
+  /** The model the 任务入口's routing step (§5.1) uses to propose sub-actions for auto-routing. */
+  decisionModel?: DecisionModelSettings
   /** GitLab project preferences (pinned + recent paths). Optional for pre-GitLab profiles; persistence merge fills the default. */
   gitlabProjects?: GitLabProjectSettings
   /** Anonymous telemetry consent, identity, frozen experiments, and daily usage limits; optional before migration. */

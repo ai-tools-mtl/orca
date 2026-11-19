@@ -4,6 +4,7 @@ import {
   getCommitMessageAgentSpec,
   getCommitMessageModel,
   isCustomAgentId,
+  isFactoryDefaultCommitMessageAgentChoice,
   isNamingOnlyTextAgent,
   listCommitMessageAgentCapabilities,
   resolveCommitMessageAgentChoice
@@ -53,11 +54,13 @@ export type ResolvedSourceControlAiOperation = {
   enabled: boolean
   params: ResolvedSourceControlAiGenerationParams
   prCreationDefaults: Required<SourceControlAiPrCreationDefaults>
+  /** No setting names an agent, so the choice fell through to the factory default. */
+  agentIsFactoryDefault: boolean
 }
 
 export type ResolveSourceControlAiResult =
   | { ok: true; value: ResolvedSourceControlAiOperation }
-  | ({ ok: false } & TextGenerationFailureFields)
+  | ({ ok: false; agentIsFactoryDefault: boolean } & TextGenerationFailureFields)
 
 export type SourceControlAiSettingsInput = Partial<
   Pick<
@@ -125,9 +128,10 @@ function supportedAgentLabels(operation: AiTextOperation): string {
 }
 
 function resolveFailure(
-  failure: TextGenerationFailureFields
-): { ok: false } & TextGenerationFailureFields {
-  return { ok: false, ...failure }
+  failure: TextGenerationFailureFields,
+  agentIsFactoryDefault: boolean
+): { ok: false; agentIsFactoryDefault: boolean } & TextGenerationFailureFields {
+  return { ok: false, agentIsFactoryDefault, ...failure }
 }
 
 export function resolveSourceControlAiForOperation(
@@ -138,22 +142,31 @@ export function resolveSourceControlAiForOperation(
   const repoOverrides = isGlobalAiTextAction(input.operation)
     ? null
     : normalizeRepoOverrides(input.repo?.sourceControlAi)
-  const agentUnsupported = (): { ok: false } & TextGenerationFailureFields =>
-    resolveFailure(
-      textGenerationFailure(AGENT_UNSUPPORTED[input.operation], {
-        agents: supportedAgentLabels(input.operation)
-      })
-    )
   const prCreationDefaults = resolvePrCreationDefaults(
     source,
     repoOverrides,
     input.prCreationProductDefaults
   )
   const actionRecipe = resolveActionRecipeForTextOperation(source, repoOverrides, input.operation)
-  if (!actionRecipe.commandInputTemplate.trim()) {
-    return resolveFailure(textGenerationFailure(COMMAND_TEMPLATE_EMPTY[input.operation]))
-  }
   const preferredAgent = hasActionAgentRecipe(actionRecipe) ? actionRecipe.agentId : source.agentId
+  const agentIsFactoryDefault = isFactoryDefaultCommitMessageAgentChoice(
+    preferredAgent,
+    input.settings.defaultTuiAgent,
+    input.settings.disabledTuiAgents
+  )
+  const agentUnsupported = () =>
+    resolveFailure(
+      textGenerationFailure(AGENT_UNSUPPORTED[input.operation], {
+        agents: supportedAgentLabels(input.operation)
+      }),
+      agentIsFactoryDefault
+    )
+  if (!actionRecipe.commandInputTemplate.trim()) {
+    return resolveFailure(
+      textGenerationFailure(COMMAND_TEMPLATE_EMPTY[input.operation]),
+      agentIsFactoryDefault
+    )
+  }
   const agentChoice = resolveCommitMessageAgentChoice(
     preferredAgent,
     input.settings.defaultTuiAgent,
@@ -177,7 +190,10 @@ export function resolveSourceControlAiForOperation(
   }
   if (isCustomAgentId(agentChoice)) {
     if (!customAgentCommand) {
-      return resolveFailure(textGenerationFailure(CUSTOM_COMMAND_EMPTY[input.operation]))
+      return resolveFailure(
+        textGenerationFailure(CUSTOM_COMMAND_EMPTY[input.operation]),
+        agentIsFactoryDefault
+      )
     }
     return {
       ok: true,
@@ -189,7 +205,8 @@ export function resolveSourceControlAiForOperation(
           ...commonParams,
           customAgentCommand
         },
-        prCreationDefaults
+        prCreationDefaults,
+        agentIsFactoryDefault: false
       }
     }
   }
@@ -212,7 +229,8 @@ export function resolveSourceControlAiForOperation(
       textGenerationFailure(AGENT_CANNOT_GENERATE[input.operation], {
         agent: spec?.label ?? resolvedAgent,
         agents: supportedAgentLabels(input.operation)
-      })
+      }),
+      agentIsFactoryDefault
     )
   }
   const hostKey = input.discoveryHostKey ?? LOCAL_COMMIT_MESSAGE_HOST_KEY
@@ -231,7 +249,10 @@ export function resolveSourceControlAiForOperation(
     discoveredModels.find((candidate) => candidate.id === persistedModelId) ??
     getCommitMessageModel(resolvedAgent, spec.defaultModelId)
   if (!model) {
-    return resolveFailure(textGenerationFailure('noModelForAgent', { label: spec.label }))
+    return resolveFailure(
+      textGenerationFailure('noModelForAgent', { label: spec.label }),
+      agentIsFactoryDefault
+    )
   }
   const thinkingLevel = resolveThinkingLevel({
     model,
@@ -253,7 +274,8 @@ export function resolveSourceControlAiForOperation(
         ...(customAgentCommand ? { customAgentCommand } : {}),
         ...(agentCommandOverride ? { agentCommandOverride } : {})
       },
-      prCreationDefaults
+      prCreationDefaults,
+      agentIsFactoryDefault
     }
   }
 }

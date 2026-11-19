@@ -1,7 +1,11 @@
 import { z } from 'zod'
 import { routeRoutingInput, type RoutingDecisionProvider } from './routing-router'
 import type { OrchestrationDb } from '../db/orchestration-db'
-import type { ZcodeV2PlanCredential } from '../../../zcode/zcode-v2-plan-credentials'
+
+/** The credential a decision provider routes with — the ok shape plus any unavailable reason. */
+export type ModelCredential =
+  | { status: 'ok'; apiKey: string; baseUrl: string; modelId: string }
+  | { status: 'absent' | 'error' | 'unavailable' }
 
 // Plan §5.1's model-backed decision provider: the desktop's own coding-plan credential calls the
 // plan site's chat completions endpoint, proposing sub-actions over the received input. The
@@ -115,7 +119,7 @@ export type ModelDecisionResolution =
 /** Resolve the desktop's own coding-plan credential into a decision provider; the model is the
  *  user's v2 selection. Unavailable reads resolve to the manual reason, never an error. */
 export async function resolveModelDecisionProvider(
-  credential: ZcodeV2PlanCredential
+  credential: ModelCredential
 ): Promise<ModelDecisionResolution> {
   if (credential.status !== 'ok') {
     return {
@@ -137,7 +141,7 @@ export async function resolveModelDecisionProvider(
 export async function autoRouteWithModelProvider(
   db: OrchestrationDb,
   input: { inputId: string },
-  credential: ZcodeV2PlanCredential,
+  credential: ModelCredential,
   executorCapabilities?: readonly string[]
 ): Promise<Awaited<ReturnType<typeof routeRoutingInput>>> {
   const resolution = await resolveModelDecisionProvider(credential)

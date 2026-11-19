@@ -15,6 +15,7 @@ export function installFirstWorkRenameHookSubscription(): () => void {
       tabId: event.tabId,
       worktreeId: event.worktreeId,
       payload: event.payload,
+      sessionAgentId: event.source,
       isReplay: event.isReplay
     })
   })
@@ -26,6 +27,7 @@ export function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
   tabId: string | undefined
   worktreeId: string | undefined
   payload: { state: string; prompt?: string; lastAssistantMessage?: string }
+  sessionAgentId: string | undefined
   isReplay: boolean | undefined
 }): void {
   const store = state.store
@@ -41,6 +43,7 @@ export function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
       state: event.payload.state,
       prompt: event.payload.prompt,
       assistantMessage: event.payload.lastAssistantMessage,
+      sessionAgentId: event.sessionAgentId,
       isReplay: event.isReplay
     },
     firstWorkRenameDeps(store, runtime)

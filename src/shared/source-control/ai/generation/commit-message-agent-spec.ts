@@ -201,6 +201,22 @@ export function resolveCommitMessageAgentChoice(
     : null
 }
 
+/** Mirrors the choice's fall-through: nothing configured anywhere means the factory default ran. */
+export function isFactoryDefaultCommitMessageAgentChoice(
+  configuredAgentId: CommitMessageAgentChoice | null | undefined,
+  defaultTuiAgent: DefaultTuiAgentPreference,
+  disabledTuiAgents?: Iterable<unknown> | null
+): boolean {
+  if (configuredAgentId) {
+    return false
+  }
+  return !(
+    defaultTuiAgent &&
+    defaultTuiAgent !== 'blank' &&
+    isTuiAgentEnabled(defaultTuiAgent, disabledTuiAgents)
+  )
+}
+
 export function getCommitMessageModel(
   agentId: TuiAgent,
   modelId: string
