@@ -1,6 +1,6 @@
-import { execFileSync } from 'node:child_process'
+import { runProcess } from '@orca/process-host'
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
-import { statSync } from 'node:fs'
+import { stat } from 'node:fs/promises'
 import { platform } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { readNodeFileSyncWithinLimit } from '../../shared/file-content/node-bounded-file-reader'
@@ -46,13 +46,17 @@ function decodeKeystorePassword(password: string): Buffer | null {
   }
 }
 
-function macKeystorePassword(service: string): string | null {
+async function macKeystorePassword(service: string): Promise<string | null> {
   try {
-    return execFileSync('security', ['find-generic-password', '-s', service, '-w'], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-      timeout: 5_000
-    }).trim()
+    const result = await runProcess(
+      {
+        program: 'security',
+        args: ['find-generic-password', '-s', service, '-w'],
+        timeoutMs: 5_000
+      },
+      'tail'
+    )
+    return result.code === 0 ? result.stdout.trim() : null
   } catch {
     return null
   }
@@ -100,23 +104,29 @@ if ($text.IndexOf([char]0) -ge 0) { $text = [Text.Encoding]::Unicode.GetString($
 Write-Output $text
 `
 
-function windowsKeystorePassword(service: string, account: string): string | null {
+async function windowsKeystorePassword(service: string, account: string): Promise<string | null> {
   try {
-    const output = execFileSync(
-      'powershell.exe',
-      [
-        '-NoProfile',
-        '-NonInteractive',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-Command',
-        WINDOWS_CREDREAD_SCRIPT,
-        service,
-        `${service}.${account}`
-      ],
-      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 15_000 }
+    const result = await runProcess(
+      {
+        program: 'powershell.exe',
+        args: [
+          '-NoProfile',
+          '-NonInteractive',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-Command',
+          WINDOWS_CREDREAD_SCRIPT,
+          service,
+          `${service}.${account}`
+        ],
+        timeoutMs: 15_000
+      },
+      'tail'
     )
-    for (const line of output.split(/\r?\n/)) {
+    if (result.code !== 0) {
+      return null
+    }
+    for (const line of result.stdout.split(/\r?\n/)) {
       const password = line.trim()
       if (decodeKeystorePassword(password)) {
         return password
@@ -129,7 +139,10 @@ function windowsKeystorePassword(service: string, account: string): string | nul
 }
 
 /** The keystore key that seals/unseals `enc:v2:os:` values for this credentials file. */
-function osKeystoreKeyFor(platformId: string, credentialsPath: string): Buffer | null {
+async function osKeystoreKeyFor(
+  platformId: string,
+  credentialsPath: string
+): Promise<Buffer | null> {
   const account = createHash('sha256').update(resolve(credentialsPath)).digest('hex')
   const cacheKey = `${platformId}:${account}`
   const cached = osKeystoreKeyCache.get(cacheKey)
@@ -139,9 +152,11 @@ function osKeystoreKeyFor(platformId: string, credentialsPath: string): Buffer |
   let key: Buffer | null = null
   try {
     if (platformId === 'darwin') {
-      key = decodeKeystorePassword(macKeystorePassword(ZCODE_KEYSTORE_SERVICE) ?? '')
+      key = decodeKeystorePassword((await macKeystorePassword(ZCODE_KEYSTORE_SERVICE)) ?? '')
     } else if (platformId === 'win32') {
-      key = decodeKeystorePassword(windowsKeystorePassword(ZCODE_KEYSTORE_SERVICE, account) ?? '')
+      key = decodeKeystorePassword(
+        (await windowsKeystorePassword(ZCODE_KEYSTORE_SERVICE, account)) ?? ''
+      )
     }
     // Linux (Secret Service) intentionally not implemented yet; the store stays unavailable.
   } catch {
@@ -153,7 +168,10 @@ function osKeystoreKeyFor(platformId: string, credentialsPath: string): Buffer |
 
 // The CLI's managed-secret ladder: ZCODE_CREDENTIAL_SECRET, ZCODE_CREDENTIAL_SECRET_FILE, or the
 // sibling credential-secret file (owner-only on POSIX); content 32–4096 bytes.
-function managedSecretFor(host: ZcodeCredentialHost, credentialsPath: string): string | null {
+async function managedSecretFor(
+  host: ZcodeCredentialHost,
+  credentialsPath: string
+): Promise<string | null> {
   const secret = host.env.ZCODE_CREDENTIAL_SECRET?.trim()
   const secretFile = host.env.ZCODE_CREDENTIAL_SECRET_FILE?.trim()
   if (secret && secretFile) {
@@ -174,7 +192,7 @@ function managedSecretFor(host: ZcodeCredentialHost, credentialsPath: string): s
   }
   if (!secretFile && platform() !== 'win32') {
     try {
-      if ((statSync(path).mode & 0o77) !== 0) {
+      if (((await stat(path)).mode & 0o77) !== 0) {
         return null
       }
     } catch {
@@ -184,15 +202,15 @@ function managedSecretFor(host: ZcodeCredentialHost, credentialsPath: string): s
   return content
 }
 
-function v2KeyFor(
+async function v2KeyFor(
   source: string,
   host: ZcodeCredentialHost,
   credentialsPath: string
-): Buffer | null {
+): Promise<Buffer | null> {
   if (source === 'os') {
     return osKeystoreKeyFor(platform(), credentialsPath)
   }
-  const managed = managedSecretFor(host, credentialsPath)
+  const managed = await managedSecretFor(host, credentialsPath)
   if (!managed) {
     return null
   }
@@ -219,11 +237,11 @@ function gcmOpen(key: Buffer, payload: string): string {
 }
 
 /** Open one sealed zcode credential value (`enc:v1:`/`enc:v2:`), throwing when unavailable. */
-export function openZcodeCredentialValue(
+export async function openZcodeCredentialValue(
   value: string,
   host: ZcodeCredentialHost,
   credentialsPath: string = zcodeV2CredentialsStorePath(host)
-): string {
+): Promise<string> {
   if (value.startsWith('enc:v2:')) {
     const rest = value.slice('enc:v2:'.length)
     const colon = rest.indexOf(':')
@@ -237,7 +255,7 @@ export function openZcodeCredentialValue(
     if (fingerprint) {
       payload = fingerprint[2]
     }
-    const key = v2KeyFor(source, host, credentialsPath)
+    const key = await v2KeyFor(source, host, credentialsPath)
     if (!key) {
       throw new Error(`zcode keystore key for ${source} is unavailable`)
     }
@@ -253,18 +271,18 @@ export function openZcodeCredentialValue(
 }
 
 /** Seal a plaintext into the current desktop layout (`enc:v2:os:` where the keystore serves). */
-export function sealZcodeCredentialValue(
+export async function sealZcodeCredentialValue(
   plaintext: string,
   host: ZcodeCredentialHost,
   credentialsPath: string = zcodeV2CredentialsStorePath(host)
-): string {
+): Promise<string> {
   const source =
     platform() === 'darwin' || platform() === 'win32'
-      ? osKeystoreKeyFor(platform(), credentialsPath)
+      ? (await osKeystoreKeyFor(platform(), credentialsPath))
         ? 'os'
         : 'env'
       : 'env'
-  const key = v2KeyFor(source, host, credentialsPath)
+  const key = await v2KeyFor(source, host, credentialsPath)
   if (!key) {
     throw new Error(`zcode keystore key for ${source} is unavailable`)
   }

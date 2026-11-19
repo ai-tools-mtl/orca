@@ -149,7 +149,7 @@ export class ZcodeStructuredSession {
   /** Routes one server→client request and answers bookkeeping asks directly. */
   onServerRequest(method: string, params: unknown, id: number | string): void {
     if (method === 'interaction/requestProviderRuntimeHeaders') {
-      this.headersAsks.answer({
+      this.headersAsks.answerResolved({
         connection: this.connection,
         params,
         id,

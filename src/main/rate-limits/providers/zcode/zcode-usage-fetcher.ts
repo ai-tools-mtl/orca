@@ -138,7 +138,7 @@ export async function fetchZcodeRateLimits(
   if (plan && !saved) {
     return failed('The saved GLM Coding Plan API key is unusable', 'parse', '')
   }
-  const cli = saved ? null : readZcodeUsageCredentials(options)
+  const cli = saved ? null : await readZcodeUsageCredentials(options)
   if (cli?.status === 'error') {
     return failed('Could not read the selected ZCode CLI Coding Plan credential', 'parse', '')
   }
@@ -149,7 +149,7 @@ export async function fetchZcodeRateLimits(
   const source = saved ? ZCODE_PLAN_CREDENTIAL_SOURCE : cli?.status === 'ok' ? cli.source : ''
   const result = await fetchUsage(credentials, source, options.signal)
   if (!saved) {
-    const current = readZcodeUsageCredentials(options)
+    const current = await readZcodeUsageCredentials(options)
     if (
       current.status !== 'ok' ||
       current.credentials.authProvenance !== credentials.authProvenance

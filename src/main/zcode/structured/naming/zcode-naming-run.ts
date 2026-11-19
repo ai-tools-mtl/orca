@@ -23,7 +23,7 @@ const NAMING_RUN_TIMEOUT_MS = 90_000
 export type ZcodeNamingRunDeps = {
   resolveEnvironment: () => Promise<NodeJS.ProcessEnv>
   resolveCommandSettings?: () => StructuredAgentCommandSettings
-  resolveChatCredentials: () => ZcodeChatCredentials | null
+  resolveChatCredentials: () => Promise<ZcodeChatCredentials | null>
 }
 
 export class ZcodeNamingRuns {
@@ -53,7 +53,7 @@ export class ZcodeNamingRuns {
     this.inFlight.add(attempt)
     let home: string | null = null
     try {
-      if (!this.deps.resolveChatCredentials()) {
+      if (!(await this.deps.resolveChatCredentials())) {
         return null
       }
       if (attempt.signal.aborted || input.shouldExecute?.() === false) {
@@ -138,7 +138,7 @@ export class ZcodeNamingRuns {
       const push = await pushZcodeAccountConfig(
         connection,
         table,
-        this.deps.resolveChatCredentials()
+        await this.deps.resolveChatCredentials()
       )
       if (!push.pushed) {
         return null
@@ -209,15 +209,24 @@ export class ZcodeNamingRuns {
       return
     }
     if (request.method === 'interaction/requestProviderRuntimeHeaders') {
-      const credentials = this.deps.resolveChatCredentials()
-      if (credentials) {
-        connection.respond(request.id, {
-          headersApplied: true,
-          requestAuth: { apiKey: credentials.apiKey }
+      void Promise.resolve(this.deps.resolveChatCredentials())
+        .then((credentials) => {
+          if (credentials) {
+            connection.respond(request.id, {
+              headersApplied: true,
+              requestAuth: { apiKey: credentials.apiKey }
+            })
+          } else {
+            connection.respondWithError(
+              request.id,
+              -32000,
+              'no coding plan key is available to Orca'
+            )
+          }
         })
-      } else {
-        connection.respondWithError(request.id, -32000, 'no coding plan key is available to Orca')
-      }
+        .catch(() =>
+          connection.respondWithError(request.id, -32000, 'plan credentials could not be read')
+        )
       return
     }
     connection.respondWithError(request.id, -32601, `Orca does not answer ${request.method}`)

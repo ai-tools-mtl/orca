@@ -40,10 +40,10 @@ export class ZcodeCredentialCipherAsks {
     params: unknown
     id: number | string
   }): void {
-    input.connection.respond(input.id, this.reply(input.params))
+    void this.reply(input.params).then((reply) => input.connection.respond(input.id, reply))
   }
 
-  private reply(params: unknown): CipherBridgeReply {
+  private async reply(params: unknown): Promise<CipherBridgeReply> {
     const requestId = requestIdOf(params)
     const fail = (message: string): CipherBridgeReply => ({
       requestId,
@@ -61,7 +61,7 @@ export class ZcodeCredentialCipherAsks {
           requestId,
           result: {
             ok: true,
-            value: openZcodeCredentialValue(parsed.data.value, host, credentialsPath)
+            value: await openZcodeCredentialValue(parsed.data.value, host, credentialsPath)
           }
         }
       }
@@ -69,7 +69,7 @@ export class ZcodeCredentialCipherAsks {
         requestId,
         result: {
           ok: true,
-          value: sealZcodeCredentialValue(parsed.data.value, host, credentialsPath)
+          value: await sealZcodeCredentialValue(parsed.data.value, host, credentialsPath)
         }
       }
     } catch (error) {

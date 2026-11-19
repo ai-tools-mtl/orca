@@ -7,6 +7,7 @@ import {
   resolveCoordinatorTerminalHandle,
   runScopedSessionCaller
 } from '../identity/terminal-identity'
+import { attemptRowLine } from './routing-attempt-line'
 
 export const ORCHESTRATION_ROUTING_HANDLERS: Record<string, CommandHandler> = {
   'orchestration routing-input-register': async ({ flags, client, cwd, json }) => {

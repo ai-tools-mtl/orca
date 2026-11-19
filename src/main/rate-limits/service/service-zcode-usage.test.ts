@@ -48,7 +48,7 @@ vi.mock('../providers/opencode-go/opencode-go-usage-source-selection', () => ({
 
 vi.mock('../providers/zcode/zcode-usage-fetcher', () => ({
   fetchZcodeRateLimits: vi.fn(),
-  hasZcodeCliPlanCredentials: vi.fn(() => false)
+  hasZcodeCliPlanCredentials: vi.fn(async () => false)
 }))
 
 vi.mock('../providers/minimax/minimax-fetcher', () => ({
@@ -130,7 +130,7 @@ describe('RateLimitService zcode plan credentials', () => {
     vi.stubEnv('ZCODE_CREDENTIAL_SECRET', 'synthetic-secret')
     try {
       cpSync(join(fixtures, 'zai'), join(home, '.zcode', 'v2'), { recursive: true })
-      const selected = readZcodeUsageCredentials()
+      const selected = await readZcodeUsageCredentials()
       if (selected.status !== 'ok') {
         throw new Error('Synthetic fixture could not be read')
       }

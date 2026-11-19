@@ -40,9 +40,9 @@ export function localZcodeCredentialHost(): ZcodeCredentialHost {
   return { home: homedir(), platform: platform(), username, env: process.env }
 }
 
-export function readZcodeV2PlanCredential(
+export async function readZcodeV2PlanCredential(
   host = localZcodeCredentialHost()
-): ZcodeV2PlanCredential {
+): Promise<ZcodeV2PlanCredential> {
   const base = userPath(host.env.ZCODE_DATA_BASE_DIR ?? host.home, host.home)
   const credentialsPath = join(base, '.zcode', 'v2', 'credentials.json')
   const configPath =
@@ -72,7 +72,7 @@ export function readZcodeV2PlanCredential(
     if (!rawIdentity) {
       return { status: 'unavailable' }
     }
-    const identity = openZcodeCredentialValue(rawIdentity, host, credentialsPath).trim()
+    const identity = (await openZcodeCredentialValue(rawIdentity, host, credentialsPath)).trim()
     if (!identity) {
       return { status: 'unavailable' }
     }
@@ -87,7 +87,7 @@ export function readZcodeV2PlanCredential(
     if (!rawAccessToken) {
       return { status: 'unavailable' }
     }
-    const apiKey = openZcodeCredentialValue(rawAccessToken, host, credentialsPath).trim()
+    const apiKey = (await openZcodeCredentialValue(rawAccessToken, host, credentialsPath)).trim()
     if (!apiKey || /[\r\n]/.test(apiKey)) {
       return { status: 'error' }
     }

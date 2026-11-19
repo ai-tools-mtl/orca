@@ -54,7 +54,7 @@ export const ORCHESTRATION_ROUTING_DELIVERY_HANDLERS: Record<string, CommandHand
       subAction: { sub_action_id: string; state: string }
       attempt: { attempt_id: string; first_action_json: string | null }
       echoSequence: number | null
-    }>(client, flags, 'orchestration.routingSubActionVerify', {
+    }>('orchestration.routingSubActionVerify', {
       input: getRequiredStringFlag(flags, 'input'),
       subAction: getRequiredStringFlag(flags, 'sub-action'),
       dispatch: getRequiredStringFlag(flags, 'dispatch'),

@@ -17,7 +17,7 @@ vi.mock('node:os', async (importOriginal) => {
 })
 // Why: the CLI sign-in probe reads platform credential stores this test must not touch.
 vi.mock('../../../../rate-limits/providers/zcode/zcode-usage-fetcher', () => ({
-  hasZcodeCliPlanCredentials: () => false
+  hasZcodeCliPlanCredentials: async () => false
 }))
 
 const SECRET = 'sk-test-secret-value-1234'

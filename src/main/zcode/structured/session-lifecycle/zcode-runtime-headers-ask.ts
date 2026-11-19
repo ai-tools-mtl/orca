@@ -59,4 +59,22 @@ export class ZcodeRuntimeHeadersAsks {
       input.connection.respondWithError(input.id, -32000, 'no coding plan key is available to Orca')
     }
   }
+
+  /** Credentials come from the keystore-backed store; the answer defers until they resolve. */
+  answerResolved(input: {
+    connection: Pick<ZcodeAppServerConnection, 'respond' | 'respondWithError'>
+    params: unknown
+    id: number | string
+    credentials: Promise<ZcodeChatCredentials | null>
+    options: ZcodeStructuredOptions
+    lane: ZcodeStructuredLane | null
+    providerSessionId: string | null
+    now: () => number
+  }): void {
+    void Promise.resolve(input.credentials)
+      .then((credentials) => this.answer({ ...input, credentials }))
+      .catch(() =>
+        input.connection.respondWithError(input.id, -32000, 'plan credentials could not be read')
+      )
+  }
 }

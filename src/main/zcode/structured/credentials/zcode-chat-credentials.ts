@@ -32,14 +32,14 @@ export function zcodePlanProviderId(site: ZcodePlanSite): string {
 }
 
 /** The credentials a zcode chat can present, Orca's own plan key first. */
-export function resolveZcodeChatCredentials(
+export async function resolveZcodeChatCredentials(
   source: ZcodeChatAccountSource = {}
-): ZcodeChatCredentials | null {
+): Promise<ZcodeChatCredentials | null> {
   const apiKey = readZcodePlanApiKeyOrNull()
   if (apiKey && source.site) {
     return { site: source.site, apiKey, providerId: zcodePlanProviderId(source.site) }
   }
-  const v2 = readZcodeV2PlanCredential(localZcodeCredentialHost())
+  const v2 = await readZcodeV2PlanCredential(localZcodeCredentialHost())
   // An explicit settings site is the connected plan; a v2 credential for the other family would
   // entitle a plan the user did not select, so it only serves as the default.
   if (v2.status === 'ok' && (!source.site || siteOfBaseUrl(v2.baseUrl) === source.site)) {

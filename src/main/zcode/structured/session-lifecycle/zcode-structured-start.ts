@@ -72,11 +72,11 @@ export async function startZcodeStructuredSession(input: {
   const probe = await awaitStorageReady(
     child.connection,
     child.whenServerAsks,
-    () =>
+    async () =>
       pushZcodeAccountConfig(
         child.connection,
         table,
-        deps.resolveChatCredentials(),
+        await deps.resolveChatCredentials(),
         STORAGE_READY_ATTEMPT_TIMEOUT_MS
       ),
     acquire.signal

@@ -37,7 +37,7 @@ export type ZcodeModelCatalogProbeDeps = {
   resolveEnvironment: () => Promise<NodeJS.ProcessEnv>
   resolveCommandSettings?: () => StructuredAgentCommandSettings
   resolveLaunchArgs?: () => Promise<string[]> | string[]
-  resolveChatCredentials: () => ZcodeChatCredentials | null
+  resolveChatCredentials: () => Promise<ZcodeChatCredentials | null>
 }
 
 /** The zcode launch a catalog probe runs: the same bundled-first composition a chat session uses. */
@@ -122,10 +122,11 @@ export function createZcodeModelCatalogProbe(
               const table = readZcodeBuiltinTable(
                 launch.env.ZCODE_BUILTIN_PROVIDER_CONFIG_FILE ?? null
               )
+              const credentials = await deps.resolveChatCredentials()
               const push = await pushZcodeAccountConfig(
                 connection,
                 table,
-                deps.resolveChatCredentials(),
+                credentials,
                 Math.max(1, deadline - Date.now())
               )
               // A refused push leaves only third-party models; advertising account ids the
@@ -137,7 +138,7 @@ export function createZcodeModelCatalogProbe(
                 push.refusedStandaloneAccount ||
                 push.refusedUnsupported ||
                 table === null ||
-                deps.resolveChatCredentials() === null
+                credentials === null
               if (!pushSettled) {
                 throw new Error('zcode account push did not land yet')
               }
@@ -245,15 +246,20 @@ function answerProbeAsk(
     return
   }
   if (request.method === 'interaction/requestProviderRuntimeHeaders') {
-    const credentials = deps.resolveChatCredentials()
-    if (credentials) {
-      connection.respond(request.id, {
-        headersApplied: true,
-        requestAuth: { apiKey: credentials.apiKey }
+    void Promise.resolve(deps.resolveChatCredentials())
+      .then((credentials) => {
+        if (credentials) {
+          connection.respond(request.id, {
+            headersApplied: true,
+            requestAuth: { apiKey: credentials.apiKey }
+          })
+        } else {
+          connection.respondWithError(request.id, -32000, 'no coding plan key is available to Orca')
+        }
       })
-    } else {
-      connection.respondWithError(request.id, -32000, 'no coding plan key is available to Orca')
-    }
+      .catch(() =>
+        connection.respondWithError(request.id, -32000, 'plan credentials could not be read')
+      )
     return
   }
   connection.respondWithError(request.id, -32601, `Orca does not answer ${request.method}`)

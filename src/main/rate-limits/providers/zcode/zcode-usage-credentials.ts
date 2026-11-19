@@ -97,16 +97,16 @@ export function resolveUsageCredentials(
   }
 }
 
-export function readZcodeUsageCredentials(
+export async function readZcodeUsageCredentials(
   options: ZcodeUsageCredentialOptions = {}
-): ZcodeUsageCredentialRead {
+): Promise<ZcodeUsageCredentialRead> {
   const host = options.credentialHost ?? localZcodeCredentialHost()
   const configPath = options.configPath ?? join(host.home, '.zcode', 'cli', 'config.json')
   // An explicit legacy fixture path never probes the developer's credential store.
   const v2 =
     options.configPath && !options.credentialHost
       ? { status: 'absent' as const }
-      : readZcodeV2PlanCredential(host)
+      : await readZcodeV2PlanCredential(host)
   if (v2.status === 'error') {
     return { status: 'error' }
   }
@@ -122,11 +122,11 @@ export function readZcodeUsageCredentials(
     : { status: 'unavailable' }
 }
 
-export function hasZcodeCliPlanCredentials(configPath?: string): boolean {
-  return readZcodeUsageCredentials({ configPath }).status === 'ok'
+export async function hasZcodeCliPlanCredentials(configPath?: string): Promise<boolean> {
+  return (await readZcodeUsageCredentials({ configPath })).status === 'ok'
 }
 
-export function isZcodeUsageCredentialCurrent(usage: ProviderRateLimits): boolean {
+export async function isZcodeUsageCredentialCurrent(usage: ProviderRateLimits): Promise<boolean> {
   if (
     !usage.usageMetadata?.authProvenance ||
     !usage.usageMetadata.credentialSource ||
@@ -134,7 +134,7 @@ export function isZcodeUsageCredentialCurrent(usage: ProviderRateLimits): boolea
   ) {
     return true
   }
-  const current = readZcodeUsageCredentials()
+  const current = await readZcodeUsageCredentials()
   return (
     current.status === 'ok' &&
     current.credentials.authProvenance === usage.usageMetadata.authProvenance

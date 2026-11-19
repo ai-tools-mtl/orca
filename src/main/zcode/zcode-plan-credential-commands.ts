@@ -18,11 +18,11 @@ import type { ZcodePlanCredentialsStatus } from '../../shared/agent-accounts/usa
 
 type UsageRefresher = Pick<RateLimitService, 'refresh' | 'invalidateZcodeCredentialState'>
 
-export function getZcodePlanCredentialsStatus(): ZcodePlanCredentialsStatus {
+export async function getZcodePlanCredentialsStatus(): Promise<ZcodePlanCredentialsStatus> {
   const apiKeyConfigured = hasZcodePlanApiKey()
   return {
     apiKeyConfigured,
-    zcodeCliConfigured: hasZcodeCliPlanCredentials(),
+    zcodeCliConfigured: await hasZcodeCliPlanCredentials(),
     apiKeyProtection: getZcodePlanApiKeyProtection(),
     apiKeyUnreadable: apiKeyConfigured ? apiKeyUnreadable() : undefined
   }
@@ -50,10 +50,10 @@ function refreshAfterChange(rateLimits: UsageRefresher | null, action: 'save' | 
   )
 }
 
-export function saveZcodePlanApiKeyCredential(
+export async function saveZcodePlanApiKeyCredential(
   rateLimits: UsageRefresher | null,
   key: unknown
-): ZcodePlanCredentialsStatus {
+): Promise<ZcodePlanCredentialsStatus> {
   // Runtime-check IPC/RPC input; compile-time types do not constrain the wire.
   if (typeof key !== 'string') {
     throw new Error('GLM Coding Plan API key must be a string')
@@ -63,9 +63,9 @@ export function saveZcodePlanApiKeyCredential(
   return getZcodePlanCredentialsStatus()
 }
 
-export function clearZcodePlanApiKeyCredential(
+export async function clearZcodePlanApiKeyCredential(
   rateLimits: UsageRefresher | null
-): ZcodePlanCredentialsStatus {
+): Promise<ZcodePlanCredentialsStatus> {
   clearZcodePlanApiKey()
   refreshAfterChange(rateLimits, 'clear')
   return getZcodePlanCredentialsStatus()
