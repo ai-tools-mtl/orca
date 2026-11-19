@@ -7,13 +7,12 @@ import {
   desktopEntryAddress
 } from '../../../orchestration/addressing/desktop-entry-identity'
 import { deliverTargetedSupplement } from '../../../orchestration/routing/targeted-supplement-delivery'
-import { autoRouteWithModelProvider } from '../../../orchestration/routing/model-decision-provider'
-import { readZcodeV2PlanCredential } from '../../../../zcode/zcode-v2-plan-credentials'
 import { recentOpenApprovalReports } from '../../../orchestration/workers/approvals/worker-approval-report'
-import { routingInputsPayload, supplementReceipt } from './routing-supplements'
+import { supplementReceipt } from './routing-supplements'
+import { coordinatedEntryRun, entryInputsWithResults, entryRunOfInput } from './entry-dispatch'
+import { ORCHESTRATION_ENTRY_ROUTING_METHODS } from './entry-routing-methods'
 import {
   EntryApprovalsParams,
-  EntryAutoRouteParams,
   EntryClaimParams,
   EntryHandbackParams,
   EntryPauseParams,
@@ -30,31 +29,6 @@ import type { OrchestrationDb } from '../../../orchestration/db/orchestration-db
 // terminal's or a session's authority. These methods construct that identity server-side from
 // the project group id; the coordinated routing methods stay untouched for CLI and sessions.
 
-function coordinatedEntryRun(db: OrchestrationDb, group: string) {
-  const caller = desktopEntryCaller(group)
-  const run = db.getCurrentRunForCoordinator(caller)
-  if (!run) {
-    throw new OrchestrationError(
-      'run_required',
-      `The entry for ${group} has no Run yet; record a request first.`
-    )
-  }
-  return { caller, run }
-}
-
-function entryRunOfInput(db: OrchestrationDb, group: string, inputId: string) {
-  const { run } = coordinatedEntryRun(db, group)
-  const input = db.getRoutingInput(inputId)
-  if (!input || input.run_id !== run.id) {
-    throw new OrchestrationError(
-      'lifecycle_not_found',
-      `Input ${inputId} does not belong to the entry Run of ${group}.`,
-      { inputId }
-    )
-  }
-  return run
-}
-
 function entryRunOfTask(db: OrchestrationDb, group: string, taskId: string) {
   const { run } = coordinatedEntryRun(db, group)
   const task = db.getTask(taskId)
@@ -69,6 +43,7 @@ function entryRunOfTask(db: OrchestrationDb, group: string, taskId: string) {
 }
 
 export const ORCHESTRATION_ENTRY_METHODS = [
+  ...ORCHESTRATION_ENTRY_ROUTING_METHODS,
   // The standing entry read: the project's current Run (or none), its inputs with sub-actions
   // and delivery attempts, and the watchdog pause — the four-state facts the card renders.
   defineOrchestrationMethod({
@@ -82,7 +57,7 @@ export const ORCHESTRATION_ENTRY_METHODS = [
       const run = db.getCurrentRunForCoordinator(caller)
       return {
         run: run ? exposeRun(run) : null,
-        ...(run ? routingInputsPayload(db, run.id) : { inputs: [] }),
+        ...(run ? entryInputsWithResults(db, run.id) : { inputs: [] }),
         // With no Run yet the entry is trivially unpaused; the facts read only this Run's ledger.
         watchdog: db.routingWatchdogFacts(run?.id ?? '')
       }
@@ -271,30 +246,6 @@ export const ORCHESTRATION_ENTRY_METHODS = [
       return { subAction: claimed, claimVersion: claimed.claim_version }
     }
   }),
-  // §5.1's model-backed routing, on the entry's own authority. Two credential sources: the
-  // settings-configured custom provider (any OpenAI-compatible endpoint), or — the default —
-  // the desktop's own ZCode coding plan credential with the v2 selection's model. Without a
-  // serving credential this resolves to the manual reason; the input stays received.
-  defineOrchestrationMethod({
-    name: 'orchestration.entryAutoRoute',
-    permission: 'workspace',
-    params: EntryAutoRouteParams,
-    access: { kind: 'writes', targets: {} },
-    handler: async (params, { runtime }) => {
-      const db = runtime.getOrchestrationDb()
-      entryRunOfInput(db, params.group, params.input)
-      const credential =
-        params.decisionModel?.provider === 'custom'
-          ? {
-              status: 'ok' as const,
-              apiKey: params.decisionModel.apiKey ?? '',
-              baseUrl: params.decisionModel.baseUrl ?? '',
-              modelId: params.decisionModel.modelId ?? ''
-            }
-          : await readZcodeV2PlanCredential()
-      return autoRouteWithModelProvider(db, { inputId: params.input }, credential)
-    }
-  }),
   // The prototype's 授权追问卡: approvals Orca reported open for this Run's workers, from the
   // persisted escalation reports. Answering goes through orchestration.approvalAnswer, where the
   // desktop transport already proves the person.
@@ -305,7 +256,10 @@ export const ORCHESTRATION_ENTRY_METHODS = [
     access: { kind: 'reads', targets: {} },
     handler: ({ group }, { runtime }) => {
       const db = runtime.getOrchestrationDb()
-      const { run } = coordinatedEntryRun(db, group)
+      const run = db.getCurrentRunForCoordinator(desktopEntryCaller(group))
+      if (!run) {
+        return { approvals: [] }
+      }
       return {
         approvals: recentOpenApprovalReports(db)
           .filter((report) => report.dispatch.run_id === run.id)

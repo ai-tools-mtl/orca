@@ -1,10 +1,16 @@
 import { z } from 'zod'
-import { routeRoutingInput, type RoutingDecisionProvider } from './routing-router'
+import {
+  routeRoutingInput,
+  type RoutingDecisionProposal,
+  type RoutingDecisionProvider
+} from './routing-router'
 import type { OrchestrationDb } from '../db/orchestration-db'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 
 /** The credential a decision provider routes with — the ok shape plus any unavailable reason. */
 export type ModelCredential =
-  | { status: 'ok'; apiKey: string; baseUrl: string; modelId: string }
+  | { status: 'ok'; apiKey: string; baseUrl: string; modelId: string; protocol?: 'openai' }
   | { status: 'absent' | 'error' | 'unavailable' }
 
 // Plan §5.1's model-backed decision provider: the desktop's own coding-plan credential calls the
@@ -16,23 +22,26 @@ export type ModelDecisionProviderConfig = {
   apiKey: string
   baseUrl: string
   modelId: string
+  protocol?: 'openai'
   /** Injectable for tests; defaults to the global fetch. */
   fetchImpl?: typeof fetch
 }
 
 const DECISION_SYSTEM_PROMPT = `You are the routing step of a work dispatcher (plan §5.1). Split the user's request into independent sub-actions. Reply with ONLY a JSON object:
-{"subActions":[{"text":"...","taskId":"<candidate id if the request names that existing task>"}],"reason":"..."}
-Rules: each sub-action text is a self-contained instruction in the user's language; requests that name several targets split into one sub-action per target; dependent steps stay in ONE sub-action with the order stated; reference a candidate taskId only when the request clearly names that task; reply {"subActions":[],"reason":"..."} when nothing needs doing. At most six sub-actions.`
+{"subActions":[{"text":"...","taskId":"<candidate id if the request names that existing task>","agent":"<agent id if explicitly assigned>"}],"reason":"..."}
+Use the optional agent only when the user explicitly names the worker for this sub-action, normalized to its lowercase Orca agent id (e.g. Codex → codex, ZCode → zcode). Omit agent for unassigned work.
+Rules: each sub-action text is a self-contained instruction in the user's language; preserve every applicable user constraint in each instruction; requests that name several targets split into one sub-action per target; dependent steps stay in ONE sub-action with the order stated; reference a candidate taskId only when the request clearly names that task; reply {"subActions":[],"reason":"..."} when nothing needs doing. At most six sub-actions.`
 
 const decisionReplySchema = z.object({
-  subActions: z.array(
-    z
-      .object({
+  subActions: z
+    .array(
+      z.object({
         text: z.string().trim().min(1),
-        taskId: z.string().trim().min(1).optional()
+        taskId: z.string().trim().min(1).optional(),
+        agent: z.custom<TuiAgent>(isTuiAgent).optional()
       })
-      .transform((entry) => ({ text: entry.text, taskId: entry.taskId }))
-  ),
+    )
+    .max(6),
   reason: z.string().trim().optional()
 })
 
@@ -43,10 +52,7 @@ const completionEnvelopeSchema = z.object({
 })
 
 /** Models fence JSON even when told not to; the outermost object is the reply. */
-function parseDecisionContent(content: string): {
-  subActions: { text: string; taskId?: string | null }[]
-  reason?: string
-} {
+function parseDecisionContent(content: string): RoutingDecisionProposal {
   const start = content.indexOf('{')
   const end = content.lastIndexOf('}')
   if (start === -1 || end === -1 || end <= start) {
@@ -64,7 +70,9 @@ export function createModelDecisionProvider(
 ): RoutingDecisionProvider {
   const fetchImpl = config.fetchImpl ?? fetch
   return async (context) => {
-    const response = await fetchImpl(`${config.baseUrl}/api/paas/v4/chat-completions`, {
+    const path =
+      config.protocol === 'openai' ? '/chat/completions' : '/api/paas/v4/chat/completions'
+    const response = await fetchImpl(`${config.baseUrl.replace(/\/+$/, '')}${path}`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${config.apiKey}`,
@@ -91,24 +99,14 @@ export function createModelDecisionProvider(
       })
     })
     if (!response.ok) {
-      return {
-        subActions: [],
-        reason: `decision model returned ${response.status}; the input stays received`
-      }
+      throw new Error(`decision model returned ${response.status}`)
     }
     const envelope = completionEnvelopeSchema.safeParse(await response.json())
     const content = envelope.success ? envelope.data.choices[0]?.message.content : undefined
     if (content === undefined) {
-      return { subActions: [], reason: 'decision model returned no content' }
+      throw new Error('decision model returned no content')
     }
-    try {
-      return parseDecisionContent(content)
-    } catch {
-      return {
-        subActions: [],
-        reason: 'decision model replied without valid JSON; the input stays received'
-      }
-    }
+    return parseDecisionContent(content)
   }
 }
 
@@ -121,7 +119,15 @@ export type ModelDecisionResolution =
 export async function resolveModelDecisionProvider(
   credential: ModelCredential
 ): Promise<ModelDecisionResolution> {
-  if (credential.status !== 'ok') {
+  if (credential.status === 'error') {
+    return { status: 'unavailable', reason: 'The active ZCode plan credential could not be read.' }
+  }
+  if (
+    credential.status !== 'ok' ||
+    !credential.apiKey ||
+    !credential.baseUrl ||
+    !credential.modelId
+  ) {
     return {
       status: 'unavailable',
       reason: 'no decision provider configured; the input awaits manual assignment'
@@ -132,7 +138,8 @@ export async function resolveModelDecisionProvider(
     provider: createModelDecisionProvider({
       apiKey: credential.apiKey,
       baseUrl: credential.baseUrl,
-      modelId: credential.modelId
+      modelId: credential.modelId,
+      protocol: credential.protocol
     })
   }
 }
@@ -145,9 +152,12 @@ export async function autoRouteWithModelProvider(
   executorCapabilities?: readonly string[]
 ): Promise<Awaited<ReturnType<typeof routeRoutingInput>>> {
   const resolution = await resolveModelDecisionProvider(credential)
-  return routeRoutingInput(db, {
+  const result = await routeRoutingInput(db, {
     inputId: input.inputId,
     executorCapabilities,
     ...(resolution.status === 'ok' ? { provider: resolution.provider } : {})
   })
+  return !result.routed && resolution.status === 'unavailable'
+    ? { ...result, reason: resolution.reason }
+    : result
 }

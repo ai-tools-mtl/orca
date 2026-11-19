@@ -53,6 +53,7 @@ export async function startLocalWorker(args: {
   coordinator: OrchestrationCallerIdentity | null
   callerSession?: OrchestrationEntryCaller
   existingTask?: TaskRow
+  entrySubActionId?: string
   orchestrationMutation?: WorkerStartMutation
   /** Settings-driven; the executing host still gets to refuse below. */
   mode: WorkerStartModeReceipt
@@ -76,11 +77,9 @@ export async function startLocalWorker(args: {
       repo: params.repo,
       callerWorktreeId
     })
-  const coordinatorWorktreeId = await resolveDispatchCallerWorktreeId(
-    runtime,
-    params.from,
-    callerSession
-  )
+  const coordinatorWorktreeId = args.entrySubActionId
+    ? ''
+    : await resolveDispatchCallerWorktreeId(runtime, params.from, callerSession)
   const existingWorktree =
     requestedWorktree === 'current' ? `id:${coordinatorWorktreeId}` : requestedWorktree
   const launchParams = await resolveWorkerConfiguredAgentParams(runtime, params, async () =>

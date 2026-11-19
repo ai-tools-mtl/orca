@@ -1,6 +1,7 @@
 import { OrchestrationError } from '../orchestration-error'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import type { TaskRow } from '../db/orchestration-records'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 
 // Plan §5.1: the Router is a restricted decision step over a persistent input — never a general
 // agent. The decision provider is a seam: Orca prepares the context (current message, source
@@ -9,7 +10,7 @@ import type { TaskRow } from '../db/orchestration-records'
 // everything to manual assignment; model-backed providers plug into the same seam later.
 
 export type RoutingDecisionProposal = {
-  subActions: { text: string; constraints?: string[]; taskId?: string | null }[]
+  subActions: { text: string; constraints?: string[]; taskId?: string | null; agent?: TuiAgent }[]
   decision?: unknown
   /** Recorded when nothing needs to happen (§5.1: 无需处理时记录原因，子动作列表为空). */
   reason?: string
@@ -37,7 +38,7 @@ export type RoutedDecision = {
   routed: boolean
   reused: boolean
   reason?: string
-  subActions: { sub_action_id: string; text: string; task_id: string | null }[]
+  subActions: { sub_action_id: string; text: string; task_id: string | null; agent?: TuiAgent }[]
 }
 
 const DEFAULT_ROUTER_TIMEOUT_MS = 30_000
@@ -133,17 +134,27 @@ export async function routeRoutingInput(
   const decision = db.registerRoutingDecision({
     inputId: input.inputId,
     subActions: proposal.subActions,
-    decision: { reason: proposal.reason ?? null, decision: proposal.decision ?? null }
+    decision: {
+      reason: proposal.reason ?? null,
+      decision: proposal.decision ?? null,
+      ...(proposal.subActions.some((action) => action.agent)
+        ? { agents: proposal.subActions.map((action) => action.agent ?? null) }
+        : {})
+    }
   })
   return {
     routed: true,
     reused: decision.reused,
     ...(proposal.reason ? { reason: proposal.reason } : {}),
-    subActions: decision.subActions.map((subAction) => ({
-      sub_action_id: subAction.sub_action_id,
-      text: subAction.text,
-      task_id: subAction.task_id
-    }))
+    subActions: decision.subActions.map((subAction, index) => {
+      const agent = decision.reused ? undefined : proposal.subActions[index]?.agent
+      return {
+        sub_action_id: subAction.sub_action_id,
+        text: subAction.text,
+        task_id: subAction.task_id,
+        ...(agent ? { agent } : {})
+      }
+    })
   }
 }
 

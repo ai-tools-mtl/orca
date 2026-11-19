@@ -56,7 +56,7 @@ describe('model decision provider (plan §5.1 model-backed seam)', () => {
       { text: '查启动慢', taskId: 'task_7' }
     ])
     const call = vi.mocked(fetchImpl).mock.calls[0]
-    expect(String(call[0])).toBe('https://plan.example/api/paas/v4/chat-completions')
+    expect(String(call[0])).toBe('https://plan.example/api/paas/v4/chat/completions')
   })
 
   it('reports a reason and stays manual on HTTP errors and non-JSON replies', async () => {
@@ -64,26 +64,27 @@ describe('model decision provider (plan §5.1 model-backed seam)', () => {
       ...okCredential,
       fetchImpl: vi.fn(async () => new Response('no', { status: 503 }))
     })
-    const failed = await failing({
-      inputId: 'rinp_1',
-      text: 'x',
-      candidateTasks: [],
-      executorCapabilities: []
-    })
-    expect(failed.subActions).toEqual([])
-    expect(failed.reason).toContain('503')
+    await expect(
+      failing({
+        inputId: 'rinp_1',
+        text: 'x',
+        candidateTasks: [],
+        executorCapabilities: []
+      })
+    ).rejects.toThrow('decision model returned 503')
 
     const gibberish = createModelDecisionProvider({
       ...okCredential,
       fetchImpl: vi.fn(async () => completionsResponse('I cannot help with that.'))
     })
-    const parsed = await gibberish({
-      inputId: 'rinp_1',
-      text: 'x',
-      candidateTasks: [],
-      executorCapabilities: []
-    })
-    expect(parsed.subActions).toEqual([])
+    await expect(
+      gibberish({
+        inputId: 'rinp_1',
+        text: 'x',
+        candidateTasks: [],
+        executorCapabilities: []
+      })
+    ).rejects.toThrow('decision model replied without a JSON object')
   })
 
   it('resolves unavailable without a serving credential', async () => {

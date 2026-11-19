@@ -18,6 +18,7 @@ export function createLocalWorkerStartDispatch(
     coordinator,
     callerSession,
     existingTask,
+    entrySubActionId,
     orchestrationMutation,
     helperCreator,
     followUp
@@ -74,6 +75,7 @@ export function createLocalWorkerStartDispatch(
     maxDepth: runtime.getNestedWorkerMaxDepth(),
     requiredCreatorDispatchId: helperCreator?.id,
     taskId: existingTask?.id,
+    entrySubActionId,
     taskSpec: params.spec,
     adoptTaskId: params.adoptTaskId,
     taskTitle: params.taskTitle,

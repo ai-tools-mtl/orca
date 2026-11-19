@@ -5,6 +5,7 @@ import { readNodeFileSyncWithinLimit } from '../../shared/file-content/node-boun
 import { ZCODE_PLAN_SITE_BASE_URLS } from '../../shared/agent-accounts/usage-credentials/zcode-plan-sites'
 import { openZcodeCredentialValue, userPath } from './zcode-credential-cipher'
 import { readSupportedZcodeV2Selection } from './zcode-v2-personal-overlay'
+import { readZcodeV2ProjectPlanKey } from './zcode-v2-project-plan-key'
 
 const MAX_V2_FILE_BYTES = 4 * 1024 * 1024
 function readV2File(path: string): string {
@@ -49,7 +50,8 @@ export function localZcodeCredentialHost(): ZcodeCredentialHost {
 }
 
 export async function readZcodeV2PlanCredential(
-  host = localZcodeCredentialHost()
+  host = localZcodeCredentialHost(),
+  options: { preferInferenceKey?: boolean } = {}
 ): Promise<ZcodeV2PlanCredential> {
   const base = userPath(host.env.ZCODE_DATA_BASE_DIR ?? host.home, host.home)
   const credentialsPath = join(base, '.zcode', 'v2', 'credentials.json')
@@ -84,18 +86,31 @@ export async function readZcodeV2PlanCredential(
     if (!identity) {
       return { status: 'unavailable' }
     }
-    // Current desktops keep the plan auth as the OAuth access token (`oauth:<family>:access_token`)
-    // instead of the per-account api-key entries older builds wrote.
-    const siteFamily = [...sites].find(([provider]) => provider === selection.providerId)?.[1]
-    const rawAccessToken =
-      (siteFamily ? store[`oauth:${siteFamily}:access_token`] : undefined) ??
+    const sealedKey =
       store[
         `account-provider:coding-plan:${selection.providerId}:account:${encodeURIComponent(identity)}:api-key`
       ]
-    if (!rawAccessToken) {
+    const oauth = store[`oauth:${site}:access_token`]
+    const inferenceKey = options.preferInferenceKey
+      ? sealedKey
+        ? await openZcodeCredentialValue(sealedKey, host, credentialsPath)
+        : await readZcodeV2ProjectPlanKey({
+            store,
+            host,
+            path: credentialsPath,
+            site,
+            providerId: selection.providerId,
+            identity
+          })
+      : undefined
+    const fallback = oauth ?? sealedKey
+    const apiKey = (
+      inferenceKey ??
+      (fallback ? await openZcodeCredentialValue(fallback, host, credentialsPath) : '')
+    ).trim()
+    if (!fallback && !inferenceKey) {
       return { status: 'unavailable' }
     }
-    const apiKey = (await openZcodeCredentialValue(rawAccessToken, host, credentialsPath)).trim()
     if (!apiKey || /[\r\n]/.test(apiKey)) {
       return { status: 'error' }
     }

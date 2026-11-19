@@ -3,6 +3,19 @@ import type { RpcContext } from '../../core'
 import { createOrchestrationRpcHarness } from './rpc-test-harness'
 import type { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
 import { createRootDispatch } from '../../../orchestration/db/root-dispatch-test-fixture'
+import {
+  partialRuntimeStore,
+  storeRepo
+} from '../../../orca-runtime-tests/runtime-store-partial-fixture'
+
+const decisionModel = {
+  provider: 'custom',
+  baseUrl: 'https://custom.example/v1',
+  apiKey: 'synthetic-key',
+  modelId: 'test'
+}
+
+const request = '修登录，另外查启动慢'
 
 describe('desktop entry methods (plan §1/§9-A per-project 入口)', () => {
   const h = createOrchestrationRpcHarness()
@@ -11,6 +24,8 @@ describe('desktop entry methods (plan §1/§9-A per-project 入口)', () => {
 
   afterEach(() => {
     h.cleanup()
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
   })
 
   // Typed at each call site: the harness erases handler result types, so every call names the
@@ -19,6 +34,221 @@ describe('desktop entry methods (plan §1/§9-A per-project 入口)', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the asserted shape is the called method's documented receipt.
     return (await h.call(name, params, ctx)) as T
   }
+
+  function prepareWorkers() {
+    const repo = storeRepo({ id: 'proj_alpha', path: '/fixture/project', kind: 'git' })
+    const state = h.setup(
+      false,
+      partialRuntimeStore({
+        getRepos: () => [repo],
+        getSettings: () => ({ defaultTuiAgent: 'codex', nativeChatProviders: {} })
+      })
+    )
+    db = state.db
+    ctx = { ...state.ctx, caller: { kind: 'desktop' } }
+    const { runtime } = state
+    vi.spyOn(runtime, 'detectProjectLaunchContext').mockResolvedValue({
+      agents: ['codex', 'claude', 'zcode'],
+      workspaceKind: 'git-worktree',
+      executionContext: { kind: 'ssh' }
+    })
+    vi.spyOn(runtime, 'showRepo').mockResolvedValue(repo)
+    vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
+    vi.spyOn(runtime, 'listManagedWorktrees').mockResolvedValue({
+      worktrees: [],
+      totalCount: 0,
+      truncated: false
+    })
+    vi.spyOn(runtime, 'listRetiredWorktreeNames').mockResolvedValue({
+      retiredNamesByRepo: {},
+      retiredNameTiersByRepo: {}
+    })
+    vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => `pane:${handle}`)
+    vi.spyOn(runtime, 'getLiveTerminalPaneKey').mockImplementation((handle) =>
+      runtime.getTerminalPaneKey(handle)
+    )
+    let nextWorker = 0
+    vi.spyOn(runtime, 'createManagedWorktree').mockImplementation(async () => {
+      const id = ++nextWorker
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this terminal-transport fixture supplies the worktree/start fields read by worker-start.
+      return {
+        worktree: { id: `wt_${id}` },
+        startupTerminal: { spawned: true, handle: `term_${id}` }
+      } as never
+    })
+    vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
+      terminals: [],
+      totalCount: 0,
+      truncated: false
+    })
+    vi.spyOn(runtime, 'waitForTerminal').mockImplementation(async (handle) => ({
+      handle,
+      condition: 'tui-idle',
+      satisfied: true,
+      status: 'running',
+      exitCode: null
+    }))
+    vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
+    vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockImplementation(async (handle) => ({
+      handle,
+      accepted: true,
+      bytesWritten: 1
+    }))
+  }
+
+  type TaskCard = {
+    subAction: { sub_action_id: string; text: string; task_id: string | null }
+    execution: { agent: string; dispatchId: string; status: string; result: string | null } | null
+  }
+
+  const group = 'proj_alpha'
+
+  async function submitRequest(text = request) {
+    const { input } = await call<{ input: { input_id: string } }>('orchestration.entrySubmit', {
+      group,
+      text
+    })
+    return input.input_id
+  }
+
+  async function readCards() {
+    const { inputs } = await call<{ inputs: { subActions: TaskCard[] }[] }>(
+      'orchestration.entryShow',
+      { group }
+    )
+    return inputs[0]!.subActions
+  }
+
+  async function reportResult(card: TaskCard, body: string) {
+    if (!card.subAction.task_id || !card.execution) {
+      throw new Error('Worker was not dispatched')
+    }
+    const from = db.getDispatchContextById(card.execution.dispatchId)?.assignee_handle
+    if (!from) {
+      throw new Error('Worker has no reporting identity')
+    }
+    await call('orchestration.send', {
+      from,
+      type: 'worker_done',
+      subject: 'Done',
+      body,
+      payload: JSON.stringify({
+        taskId: card.subAction.task_id,
+        dispatchId: card.execution.dispatchId,
+        outcome: 'succeeded'
+      })
+    })
+  }
+
+  it('auto-dispatches independent work and shows each worker result on its own card', async () => {
+    prepareWorkers()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              choices: [
+                {
+                  message: {
+                    content:
+                      '{"subActions":[{"text":"修登录","agent":"codex"},{"text":"查启动慢","agent":"claude"}]}'
+                  }
+                }
+              ]
+            })
+          )
+      )
+    )
+    const input = await submitRequest('用 Codex 修登录，另外用 Claude 查启动慢')
+    const route = { group, input, dispatch: true, decisionModel }
+    expect(await call('orchestration.entryAutoRoute', route)).toMatchObject({
+      routed: true,
+      dispatchErrors: []
+    })
+    const [login, startup] = await readCards()
+    expect(login.execution).toMatchObject({ agent: 'codex', status: 'dispatched' })
+    expect(startup.execution).toMatchObject({ agent: 'claude', status: 'dispatched' })
+    expect(login.execution?.dispatchId).not.toBe(startup.execution?.dispatchId)
+
+    const runId = db.getTask(startup.subAction.task_id!)!.run_id
+    db.insertMessage({
+      runId,
+      from: 'term_2',
+      to: `run:${runId}`,
+      type: 'escalation',
+      subject: 'Agent hit an error',
+      payload: JSON.stringify({
+        dispatchId: startup.execution?.dispatchId,
+        error: 'Select a model'
+      })
+    })
+    expect(await readCards()).toMatchObject([
+      { execution: { status: 'dispatched' } },
+      { execution: { status: 'attention', failure: 'Select a model' } }
+    ])
+
+    await reportResult(startup, '启动慢由同步预热导致')
+    expect(await readCards()).toMatchObject([
+      { subAction: { text: '修登录' }, execution: { status: 'dispatched', result: null } },
+      {
+        subAction: { text: '查启动慢' },
+        execution: { status: 'completed', result: '启动慢由同步预热导致' }
+      }
+    ])
+    await reportResult(login, '已修复旧账号登录')
+    await call('orchestration.entryAutoRoute', route)
+    expect(await readCards()).toMatchObject([
+      {
+        execution: {
+          dispatchId: login.execution?.dispatchId,
+          status: 'completed',
+          result: '已修复旧账号登录'
+        }
+      },
+      {
+        execution: {
+          dispatchId: startup.execution?.dispatchId,
+          status: 'completed',
+          result: '启动慢由同步预热导致'
+        }
+      }
+    ])
+  })
+
+  it('keeps each manually split task pending until its worker is chosen', async () => {
+    prepareWorkers()
+    const input = await submitRequest()
+    await call('orchestration.entryPlan', { group, input, subActions: ['修登录', '查启动慢'] })
+    const [login, startup] = await readCards()
+    const assign = (card: TaskCard, agent: string) =>
+      call('orchestration.entryAssign', {
+        group,
+        input,
+        subAction: card.subAction.sub_action_id,
+        agent
+      })
+    await expect(assign(startup, 'opencode')).rejects.toMatchObject({ code: 'agent_unconfigured' })
+    await assign(login, 'claude')
+    expect(await readCards()).toMatchObject([
+      { execution: { agent: 'claude', status: 'dispatched' } },
+      { execution: null }
+    ])
+    await assign(startup, 'codex')
+    const [assignedLogin, assignedStartup] = await readCards()
+    await reportResult(assignedLogin, '已修复登录')
+    await reportResult(assignedStartup, '已定位启动阻塞')
+    expect(await readCards()).toMatchObject([
+      {
+        subAction: { text: '修登录' },
+        execution: { agent: 'claude', status: 'completed', result: '已修复登录' }
+      },
+      {
+        subAction: { text: '查启动慢' },
+        execution: { agent: 'codex', status: 'completed', result: '已定位启动阻塞' }
+      }
+    ])
+  })
 
   it('shows an empty standing entry before the first request', async () => {
     ;({ ctx } = h.setup(false))

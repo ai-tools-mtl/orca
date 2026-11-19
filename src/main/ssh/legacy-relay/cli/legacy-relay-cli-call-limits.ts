@@ -13,6 +13,7 @@ import {
   replayStableCallerParams
 } from '../../../runtime/rpc/orchestration/mutations/orchestration-mutation-receipt'
 import { getCompiledSchema } from '../../../schema-validation/zod-schema-compilation'
+import type { ZodType } from 'zod'
 import type { LegacyRelayCliCall } from './legacy-relay-cli-caller'
 
 /** Enough for a coordinator and its workers' waits; past it a host is flooding this desktop. */
@@ -94,7 +95,7 @@ export function isExactLegacyRelayCliReplay(
   ) {
     return false
   }
-  const parsed = getCompiledSchema(method.params).safeParse(call.params)
+  const parsed = getCompiledSchema<ZodType>(method.params).safeParse(call.params)
   if (!parsed.success) {
     return false
   }

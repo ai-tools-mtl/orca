@@ -15,6 +15,7 @@ export function createStartingWorkerDispatch(
   this: OrchestrationDb,
   params: {
     taskId?: string
+    entrySubActionId?: string
     taskSpec?: string
     /** The paired coordinator's ID for this Task: an existing one is reopened, else the new one takes it. */
     adoptTaskId?: string
@@ -183,6 +184,24 @@ export function createStartingWorkerDispatch(
          ) VALUES (?, ?, 'starting', 'accepted', ?)`
       )
       .run(id, params.runtimeEpoch ?? null, JSON.stringify(params.startOptions))
+    if (params.entrySubActionId) {
+      if (this.isRoutingRunPaused(task.run_id)) {
+        throw new OrchestrationError('paused', 'The project task entry is paused.')
+      }
+      const bound = this.db
+        .prepare(
+          `UPDATE routing_sub_actions SET task_id = ?
+         WHERE sub_action_id = ? AND run_id = ? AND task_id IS NULL`
+        )
+        .run(task.id, params.entrySubActionId, task.run_id)
+      if (bound.changes !== 1) {
+        throw new OrchestrationError(
+          'lifecycle_conflict',
+          'The entry sub-action is already assigned.'
+        )
+      }
+      this.claimSubActionForDispatch(params.entrySubActionId, id)
+    }
     if (params.federation) {
       this.db
         .prepare(
