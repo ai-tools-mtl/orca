@@ -57,10 +57,17 @@ const sheetContentVariants = cva(
         top: 'inset-x-0 top-0 h-auto border-b border-black/14 dark:border-white/14 data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top',
         bottom:
           'inset-x-0 bottom-0 h-auto border-t border-black/14 dark:border-white/14 data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom'
+      },
+      // Workspace sheets that span the workbench next to the sidebar: no default gutter, no
+      // max-width cap, and the sidebar surface so the sheet reads as an app pane, not a dialog.
+      surface: {
+        default: '',
+        flush: 'w-auto gap-0 p-0 bg-worktree-sidebar sm:max-w-none'
       }
     },
     defaultVariants: {
-      side: 'right'
+      side: 'right',
+      surface: 'default'
     }
   }
 )

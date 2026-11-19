@@ -19,12 +19,10 @@ export type RoutingEntryInput = {
   subActions: RoutingEntrySubAction[]
 }
 
-export type RoutingEntryCardProps = {
-  paused?: boolean
-  inputs: RoutingEntryInput[]
+export type RoutingRequestCardProps = {
+  input: RoutingEntryInput
   busy?: boolean
   error?: string | null
-  onRefresh?: () => void
   onHandback?: (subActionId: string, dispatchId: string) => void
   onSendSupplement?: (subActionId: string, text: string) => void
 }
@@ -63,96 +61,88 @@ function stateLabel(
   }
 }
 
-/** 简洁入口 (plan §9 A / §10): the four-state supplement cards over the runtime's own facts.
- *  Presentational only — facts come from orchestration.routingInputsShow, actions delegate to
- *  the handback/send RPCs. Internal ids stay in the expandable details. */
-export default function RoutingEntryCard({
-  paused,
-  inputs,
+/** One request card of the 统一任务入口 stream (plan §24): the original message on top, its
+ *  sub-actions below with the four-state facts, and the card-level supplement form delivering
+ *  to the claimed Dispatch's active turn. Presentational — facts come from entryShow. */
+export default function RoutingRequestCard({
+  input,
   busy,
   error,
-  onRefresh,
   onHandback,
   onSendSupplement
-}: RoutingEntryCardProps) {
+}: RoutingRequestCardProps) {
   const t = useTranslate()
+  const claimed = input.subActions.find((subAction) => subAction.claimedBy)
   return (
-    <div className="flex flex-col gap-2 px-3 py-2 text-sm">
-      <div className="flex items-center justify-between">
-        <span className="font-medium">{t(`${ENTRY}.title`, 'Dispatch entry')}</span>
-        <div className="flex items-center gap-1">
-          {paused ? <Badge variant="destructive">{t(`${ENTRY}.paused`, 'Paused')}</Badge> : null}
-          <Button variant="ghost" size="sm" disabled={busy} onClick={onRefresh}>
-            {t(`${ENTRY}.refresh`, 'Refresh')}
+    <div className="flex flex-col gap-1.5 rounded-lg border p-2.5">
+      <p className="text-sm whitespace-pre-wrap">{input.text}</p>
+      <p className="text-muted-foreground text-xs" title={input.inputId}>
+        {t(`${ENTRY}.input`, 'Input')} {input.inputId} ·{' '}
+        {input.decisionStatus === 'decided'
+          ? t(`${ENTRY}.decided`, 'Decided')
+          : t(`${ENTRY}.awaitingRouting`, 'Awaiting routing')}
+      </p>
+      {error ? <p className="text-destructive text-xs">{error}</p> : null}
+      {input.subActions.map((subAction) => {
+        const badge = STATE_BADGES[subAction.state]
+        return (
+          <div key={subAction.subActionId} className="flex flex-col gap-1 border-t pt-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="truncate text-sm">{subAction.text}</span>
+              <Badge variant={badge.variant}>{stateLabel(t, subAction.state)}</Badge>
+            </div>
+            {subAction.state === 'violated' && subAction.firstActionSummary ? (
+              <p className="text-destructive text-xs">{subAction.firstActionSummary}</p>
+            ) : null}
+            {subAction.lastOutcome === 'refused' && subAction.refusalKind ? (
+              <p className="text-muted-foreground text-xs">
+                {t(`${ENTRY}.refused`, 'Refused')}: {subAction.refusalKind}
+              </p>
+            ) : null}
+            {subAction.claimedBy ? (
+              <p className="text-muted-foreground text-xs" title={subAction.claimedBy}>
+                {t(`${ENTRY}.executionTarget`, 'Execution target')} {subAction.claimedBy}
+              </p>
+            ) : null}
+          </div>
+        )
+      })}
+      {claimed ? (
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={busy || !onHandback}
+            onClick={() => onHandback?.(claimed.subActionId, claimed.claimedBy ?? '')}
+          >
+            {t(`${ENTRY}.handback`, 'Hand back')}
           </Button>
+          <form
+            className="flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-md border px-2"
+            onSubmit={(event) => {
+              event.preventDefault()
+              const form = event.currentTarget
+              const raw = new FormData(form).get('supplement')
+              const text = typeof raw === 'string' ? raw.trim() : ''
+              if (!text) {
+                return
+              }
+              onSendSupplement?.(claimed.subActionId, text)
+              form.reset()
+            }}
+          >
+            <input
+              name="supplement"
+              disabled={busy}
+              placeholder={t(
+                `${ENTRY}.supplementPlaceholder`,
+                'Supplement · deliver to the active turn'
+              )}
+              className="min-w-0 flex-1 border-none bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+            />
+          </form>
         </div>
-      </div>
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
-      {inputs.length === 0 ? (
-        <p className="text-muted-foreground text-xs">
-          {t(`${ENTRY}.noInputs`, 'No recorded inputs.')}
-        </p>
       ) : null}
-      {inputs.map((input) => (
-        <div key={input.inputId} className="flex flex-col gap-1 rounded-md border p-2">
-          <details>
-            <summary className="cursor-pointer text-xs text-muted-foreground">
-              {input.text.length > 60 ? `${input.text.slice(0, 60)}…` : input.text}
-            </summary>
-            <p className="mt-1 text-xs whitespace-pre-wrap">{input.text}</p>
-            <p className="mt-1 text-xs text-muted-foreground" title={input.inputId}>
-              {t(`${ENTRY}.input`, 'Input')} {input.inputId} ·{' '}
-              {input.decisionStatus === 'decided'
-                ? t(`${ENTRY}.decided`, 'Decided')
-                : t(`${ENTRY}.awaitingRouting`, 'Awaiting routing')}
-            </p>
-          </details>
-          {input.subActions.map((subAction) => {
-            const badge = STATE_BADGES[subAction.state]
-            return (
-              <div key={subAction.subActionId} className="flex flex-col gap-1 border-t pt-1">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate">{subAction.text}</span>
-                  <Badge variant={badge.variant}>{stateLabel(t, subAction.state)}</Badge>
-                </div>
-                {subAction.state === 'violated' && subAction.firstActionSummary ? (
-                  <p className="text-xs text-destructive">{subAction.firstActionSummary}</p>
-                ) : null}
-                {subAction.lastOutcome === 'refused' && subAction.refusalKind ? (
-                  <p className="text-xs text-muted-foreground">
-                    {t(`${ENTRY}.refused`, 'Refused')}: {subAction.refusalKind}
-                  </p>
-                ) : null}
-                {subAction.claimedBy ? (
-                  <p className="text-xs text-muted-foreground" title={subAction.claimedBy}>
-                    {t(`${ENTRY}.executionTarget`, 'Execution target')} {subAction.claimedBy}
-                  </p>
-                ) : null}
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={busy || !onSendSupplement}
-                    onClick={() => onSendSupplement?.(subAction.subActionId, subAction.text)}
-                  >
-                    {t(`${ENTRY}.supplement`, 'Supplement')}
-                  </Button>
-                  {subAction.claimedBy ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={busy || !onHandback}
-                      onClick={() => onHandback?.(subAction.subActionId, subAction.claimedBy ?? '')}
-                    >
-                      {t(`${ENTRY}.handback`, 'Hand back')}
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      ))}
     </div>
   )
 }

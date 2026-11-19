@@ -17,6 +17,8 @@ import { FolderPlus, Loader2 } from 'lucide-react'
 import { ActivityThreadCollapseContext } from '@/components/activity/thread-list/activity-thread-collapse-context'
 import { useSidebarProjectDrop } from './project-admission/drop/useSidebarProjectDrop'
 import { useWorkspaceBoardPanel } from './workspace-board/surface/useWorkspaceBoardPanel'
+import { useDispatchEntryPanel } from './dispatch-entry/use-dispatch-entry-panel'
+import DispatchEntrySheet from './dispatch-entry/dispatch-entry-sheet'
 import { useWorkspaceRevealBodyRedirect } from './worktree-list/navigation/use-workspace-reveal-body-redirect'
 import { resolveLeftSidebarStyleVariables } from '@/app-shell/appearance/left-sidebar-appearance'
 import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
@@ -124,6 +126,14 @@ function Sidebar({
     solidifyWorkspaceBoardFromDrag,
     cancelWorkspaceBoardDragPreview
   } = useWorkspaceBoardPanel()
+  const dispatchEntry = useDispatchEntryPanel()
+
+  // One sheet at a time over the workbench: opening either dismisses the other.
+  useEffect(() => {
+    if (dispatchEntry.open && workspaceBoardOpen) {
+      closeWorkspaceBoard()
+    }
+  }, [closeWorkspaceBoard, dispatchEntry.open, workspaceBoardOpen])
 
   const repoCount = repos.length
   const previousRepoCountRef = React.useRef(repoCount)
@@ -302,6 +312,18 @@ function Sidebar({
           preserveOpenForMenu={workspaceBoardMenuOpen}
           onOpenChange={handleWorkspaceBoardOpenChange}
           onMenuOpenChange={setWorkspaceBoardMenuOpen}
+        />
+      ) : null}
+      {dispatchEntry.open && dispatchEntry.repoId && dispatchEntry.hostId ? (
+        <DispatchEntrySheet
+          hostId={dispatchEntry.hostId}
+          leftSidebarStyle={leftSidebarStyle}
+          onClose={dispatchEntry.closeDispatchEntry}
+          open
+          repoId={dispatchEntry.repoId}
+          sidebarOpen={sidebarOpen}
+          sidebarWidth={sidebarWidth}
+          statusBarVisible={statusBarVisible}
         />
       ) : null}
       {showAgentDashboard ? (

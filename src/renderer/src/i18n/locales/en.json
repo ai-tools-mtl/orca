@@ -8229,7 +8229,6 @@
           "title": "Dispatch entry",
           "paused": "Paused",
           "refresh": "Refresh",
-          "noInputs": "No recorded inputs.",
           "input": "Input",
           "decided": "Decided",
           "awaitingRouting": "Awaiting routing",
@@ -8240,12 +8239,16 @@
           "pending_verification": "Pending verification",
           "refused": "Refused",
           "executionTarget": "Execution target",
-          "supplement": "Supplement",
           "handback": "Hand back",
-          "noSendTarget": "No execution target: claim a Dispatch first, or keep exactly one active worker here.",
           "firstAction": "First action {{name}} {{path}}",
           "composerPlaceholder": "Describe a request for this project",
-          "send": "Send"
+          "send": "Send",
+          "paneTitle": "Task entry",
+          "close": "Close",
+          "emptyTitle": "Start work on this project",
+          "emptyHint": "One message may contain several requests. It is saved first and shown as Received; routing splits the independent requests, dependent steps stay with one worker.",
+          "composerAria": "Task input",
+          "supplementPlaceholder": "Supplement · deliver to the active turn"
         }
       },
       "shared": {

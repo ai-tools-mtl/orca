@@ -950,16 +950,20 @@
         },
         "RoutingEntryCard": {
           "awaitingRouting": "Awaiting routing",
+          "close": "Close",
+          "composerAria": "Task input",
           "decided": "Decided",
+          "emptyHint": "One message may contain several requests. It is saved first and shown as Received; routing splits the independent requests, dependent steps stay with one worker.",
+          "emptyTitle": "Start work on this project",
           "executionTarget": "Execution target",
           "handback": "Hand back",
           "input": "Input",
-          "noInputs": "No recorded inputs.",
+          "paneTitle": "Task entry",
           "paused": "Paused",
           "refresh": "Refresh",
           "refused": "Refused",
-          "supplement": "Supplement",
-          "title": "Dispatch entry"
+          "send": "Send",
+          "supplementPlaceholder": "Supplement · deliver to the active turn"
         },
         "SetupScriptCodeBlock": {
           "showMore_one": "Show {{count}} more line",

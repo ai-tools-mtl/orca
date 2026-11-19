@@ -7364,7 +7364,6 @@
           "title": "调度入口",
           "paused": "已暂停",
           "refresh": "刷新",
-          "noInputs": "暂无记录的输入。",
           "input": "输入",
           "decided": "已决定",
           "awaitingRouting": "待路由",
@@ -7375,12 +7374,16 @@
           "pending_verification": "待核对",
           "refused": "拒收",
           "executionTarget": "执行目标",
-          "supplement": "补充",
           "handback": "交回",
-          "noSendTarget": "没有可投递的执行目标：先认领一个 Dispatch，或让该工作区只有一个活动 Worker。",
           "firstAction": "首个动作 {{name}} {{path}}",
           "composerPlaceholder": "输入这个项目的请求…",
-          "send": "发送"
+          "send": "发送",
+          "paneTitle": "任务入口",
+          "close": "关闭",
+          "emptyTitle": "向项目发起工作",
+          "emptyHint": "一条消息可以包含多项要求。输入会先保存并显示「已收到」，调度拆分独立要求，依赖步骤保持在同一 Worker，任务卡持续跟进结果。",
+          "composerAria": "任务输入",
+          "supplementPlaceholder": "补充要求 · 投递到当前轮次"
         }
       },
       "shared": {

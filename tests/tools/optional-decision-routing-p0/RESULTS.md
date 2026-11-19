@@ -223,3 +223,24 @@ unavailable。`env -u ZCODE_PERSONAL_PROVIDER_CONFIG_FILE -u ZCODE_BUILTIN_PROVI
 facts hook 改走 entry 方法。composer：输入请求→entrySubmit（Enter 提交），子动作
 四态列表随显。限制（诚实记录）：入口行仅在 repo 分组模式（默认）显示；跨宿主同项目的
 多注册仅取 repo 的解析宿主；claim 仍走 coordinated 面（由 agent/CLI 认领）。
+
+## 入口改为对话面板（2026-11-19，回归原型）
+
+用户指出入口应与原型一致（原型/多Agent调度-可交互原型.html：任务卡流 + 底部对话 composer +
+卡片级「补充要求 · 投递到当前轮次」），此前两轮实现只按方案 §9-A 文字挂侧边栏，未回头核对
+原型——流程教训：原型是既定设计物，优先于方案文字。
+
+- **DispatchEntrySheet**（sidebar/dispatch-entry/）：与看板抽屉同款 Sheet 机制（非模态、
+  锚在侧栏右侧覆盖工作区、宽 760px 上限、Escape/外点关闭），与看板互斥（开启一方关闭另一方）。
+- **DispatchEntryChat**：pane 头（任务入口 · 项目名 / 暂停徽标 / 刷新 / 关闭）+ 请求卡流
+  （按 received_seq 时序，自动滚底）+ 空态（「向项目发起工作」+ 原型说明文案）+ 底部 composer
+  （Enter 提交，Shift+Enter 换行，IME composition 保护）。
+- **RoutingRequestCard**：单请求卡（原文 → 输入元信息/已路由 → 子动作四态 → 卡级交回 +
+  「补充要求 · 投递到当前轮次」表单，投递到已认领 Dispatch 的活动轮）。
+- **侧边栏行 = 开启按钮**：每项目唯一的门（标题 + 提示 + chevron），经
+  `orca:open-dispatch-entry` 窗口事件开面板（同看板 TOGGLE_WORKSPACE_BOARD_EVENT 模式，
+  免去 4 层 ctx 传递）。
+- facts hook 不变（entryShow/entrySubmit/entrySupplement/entryHandback）；i18n 补 pane 文案，
+  清理 noSendTarget/supplement/noInputs 孤儿键。
+- 验证：三 tc 0 错、oxlint/oxfmt 绿、react-compiler ratchet 绿、localization 三检绿、
+  入口方法测试 4/4、模板编译测试过、fixtures:shot 请求卡渲染正确。

@@ -1,95 +1,46 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React from 'react'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import { useTranslate } from '@/i18n/use-translate'
-import { Button } from '@/components/ui/button'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { ChevronRight } from 'lucide-react'
 import type { Row } from '../../../../../../shared/sidebar-list/row-types'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
-import RoutingEntryCard from '../../workspace-card/activity/RoutingEntryCard'
-import { useRoutingEntryFacts } from '../../workspace-card/activity/use-routing-entry-facts'
 
-// The project's standing 统一任务入口 row (plan §1/§9-A): every request for this project is
-// recorded here and its sub-actions fan out beneath it. Facts and actions go to the desktop
-// entry's own runtime methods (orchestration.entry*) — no terminal or session authority.
+// The project's standing 统一任务入口 row (plan §1/§9-A, per-project unique): a door to the
+// entry's conversation sheet, which opens through the window event the panel hook listens for.
+
+export const OPEN_DISPATCH_ENTRY_EVENT = 'orca:open-dispatch-entry'
+
+export function openDispatchEntry(repoId: string, hostId: string): void {
+  window.dispatchEvent(new CustomEvent(OPEN_DISPATCH_ENTRY_EVENT, { detail: { repoId, hostId } }))
+}
 
 export default function ProjectRoutingEntryLine({
   repoId,
   hostId
 }: {
   repoId: string
-  hostId: ExecutionHostId
+  hostId: string
 }): React.JSX.Element {
   const t = useTranslate()
-  const target = useMemo(() => ipcOrRuntimeTargetForHostId(hostId), [hostId])
-  const facts = useRoutingEntryFacts(target, repoId)
-  const [draft, setDraft] = useState('')
-  const [submitError, setSubmitError] = useState<string | null>(null)
-
-  const submit = useCallback(() => {
-    const text = draft.trim()
-    if (!text) {
-      return
-    }
-    void facts.submit(text).then(() => setDraft(''))
-  }, [draft, facts])
-
-  const sendSupplement = useCallback(
-    (subActionId: string, text: string) => {
-      const owner = facts.inputs.find((input) =>
-        input.subActions.some((subAction) => subAction.subActionId === subActionId)
-      )
-      const dispatch = facts.inputs
-        .flatMap((input) => input.subActions)
-        .find((subAction) => subAction.subActionId === subActionId)?.claimedBy
-      if (!owner || !dispatch) {
-        setSubmitError(
-          t(
-            'auto.components.sidebar.RoutingEntryCard.noSendTarget',
-            'No execution target: claim a Dispatch first, or keep exactly one active worker here.'
-          )
-        )
-        return
-      }
-      setSubmitError(null)
-      void facts.sendSupplement(owner.inputId, subActionId, dispatch, text)
-    },
-    [facts, t]
-  )
-
   return (
-    <div className="flex flex-col gap-1 px-2 pb-1.5">
-      <div className="flex items-center gap-1">
-        <input
-          value={draft}
-          placeholder={t(
+    <button
+      type="button"
+      className="mx-2 mb-1.5 flex w-[calc(100%-16px)] items-center gap-2 rounded-md border px-2 py-1.5 text-start transition-colors hover:bg-accent"
+      onClick={() => openDispatchEntry(repoId, hostId)}
+    >
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="text-xs font-medium">
+          {t('auto.components.sidebar.RoutingEntryCard.title', 'Dispatch entry')}
+        </span>
+        <span className="text-muted-foreground truncate text-[11px]">
+          {t(
             'auto.components.sidebar.RoutingEntryCard.composerPlaceholder',
             'Describe a request for this project'
           )}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
-              submit()
-            }
-          }}
-          className="h-7 min-w-0 flex-1 rounded-md border bg-transparent px-2 text-xs outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
-        />
-        <Button variant="outline" size="sm" disabled={facts.busy || !draft.trim()} onClick={submit}>
-          {t('auto.components.sidebar.RoutingEntryCard.send', 'Send')}
-        </Button>
-      </div>
-      {(submitError ?? facts.error) ? (
-        <p className="text-xs text-destructive">{submitError ?? facts.error}</p>
-      ) : null}
-      <RoutingEntryCard
-        paused={facts.paused}
-        busy={facts.busy}
-        inputs={facts.inputs}
-        onRefresh={() => void facts.refresh()}
-        onHandback={(subActionId, dispatchId) => void facts.handback(subActionId, dispatchId)}
-        onSendSupplement={sendSupplement}
-      />
-    </div>
+        </span>
+      </span>
+      <ChevronRight className="text-muted-foreground size-3.5 shrink-0" />
+    </button>
   )
 }
 

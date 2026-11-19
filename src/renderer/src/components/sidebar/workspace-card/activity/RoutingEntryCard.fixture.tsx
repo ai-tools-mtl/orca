@@ -1,5 +1,5 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
-import RoutingEntryCard, { type RoutingEntryInput } from './RoutingEntryCard'
+import RoutingRequestCard, { type RoutingEntryInput } from './RoutingEntryCard'
 
 const inputs: RoutingEntryInput[] = [
   {
@@ -13,7 +13,7 @@ const inputs: RoutingEntryInput[] = [
         state: 'processed',
         claimedBy: 'dispatch:ctx_a',
         lastOutcome: 'delivered',
-        firstActionSummary: '首个动作 read /w/new.txt 符合补充要求'
+        firstActionSummary: 'First action read /w/new.txt as the supplement required'
       },
       {
         subActionId: 'sa-1-2',
@@ -33,7 +33,7 @@ const inputs: RoutingEntryInput[] = [
         state: 'violated',
         lastOutcome: 'refused',
         refusalKind: 'turn-not-active',
-        firstActionSummary: '先读取了 old.txt，违背补充要求'
+        firstActionSummary: 'Read old.txt first, against the supplement'
       }
     ]
   },
@@ -48,21 +48,19 @@ const inputs: RoutingEntryInput[] = [
 export const fourStates = defineFixture({
   width: 360,
   render: () => (
-    <RoutingEntryCard
-      inputs={inputs}
-      onRefresh={() => undefined}
-      onHandback={() => undefined}
-      onSendSupplement={() => undefined}
-    />
+    <div className="flex flex-col gap-2 p-2">
+      {inputs.map((input) => (
+        <RoutingRequestCard key={input.inputId} input={input} onHandback={() => undefined} />
+      ))}
+    </div>
   )
 })
 
-export const paused = defineFixture({
+export const withSupplementForm = defineFixture({
   width: 360,
-  render: () => <RoutingEntryCard paused busy inputs={inputs.slice(2)} />
-})
-
-export const empty = defineFixture({
-  width: 360,
-  render: () => <RoutingEntryCard inputs={[]} />
+  render: () => (
+    <div className="p-2">
+      <RoutingRequestCard input={inputs[0]!} onSendSupplement={() => undefined} />
+    </div>
+  )
 })
