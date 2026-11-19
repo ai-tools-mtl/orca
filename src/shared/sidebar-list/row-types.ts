@@ -131,6 +131,15 @@ export type FolderWorkspaceRow = {
   lineageCollapsed?: boolean
 }
 
+/** The project's standing 统一任务入口 row (plan §1/§9-A): one per repo, right under its
+ *  project header. `hostId` names the execution host whose runtime holds the entry's Run. */
+export type ProjectRoutingEntryRow = {
+  type: 'project-routing-entry'
+  key: string
+  repoId: string
+  hostId: ExecutionHostId
+}
+
 /** Stable create/repo identity only: subscribing to full progress records would rebuild the list on phase/loader churn. */
 export type PendingCreationRef = { creationId: string; repoId: string }
 
@@ -141,6 +150,7 @@ export type Row =
   | NewExternalWorktreesInboxRow
   | PendingCreationRow
   | FolderWorkspaceRow
+  | ProjectRoutingEntryRow
 
 /** The registration a project header reorders by, or none for a repeated copy. */
 export function getHeaderDragRepo(row: GroupHeaderRow): Repo | undefined {

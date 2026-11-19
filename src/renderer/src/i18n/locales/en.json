@@ -8243,7 +8243,9 @@
           "supplement": "Supplement",
           "handback": "Hand back",
           "noSendTarget": "No execution target: claim a Dispatch first, or keep exactly one active worker here.",
-          "firstAction": "First action {{name}} {{path}}"
+          "firstAction": "First action {{name}} {{path}}",
+          "composerPlaceholder": "Describe a request for this project",
+          "send": "Send"
         }
       },
       "shared": {

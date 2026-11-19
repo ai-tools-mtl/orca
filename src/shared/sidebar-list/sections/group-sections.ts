@@ -2,6 +2,7 @@ import type { Repo } from '../../repository/repo-types'
 import type { WorktreeOccurrencePlan } from '../lineage/worktree-occurrence-plan'
 import type { WorkspaceStatusDefinition, Worktree } from '../../worktree/types'
 import type { ExecutionHostId } from '../../execution-host/execution-host'
+import { getRepoExecutionHostIdOrDefault } from '../../execution-host/execution-host'
 import { getWorkspaceStatusFromGroupKey } from '../../workspace/status/workspace-statuses'
 import type { PRGroupKey } from '../../workspace-view/workspace-pr-groups'
 import type { NoticeHostContext } from '../hosts/host-labels'
@@ -205,6 +206,18 @@ export function appendOrderedGroups(
         for (const repoId of repoIds) {
           for (const creation of pendingByRepo.get(repoId) ?? []) {
             result.push(buildPendingCreationRow(creation, repoMap))
+          }
+        }
+        // The project's standing 统一任务入口 row sits between its notices and its workspaces.
+        for (const repoId of repoIds) {
+          const entryRepo = repoId === repo?.id ? repo : repoMap.get(repoId)
+          if (entryRepo) {
+            result.push({
+              type: 'project-routing-entry',
+              key: `entry:${repoId}`,
+              repoId,
+              hostId: getRepoExecutionHostIdOrDefault(entryRepo, defaultHostId)
+            })
           }
         }
       }

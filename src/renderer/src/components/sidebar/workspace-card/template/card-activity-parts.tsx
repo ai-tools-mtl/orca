@@ -2,7 +2,6 @@ import React from 'react'
 import { LinearAgentSkillSetupPrompt } from '../../LinearAgentSkillSetupPrompt'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 import WorktreeCardAgents from '../activity/WorktreeCardAgents'
-import WorktreeCardRoutingEntry from '../activity/WorktreeCardRoutingEntry'
 import {
   renderWorktreeCardIndicators,
   WorktreeCardIdentityHover,
@@ -86,12 +85,6 @@ export const CARD_ACTIVITY_PARTS = {
       label={card.childWorkspaceShortLabel}
       count={card.lineageChildCount}
       onToggle={card.onLineageToggle}
-    />
-  )),
-  RoutingEntry: part([], (_props, _children, card) => (
-    <WorktreeCardRoutingEntry
-      worktreeId={card.worktree.id}
-      executionHostId={card.worktree.hostId}
     />
   )),
   Indicators: part(['hover'], (props, _children, card) => {

@@ -67,6 +67,8 @@ function getRowHostId(row: Row, defaultHostId: ExecutionHostId): ExecutionHostId
       return getRepoExecutionHostIdOrDefault(row.repo, defaultHostId)
     case 'folder-workspace':
       return getFolderWorkspaceHostId(row.folderWorkspace, row.projectGroup, defaultHostId)
+    case 'project-routing-entry':
+      return row.hostId
     case 'header':
       return row.repo ? getRepoExecutionHostIdOrDefault(row.repo, defaultHostId) : null
   }

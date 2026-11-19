@@ -28,6 +28,7 @@ import {
   renderNewExternalWorktreesInboxVirtualRow,
   renderPendingCreationVirtualRow
 } from './notice-rows'
+import { renderProjectRoutingEntryVirtualRow } from './project-routing-entry-line'
 import { renderWorktreeItemRow, type WorktreeItemRowContext } from './item-row'
 import { renderWorktreeSectionHeaderRow } from './SectionHeader'
 import type { SectionHeaderRowContext } from './section-header-row-context'
@@ -171,6 +172,14 @@ export function renderWorktreeVirtualRow(
 
   if (row.type === 'pending-creation') {
     return renderPendingCreationVirtualRow({
+      row,
+      vItem,
+      measureVirtualRowElement: ctx.measureVirtualRowElement
+    })
+  }
+
+  if (row.type === 'project-routing-entry') {
+    return renderProjectRoutingEntryVirtualRow({
       row,
       vItem,
       measureVirtualRowElement: ctx.measureVirtualRowElement

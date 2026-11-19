@@ -18,6 +18,9 @@ export function getRenderRowKey(row: RenderRow): string {
   if (row.type === 'pending-creation') {
     return `pending:${row.creationId}`
   }
+  if (row.type === 'project-routing-entry') {
+    return row.key
+  }
   if (row.type === 'folder-workspace') {
     return row.key
   }

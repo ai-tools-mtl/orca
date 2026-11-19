@@ -12,7 +12,7 @@ const attemptSchema = z.object({
   first_action_json: z.string().nullable()
 })
 
-const routingInputsShowResultSchema = z.object({
+const entryShowResultSchema = z.object({
   inputs: z.array(
     z.object({
       input: z.object({
@@ -48,10 +48,11 @@ const routingInputsShowResultSchema = z.object({
         })
       )
     })
-  )
+  ),
+  watchdog: z.object({ paused: z.boolean() })
 })
 
-type RoutingInputsShowResult = z.infer<typeof routingInputsShowResultSchema>
+type EntryShowResult = z.infer<typeof entryShowResultSchema>
 
 const firstActionEvidenceSchema = z.object({
   verdict: z.string(),
@@ -84,7 +85,7 @@ function firstActionSummaryOf(rawEvidence: string | null): string | undefined {
   ).trim()
 }
 
-function toEntryInputs(result: RoutingInputsShowResult): RoutingEntryInput[] {
+function toEntryInputs(result: EntryShowResult): RoutingEntryInput[] {
   return result.inputs.map((entry) => ({
     inputId: entry.input.input_id,
     text: entry.input.raw_text,
@@ -107,10 +108,6 @@ function toEntryInputs(result: RoutingInputsShowResult): RoutingEntryInput[] {
   }))
 }
 
-const routingWatchdogResultSchema = z.object({
-  watchdog: z.object({ paused: z.boolean() })
-})
-
 // Module-level so hooks stay React-Compiler compatible (no in-hook try/finally).
 async function runWithBusy(
   setBusy: (busy: boolean) => void,
@@ -126,26 +123,17 @@ async function runWithBusy(
 
 async function readEntryFacts(
   target: RuntimeClientTarget,
-  run: string | undefined,
+  group: string,
   setInputs: (inputs: RoutingEntryInput[]) => void,
   setPaused: (paused: boolean) => void,
   setError: (error: string | null) => void
 ): Promise<void> {
   try {
-    const show = routingInputsShowResultSchema.parse(
-      await callRuntimeRpc<unknown>(target, 'orchestration.routingInputsShow', {
-        ...(run ? { run } : {}),
-        from: undefined
-      })
+    const show = entryShowResultSchema.parse(
+      await callRuntimeRpc<unknown>(target, 'orchestration.entryShow', { group })
     )
     setInputs(toEntryInputs(show))
-    const watchdog = routingWatchdogResultSchema.parse(
-      await callRuntimeRpc<unknown>(target, 'orchestration.routingWatchdogShow', {
-        ...(run ? { run } : {}),
-        from: undefined
-      })
-    )
-    setPaused(watchdog.watchdog.paused)
+    setPaused(show.watchdog.paused)
     setError(null)
   } catch (cause) {
     setError(cause instanceof Error ? cause.message : String(cause))
@@ -154,16 +142,15 @@ async function readEntryFacts(
 
 async function callEntryAction(
   target: RuntimeClientTarget,
-  run: string | undefined,
   method: string,
   params: Record<string, unknown>
 ): Promise<void> {
-  await callRuntimeRpc(target, method, { ...params, ...(run ? { run } : {}), from: undefined })
+  await callRuntimeRpc(target, method, params)
 }
 
-/** The §9-A entry facts over the runtime's own RPCs — the renderer keeps no second flow state
- *  (§10): every read goes to orchestration.routingInputsShow / routingWatchdogShow. */
-export function useRoutingEntryFacts(target: RuntimeClientTarget | null, run?: string) {
+/** The §9-A entry facts over the desktop entry's own methods — the renderer keeps no second
+ *  flow state (§10): every read goes to orchestration.entryShow for this project's group. */
+export function useRoutingEntryFacts(target: RuntimeClientTarget | null, group: string) {
   const [inputs, setInputs] = useState<RoutingEntryInput[]>([])
   const [paused, setPaused] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -173,26 +160,23 @@ export function useRoutingEntryFacts(target: RuntimeClientTarget | null, run?: s
     if (!target) {
       return
     }
-    await readEntryFacts(target, run, setInputs, setPaused, setError)
-  }, [target, run])
+    await readEntryFacts(target, group, setInputs, setPaused, setError)
+  }, [target, group])
 
   useEffect(() => {
     void runWithBusy(setBusy, refresh)
   }, [refresh])
 
-  const claim = useCallback(
-    (subActionId: string, dispatchId: string) => {
+  const submit = useCallback(
+    (text: string) => {
       if (!target) {
         return Promise.resolve()
       }
       return runWithBusy(setBusy, () =>
-        callEntryAction(target, run, 'orchestration.routingSubActionClaim', {
-          subAction: subActionId,
-          dispatch: dispatchId
-        }).then(refresh)
+        callEntryAction(target, 'orchestration.entrySubmit', { group, text }).then(refresh)
       )
     },
-    [target, run, refresh]
+    [target, group, refresh]
   )
 
   const handback = useCallback(
@@ -201,13 +185,14 @@ export function useRoutingEntryFacts(target: RuntimeClientTarget | null, run?: s
         return Promise.resolve()
       }
       return runWithBusy(setBusy, () =>
-        callEntryAction(target, run, 'orchestration.routingSubActionHandback', {
+        callEntryAction(target, 'orchestration.entryHandback', {
+          group,
           subAction: subActionId,
           dispatch: dispatchId
         }).then(refresh)
       )
     },
-    [target, run, refresh]
+    [target, group, refresh]
   )
 
   const sendSupplement = useCallback(
@@ -216,7 +201,8 @@ export function useRoutingEntryFacts(target: RuntimeClientTarget | null, run?: s
         return Promise.resolve()
       }
       return runWithBusy(setBusy, () =>
-        callEntryAction(target, run, 'orchestration.routingSupplementSend', {
+        callEntryAction(target, 'orchestration.entrySupplement', {
+          group,
           input: inputId,
           subAction: subActionId,
           dispatch: dispatchId,
@@ -224,8 +210,8 @@ export function useRoutingEntryFacts(target: RuntimeClientTarget | null, run?: s
         }).then(refresh)
       )
     },
-    [target, run, refresh]
+    [target, group, refresh]
   )
 
-  return { inputs, paused, busy, error, refresh, claim, handback, sendSupplement }
+  return { inputs, paused, busy, error, refresh, submit, handback, sendSupplement }
 }

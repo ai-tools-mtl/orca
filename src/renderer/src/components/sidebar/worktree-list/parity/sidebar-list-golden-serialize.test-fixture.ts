@@ -139,6 +139,12 @@ export function serializeSidebarRow(
         field('depth', row.depth),
         field('groupDepth', row.groupDepth)
       ])
+    case 'project-routing-entry':
+      return line('ENTRY', [
+        field('key', row.key),
+        field('repo', row.repoId),
+        field('host', row.hostId)
+      ])
   }
 }
 

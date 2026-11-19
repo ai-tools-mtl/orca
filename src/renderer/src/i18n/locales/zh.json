@@ -7378,7 +7378,9 @@
           "supplement": "补充",
           "handback": "交回",
           "noSendTarget": "没有可投递的执行目标：先认领一个 Dispatch，或让该工作区只有一个活动 Worker。",
-          "firstAction": "首个动作 {{name}} {{path}}"
+          "firstAction": "首个动作 {{name}} {{path}}",
+          "composerPlaceholder": "输入这个项目的请求…",
+          "send": "发送"
         }
       },
       "shared": {

@@ -203,3 +203,23 @@ fixtures:shot fourStates 重拍正常（英文声明渲染，zh 目录翻译）�
 `localZcodeCredentialHost()` 的 `env: process.env` 读到它，fixture 选择不匹配 →
 unavailable。`env -u ZCODE_PERSONAL_PROVIDER_CONFIG_FILE -u ZCODE_BUILTIN_PROVIDER_CONFIG_FILE`
 后 2/2 绿。与 native-process-spawn/runner-wsl-gh-fallback 同类，origin/main 同样受影响。
+
+## §1/§9-A 项目级唯一入口（2026-11-19，设计修正）
+
+用户指出入口应是「每新建一个项目就有唯一的常驻入口」——方案 §1/§24 的原意（入口是请求起点，
+不是有输入后才出现的观测面板）。此前挂在工作区卡、依赖已有输入的挂载是过渡态，已替换：
+
+**准入适配（方案 §87「内部调度调用身份」缺口的落地）**：桌面 UI 按调度身份模型刻意不是任何
+调用者（terminal/session/peer 三种身份都不解析到它，防冒充设计），coordinatedRunAccess 会
+拒绝一切渲染器调用。入口现在铸造自己的 coordinator 身份 `desktop-entry:<group>`（每项目一个、
+重启稳定、不可被认领——没有已声明 terminal/session 解析到该地址）。四个 localOnly 方法
+（entryShow/entrySubmit/entrySupplement/entryHandback）从项目 id 服务端构造该身份并复用路由
+账本服务函数；coordinated 方法对 CLI/会话完全不变。首笔请求经 createBoundRun 创建入口的 Run，
+后续请求追加为同 Run 的输入。测试 4/4（空态/建复用/项目隔离/投递+交回）。
+
+**挂载**：repo 分组头下、notices 与工作区行之间，新增共享行类型
+`project-routing-entry`（每 repo 一行，hostId 取 repo 的执行宿主）；卡级挂载
+（WorktreeCardRoutingEntry + 模板行）移除，RoutingEntryCard 继续作为事实卡片复用，
+facts hook 改走 entry 方法。composer：输入请求→entrySubmit（Enter 提交），子动作
+四态列表随显。限制（诚实记录）：入口行仅在 repo 分组模式（默认）显示；跨宿主同项目的
+多注册仅取 repo 的解析宿主；claim 仍走 coordinated 面（由 agent/CLI 认领）。
