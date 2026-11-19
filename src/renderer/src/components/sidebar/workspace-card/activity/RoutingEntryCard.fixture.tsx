@@ -12,13 +12,25 @@ const inputs: RoutingEntryInput[] = [
         text: '修登录',
         state: 'processed',
         claimedBy: 'dispatch:ctx_a',
-        lastOutcome: 'delivered',
-        firstActionSummary: 'First action read /w/new.txt as the supplement required'
+        firstActionSummary: 'First action read /w/new.txt as the supplement required',
+        history: [
+          {
+            outcome: 'delivered',
+            createdAt: '2026-11-19 11:30:00',
+            turnId: 'turn_01',
+            expectedTurnId: 'turn_01',
+            targetDispatchId: 'dispatch:ctx_a',
+            supplementText: '修登录，只读检查'
+          }
+        ],
+        lastSupplementText: '修登录，只读检查',
+        lastTargetDispatchId: 'dispatch:ctx_a'
       },
       {
         subActionId: 'sa-1-2',
         text: '查启动慢',
-        state: 'registered'
+        state: 'registered',
+        history: []
       }
     ]
   },
@@ -31,9 +43,19 @@ const inputs: RoutingEntryInput[] = [
         subActionId: 'sa-2-1',
         text: '改读 new.txt',
         state: 'violated',
-        lastOutcome: 'refused',
-        refusalKind: 'turn-not-active',
-        firstActionSummary: 'Read old.txt first, against the supplement'
+        firstActionSummary: 'Read old.txt first, against the supplement',
+        history: [
+          {
+            outcome: 'refused',
+            createdAt: '2026-11-19 11:32:00',
+            refusalKind: 'turn-not-active',
+            expectedTurnId: 'turn_01',
+            targetDispatchId: 'dispatch:ctx_a',
+            supplementText: '只读 new.txt，跳过 old.txt'
+          }
+        ],
+        lastSupplementText: '只读 new.txt，跳过 old.txt',
+        lastTargetDispatchId: 'dispatch:ctx_a'
       }
     ]
   },

@@ -150,3 +150,12 @@ export const EntryHandbackParams = z.object({
   subAction: requiredString('Missing --sub-action'),
   dispatch: requiredString('Missing --dispatch')
 })
+
+export const EntryPauseParams = z.object({
+  group: requiredString('Missing --group')
+})
+
+export const EntryReviewParams = z.object({
+  group: requiredString('Missing --group'),
+  task: requiredString('Missing --task')
+})

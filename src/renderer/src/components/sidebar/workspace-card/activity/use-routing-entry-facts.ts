@@ -1,112 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
-import { z } from 'zod'
-import { translate } from '@/i18n/i18n'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { RoutingEntryInput } from './RoutingEntryCard'
-
-const attemptSchema = z.object({
-  // The ledger CHECK constrains outcomes to exactly these three (migrate-v49's outcome enum).
-  outcome: z.enum(['delivered', 'refused', 'unverified']),
-  refusal_kind: z.string().nullable(),
-  first_action_json: z.string().nullable()
-})
-
-const entryShowResultSchema = z.object({
-  inputs: z.array(
-    z.object({
-      input: z.object({
-        input_id: z.string(),
-        received_seq: z.number(),
-        decision_status: z.string(),
-        raw_text: z.string()
-      }),
-      subActions: z.array(
-        z.object({
-          subAction: z.object({
-            sub_action_id: z.string(),
-            text: z.string(),
-            task_id: z.string().nullable(),
-            state: z.enum([
-              'registered',
-              'delivered',
-              'processed',
-              'violated',
-              'pending_verification'
-            ]),
-            claimed_dispatch_id: z.string().nullable()
-          }),
-          deliveries: z.array(
-            z.object({
-              supplement: z.object({
-                supplement_id: z.string(),
-                target_dispatch_id: z.string()
-              }),
-              attempts: z.array(attemptSchema)
-            })
-          )
-        })
-      )
-    })
-  ),
-  watchdog: z.object({ paused: z.boolean() })
-})
-
-type EntryShowResult = z.infer<typeof entryShowResultSchema>
-
-const firstActionEvidenceSchema = z.object({
-  verdict: z.string(),
-  reason: z.string().optional(),
-  firstAction: z
-    .object({ name: z.string().optional(), path: z.string().optional() })
-    .partial()
-    .optional()
-})
-
-function firstActionSummaryOf(rawEvidence: string | null): string | undefined {
-  if (!rawEvidence) {
-    return undefined
-  }
-  const parsed = firstActionEvidenceSchema.safeParse(JSON.parse(rawEvidence))
-  if (!parsed.success) {
-    return undefined
-  }
-  if (parsed.data.reason !== undefined) {
-    return parsed.data.reason
-  }
-  const action = parsed.data.firstAction
-  if (!action) {
-    return undefined
-  }
-  return translate(
-    'auto.components.sidebar.RoutingEntryCard.firstAction',
-    'First action {{name}} {{path}}',
-    { name: action.name ?? '', path: action.path ?? '' }
-  ).trim()
-}
-
-function toEntryInputs(result: EntryShowResult): RoutingEntryInput[] {
-  return result.inputs.map((entry) => ({
-    inputId: entry.input.input_id,
-    text: entry.input.raw_text,
-    decisionStatus:
-      entry.input.decision_status === 'decided' ? ('decided' as const) : ('received' as const),
-    subActions: entry.subActions.map((subAction) => {
-      const attempts = subAction.deliveries.flatMap((delivery) => delivery.attempts)
-      const last = attempts.at(-1)
-      const evidence = attempts.findLast((attempt) => attempt.first_action_json !== null)
-      return {
-        subActionId: subAction.subAction.sub_action_id,
-        text: subAction.subAction.text,
-        state: subAction.subAction.state,
-        claimedBy: subAction.subAction.claimed_dispatch_id ?? undefined,
-        lastOutcome: last?.outcome,
-        refusalKind: last?.refusal_kind ?? undefined,
-        firstActionSummary: firstActionSummaryOf(evidence?.first_action_json ?? null)
-      }
-    })
-  }))
-}
+import {
+  entryReview,
+  entryReviewResultSchema,
+  entryShowResultSchema,
+  toEntryInputs
+} from './routing-entry-model'
+import type { RoutingReviewState } from './routing-entry-model'
 
 // Module-level so hooks stay React-Compiler compatible (no in-hook try/finally).
 async function runWithBusy(
@@ -126,7 +28,8 @@ async function readEntryFacts(
   group: string,
   setInputs: (inputs: RoutingEntryInput[]) => void,
   setPaused: (paused: boolean) => void,
-  setError: (error: string | null) => void
+  setError: (error: string | null) => void,
+  setReviews: (reviews: ReadonlyMap<string, RoutingReviewState>) => void
 ): Promise<void> {
   try {
     const show = entryShowResultSchema.parse(
@@ -135,6 +38,29 @@ async function readEntryFacts(
     setInputs(toEntryInputs(show))
     setPaused(show.watchdog.paused)
     setError(null)
+    // Review state per delegated task (§7): fetched alongside so cards render it inline.
+    const taskIds = [
+      ...new Set(
+        show.inputs
+          .flatMap((entry) => entry.subActions)
+          .map((subAction) => subAction.subAction.task_id)
+          .filter((taskId): taskId is string => taskId != null)
+      )
+    ]
+    const reviews = new Map<string, RoutingReviewState>()
+    await Promise.all(
+      taskIds.map(async (taskId) => {
+        try {
+          reviews.set(
+            taskId,
+            entryReviewResultSchema.parse(await entryReview(target, group, taskId))
+          )
+        } catch {
+          // A task without a cycle shows no review state; read failures stay silent.
+        }
+      })
+    )
+    setReviews(reviews)
   } catch (cause) {
     setError(cause instanceof Error ? cause.message : String(cause))
   }
@@ -155,12 +81,13 @@ export function useRoutingEntryFacts(target: RuntimeClientTarget | null, group: 
   const [paused, setPaused] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [reviews, setReviews] = useState<ReadonlyMap<string, RoutingReviewState>>(new Map())
 
   const refresh = useCallback(async () => {
     if (!target) {
       return
     }
-    await readEntryFacts(target, group, setInputs, setPaused, setError)
+    await readEntryFacts(target, group, setInputs, setPaused, setError, setReviews)
   }, [target, group])
 
   useEffect(() => {
@@ -213,5 +140,49 @@ export function useRoutingEntryFacts(target: RuntimeClientTarget | null, group: 
     [target, group, refresh]
   )
 
-  return { inputs, paused, busy, error, refresh, submit, handback, sendSupplement }
+  const setPausedState = useCallback(
+    (pausedNext: boolean) => {
+      if (!target) {
+        return Promise.resolve()
+      }
+      return runWithBusy(setBusy, () =>
+        callEntryAction(
+          target,
+          pausedNext ? 'orchestration.entryPause' : 'orchestration.entryResume',
+          {
+            group
+          }
+        ).then(refresh)
+      )
+    },
+    [target, group, refresh]
+  )
+
+  const acceptReview = useCallback(
+    (taskId: string) => {
+      if (!target) {
+        return Promise.resolve()
+      }
+      return runWithBusy(setBusy, () =>
+        callEntryAction(target, 'orchestration.entryReviewAccept', { group, task: taskId }).then(
+          refresh
+        )
+      )
+    },
+    [target, group, refresh]
+  )
+
+  return {
+    inputs,
+    paused,
+    busy,
+    error,
+    reviews,
+    refresh,
+    submit,
+    handback,
+    sendSupplement,
+    setPaused: setPausedState,
+    acceptReview
+  }
 }

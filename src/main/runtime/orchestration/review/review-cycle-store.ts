@@ -67,6 +67,20 @@ export function getReviewCycle(this: OrchestrationDb, cycleId: string): ReviewCy
   return cycleOf.call(this, cycleId)
 }
 
+/** The task's latest cycle, newest first — the entry renders review state per delegated task. */
+export function getLatestReviewCycleForTask(
+  this: OrchestrationDb,
+  taskId: string
+): ReviewCycleRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
+  const row = this.db
+    .prepare(
+      'SELECT * FROM review_cycles WHERE task_id = ? ORDER BY created_at DESC, cycle_id DESC LIMIT 1'
+    )
+    .get(taskId) as ReviewCycleRow | undefined
+  return row
+}
+
 /** The writer submits revision n (first submission is R1 by start). Moves reviewing → nothing
  *  (stays reviewing until the reviewer answers) and rework → reviewing. Blocking opinions of
  *  the previous revision stay recorded — history, not debts. */
@@ -184,6 +198,7 @@ export function acceptReviewCycle(this: OrchestrationDb, cycleId: string): Revie
 export type ReviewCycleMethods = {
   startReviewCycle: typeof startReviewCycle
   getReviewCycle: typeof getReviewCycle
+  getLatestReviewCycleForTask: typeof getLatestReviewCycleForTask
   submitReviewRevision: typeof submitReviewRevision
   recordReviewOpinion: typeof recordReviewOpinion
   listReviewOpinions: typeof listReviewOpinions
@@ -195,6 +210,7 @@ export function attachReviewCycleStore(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     startReviewCycle,
     getReviewCycle,
+    getLatestReviewCycleForTask,
     submitReviewRevision,
     recordReviewOpinion,
     listReviewOpinions,

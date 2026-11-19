@@ -7381,7 +7381,16 @@
           "emptyHint": "一条消息可以包含多项要求。输入会先保存并显示「已收到」，调度拆分独立要求，依赖步骤保持在同一 Worker，任务卡持续跟进结果。",
           "composerAria": "任务输入",
           "supplementPlaceholder": "补充要求 · 投递到当前轮次",
-          "sendHint": "Enter 发送 · Shift+Enter 换行"
+          "sendHint": "Enter 发送 · Shift+Enter 换行",
+          "pause": "暂停",
+          "resume": "恢复",
+          "retry": "重试",
+          "reviewLabel": "审查",
+          "reviewReviewing": "审查中",
+          "reviewRework": "返工中",
+          "reviewAccepted": "已验收",
+          "reviewBlocking": "条阻塞",
+          "accept": "验收"
         }
       },
       "shared": {

@@ -47,6 +47,15 @@ export default function DispatchEntryChat({
           {facts.paused ? (
             <Badge variant="destructive">{t(`${ENTRY}.paused`, 'Paused')}</Badge>
           ) : null}
+          <span className="flex-1" />
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={facts.busy}
+            onClick={() => void facts.setPaused(!facts.paused)}
+          >
+            {facts.paused ? t(`${ENTRY}.resume`, 'Resume') : t(`${ENTRY}.pause`, 'Pause')}
+          </Button>
         </div>
       </div>
       <div
@@ -95,13 +104,16 @@ export default function DispatchEntryChat({
                   <RoutingRequestCard
                     input={input}
                     busy={facts.busy}
+                    reviews={facts.reviews}
+                    onAcceptReview={(taskId) => void facts.acceptReview(taskId)}
                     onHandback={(subActionId, dispatchId) =>
                       void facts.handback(subActionId, dispatchId)
                     }
                     onSendSupplement={(subActionId, text) => {
-                      const dispatch = input.subActions.find(
-                        (subAction) => subAction.subActionId === subActionId
-                      )?.claimedBy
+                      const subAction = input.subActions.find(
+                        (candidate) => candidate.subActionId === subActionId
+                      )
+                      const dispatch = subAction?.claimedBy ?? subAction?.lastTargetDispatchId
                       if (dispatch) {
                         void facts.sendSupplement(input.inputId, subActionId, dispatch, text)
                       }

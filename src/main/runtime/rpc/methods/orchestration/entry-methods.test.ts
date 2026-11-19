@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import type { RpcContext } from '../../../core'
+import type { RpcContext } from '../../core'
 import { createOrchestrationRpcHarness } from './rpc-test-harness'
 import type { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
 import { createRootDispatch } from '../../../orchestration/db/root-dispatch-test-fixture'
@@ -117,5 +117,66 @@ describe('desktop entry methods (plan §1/§9-A per-project 入口)', () => {
       dispatch: dispatch.id
     })
     expect(handback.released).toBe(true)
+  })
+
+  it('pauses and resumes the entry run, refusing supplements while paused', async () => {
+    ;({ ctx } = h.setup(false))
+    const submitted = await call<{ run: { id: string }; input: { input_id: string } }>(
+      'orchestration.entrySubmit',
+      { group: 'proj_alpha', text: '暂停期间不投递' }
+    )
+    const paused = await call<{ watchdog: { paused: boolean } }>('orchestration.entryPause', {
+      group: 'proj_alpha'
+    })
+    expect(paused.watchdog.paused).toBe(true)
+    await expect(
+      call<unknown>('orchestration.entrySupplement', {
+        group: 'proj_alpha',
+        input: submitted.input.input_id,
+        subAction: 'sa_x',
+        dispatch: 'dispatch_x',
+        text: '任何内容'
+      })
+    ).rejects.toMatchObject({ code: 'paused' })
+    const resumed = await call<{ watchdog: { paused: boolean } }>('orchestration.entryResume', {
+      group: 'proj_alpha'
+    })
+    expect(resumed.watchdog.paused).toBe(false)
+  })
+
+  it('shows and accepts the review cycle of a delegated task, scoped to the entry run', async () => {
+    ;({ db, ctx } = h.setup(false))
+    const submitted = await call<{ run: { id: string }; input: { input_id: string } }>(
+      'orchestration.entrySubmit',
+      { group: 'proj_alpha', text: '带审查的任务' }
+    )
+    const task = db.createTask({ runId: submitted.run.id, spec: 'entry worker' })
+    const dispatch = createRootDispatch(db, task.id, 'term_writer')
+    db.startReviewCycle({
+      taskId: task.id,
+      writerDispatchId: dispatch.id,
+      reviewerDispatchId: 'ctx_reviewer'
+    })
+    const show = await call<{ cycle: { state: string } | null }>('orchestration.entryReviewShow', {
+      group: 'proj_alpha',
+      task: task.id
+    })
+    expect(show.cycle?.state).toBe('reviewing')
+    // A task of another Run is not the entry's to accept.
+    const otherRun = db.createRun({
+      objective: 'Other run',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: null
+    })
+    const otherTask = db.createTask({ runId: otherRun.id, spec: 'other run task' })
+    await expect(
+      call<unknown>('orchestration.entryReviewShow', { group: 'proj_alpha', task: otherTask.id })
+    ).rejects.toMatchObject({ code: 'lifecycle_not_found' })
+    const accepted = await call<{ cycle: { state: string } }>('orchestration.entryReviewAccept', {
+      group: 'proj_alpha',
+      task: task.id
+    })
+    expect(accepted.cycle.state).toBe('accepted')
+    void ctx
   })
 })

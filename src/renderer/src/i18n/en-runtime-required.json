@@ -949,6 +949,7 @@
           "openTerminalWarning_other": "{{count}} open terminals in this project will be closed."
         },
         "RoutingEntryCard": {
+          "accept": "Accept",
           "awaitingRouting": "Awaiting routing",
           "composerAria": "Task input",
           "composerPlaceholder": "Describe a request for this project",
@@ -958,8 +959,15 @@
           "executionTarget": "Execution target",
           "handback": "Hand back",
           "paneTitle": "Task entry",
+          "pause": "Pause",
           "paused": "Paused",
-          "refused": "Refused",
+          "resume": "Resume",
+          "retry": "Retry",
+          "reviewAccepted": "Accepted",
+          "reviewBlocking": "blocking",
+          "reviewLabel": "Review",
+          "reviewReviewing": "In review",
+          "reviewRework": "Rework",
           "send": "Send",
           "sendHint": "Enter to send · Shift+Enter for a newline",
           "supplementPlaceholder": "Supplement · deliver to the active turn"

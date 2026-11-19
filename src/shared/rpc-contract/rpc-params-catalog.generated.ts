@@ -466,6 +466,8 @@ import {
 } from './orchestration/orchestration-peer-mail-params'
 import {
   EntryHandbackParams,
+  EntryPauseParams,
+  EntryReviewParams,
   EntryShowParams,
   EntrySubmitParams,
   EntrySupplementParams,
@@ -1435,6 +1437,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.dispatch': DispatchParams,
   'orchestration.dispatchShow': DispatchShowParams,
   'orchestration.entryHandback': EntryHandbackParams,
+  'orchestration.entryPause': EntryPauseParams,
+  'orchestration.entryResume': EntryPauseParams,
+  'orchestration.entryReviewAccept': EntryReviewParams,
+  'orchestration.entryReviewShow': EntryReviewParams,
   'orchestration.entryShow': EntryShowParams,
   'orchestration.entrySubmit': EntrySubmitParams,
   'orchestration.entrySupplement': EntrySupplementParams,

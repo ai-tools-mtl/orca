@@ -10,6 +10,8 @@ import { deliverTargetedSupplement } from '../../../orchestration/routing/target
 import { routingInputsPayload, supplementReceipt } from './routing-supplements'
 import {
   EntryHandbackParams,
+  EntryPauseParams,
+  EntryReviewParams,
   EntryShowParams,
   EntrySubmitParams,
   EntrySupplementParams
@@ -41,6 +43,19 @@ function entryRunOfInput(db: OrchestrationDb, group: string, inputId: string) {
       'lifecycle_not_found',
       `Input ${inputId} does not belong to the entry Run of ${group}.`,
       { inputId }
+    )
+  }
+  return run
+}
+
+function entryRunOfTask(db: OrchestrationDb, group: string, taskId: string) {
+  const { run } = coordinatedEntryRun(db, group)
+  const task = db.getTask(taskId)
+  if (!task || task.run_id !== run.id) {
+    throw new OrchestrationError(
+      'lifecycle_not_found',
+      `Task ${taskId} does not belong to the entry Run of ${group}.`,
+      { taskId }
     )
   }
   return run
@@ -139,6 +154,67 @@ export const ORCHESTRATION_ENTRY_METHODS = [
         subAction: result.subAction,
         handback: result.handback ?? null
       }
+    }
+  }),
+  // §5.5 as the prototype's card-level 暂停: a user-applied wait on the entry's Run. While
+  // paused, supplement deliveries refuse (deliveries stay recorded, re-driven on resume).
+  defineOrchestrationMethod({
+    name: 'orchestration.entryPause',
+    permission: 'workspace',
+    params: EntryPauseParams,
+    access: { kind: 'writes', targets: {} },
+    handler: ({ group }, { runtime }) => {
+      const db = runtime.getOrchestrationDb()
+      const { run } = coordinatedEntryRun(db, group)
+      db.pauseRoutingRun(run.id)
+      return { watchdog: db.routingWatchdogFacts(run.id) }
+    }
+  }),
+  defineOrchestrationMethod({
+    name: 'orchestration.entryResume',
+    permission: 'workspace',
+    params: EntryPauseParams,
+    access: { kind: 'writes', targets: {} },
+    handler: ({ group }, { runtime }) => {
+      const db = runtime.getOrchestrationDb()
+      const { run } = coordinatedEntryRun(db, group)
+      db.resumeRoutingRun(run.id)
+      return { watchdog: db.routingWatchdogFacts(run.id) }
+    }
+  }),
+  // §7 review state for a delegated task of the entry's Run: the latest cycle with its
+  // opinions, plus the user's acceptance (严格首版由用户验收 closes only without blocking
+  // opinions — acceptReviewCycle enforces that).
+  defineOrchestrationMethod({
+    name: 'orchestration.entryReviewShow',
+    permission: 'workspace',
+    params: EntryReviewParams,
+    access: { kind: 'reads', targets: {} },
+    handler: ({ group, task }, { runtime }) => {
+      const db = runtime.getOrchestrationDb()
+      entryRunOfTask(db, group, task)
+      const cycle = db.getLatestReviewCycleForTask(task)
+      return {
+        cycle: cycle ?? null,
+        ...(cycle ? { opinions: db.listReviewOpinions(cycle.cycle_id) } : { opinions: [] })
+      }
+    }
+  }),
+  defineOrchestrationMethod({
+    name: 'orchestration.entryReviewAccept',
+    permission: 'workspace',
+    params: EntryReviewParams,
+    access: { kind: 'writes', targets: {} },
+    handler: ({ group, task }, { runtime }) => {
+      const db = runtime.getOrchestrationDb()
+      entryRunOfTask(db, group, task)
+      const cycle = db.getLatestReviewCycleForTask(task)
+      if (!cycle) {
+        throw new OrchestrationError('lifecycle_not_found', `Task ${task} has no review cycle.`, {
+          taskId: task
+        })
+      }
+      return { cycle: db.acceptReviewCycle(cycle.cycle_id) }
     }
   })
 ]
