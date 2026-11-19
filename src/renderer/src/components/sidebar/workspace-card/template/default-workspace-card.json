@@ -213,7 +213,8 @@
             "when": "vars.inlineAgents",
             "props": { "tight": "=!(vars.hasMetaRow || git.remoteBranchConflict != null)" }
           },
-          { "el": "ChildToggle", "when": "lineage.toggleable" }
+          { "el": "ChildToggle", "when": "lineage.toggleable" },
+          { "el": "RoutingEntry" }
         ]
       }
     ]

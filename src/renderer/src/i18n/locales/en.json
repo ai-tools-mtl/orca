@@ -8224,6 +8224,26 @@
           "browseFolder": "Browse folder…",
           "cloneFromUrl": "Clone from URL…",
           "createNewProject": "Create new project…"
+        },
+        "RoutingEntryCard": {
+          "title": "Dispatch entry",
+          "paused": "Paused",
+          "refresh": "Refresh",
+          "noInputs": "No recorded inputs.",
+          "input": "Input",
+          "decided": "Decided",
+          "awaitingRouting": "Awaiting routing",
+          "registered": "Received",
+          "delivered": "Delivered",
+          "processed": "Processed this turn",
+          "violated": "Turn ignored the supplement",
+          "pending_verification": "Pending verification",
+          "refused": "Refused",
+          "executionTarget": "Execution target",
+          "supplement": "Supplement",
+          "handback": "Hand back",
+          "noSendTarget": "No execution target: claim a Dispatch first, or keep exactly one active worker here.",
+          "firstAction": "First action {{name}} {{path}}"
         }
       },
       "shared": {

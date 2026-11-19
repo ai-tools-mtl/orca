@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { z } from 'zod'
+import { translate } from '@/i18n/i18n'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { RoutingEntryInput } from './RoutingEntryCard'
@@ -76,7 +77,11 @@ function firstActionSummaryOf(rawEvidence: string | null): string | undefined {
   if (!action) {
     return undefined
   }
-  return `首个动作 ${action.name ?? ''} ${action.path ?? ''}`.trim()
+  return translate(
+    'auto.components.sidebar.RoutingEntryCard.firstAction',
+    'First action {{name}} {{path}}',
+    { name: action.name ?? '', path: action.path ?? '' }
+  ).trim()
 }
 
 function toEntryInputs(result: RoutingInputsShowResult): RoutingEntryInput[] {
@@ -106,6 +111,56 @@ const routingWatchdogResultSchema = z.object({
   watchdog: z.object({ paused: z.boolean() })
 })
 
+// Module-level so hooks stay React-Compiler compatible (no in-hook try/finally).
+async function runWithBusy(
+  setBusy: (busy: boolean) => void,
+  action: () => Promise<void>
+): Promise<void> {
+  setBusy(true)
+  try {
+    await action()
+  } finally {
+    setBusy(false)
+  }
+}
+
+async function readEntryFacts(
+  target: RuntimeClientTarget,
+  run: string | undefined,
+  setInputs: (inputs: RoutingEntryInput[]) => void,
+  setPaused: (paused: boolean) => void,
+  setError: (error: string | null) => void
+): Promise<void> {
+  try {
+    const show = routingInputsShowResultSchema.parse(
+      await callRuntimeRpc<unknown>(target, 'orchestration.routingInputsShow', {
+        ...(run ? { run } : {}),
+        from: undefined
+      })
+    )
+    setInputs(toEntryInputs(show))
+    const watchdog = routingWatchdogResultSchema.parse(
+      await callRuntimeRpc<unknown>(target, 'orchestration.routingWatchdogShow', {
+        ...(run ? { run } : {}),
+        from: undefined
+      })
+    )
+    setPaused(watchdog.watchdog.paused)
+    setError(null)
+  } catch (cause) {
+    setError(cause instanceof Error ? cause.message : String(cause))
+  }
+}
+
+async function callEntryAction(
+  target: RuntimeClientTarget,
+  run: string | undefined,
+  method: string,
+  params: Record<string, unknown>
+): Promise<void> {
+  await callRuntimeRpc(target, method, { ...params, ...(run ? { run } : {}), from: undefined })
+}
+
 /** The §9-A entry facts over the runtime's own RPCs — the renderer keeps no second flow state
  *  (§10): every read goes to orchestration.routingInputsShow / routingWatchdogShow. */
 export function useRoutingEntryFacts(target: RuntimeClientTarget | null, run?: string) {
@@ -118,75 +173,59 @@ export function useRoutingEntryFacts(target: RuntimeClientTarget | null, run?: s
     if (!target) {
       return
     }
-    setBusy(true)
-    try {
-      const show = routingInputsShowResultSchema.parse(
-        await callRuntimeRpc<unknown>(target, 'orchestration.routingInputsShow', {
-          ...(run ? { run } : {}),
-          from: undefined
-        })
-      )
-      setInputs(toEntryInputs(show))
-      const watchdog = routingWatchdogResultSchema.parse(
-        await callRuntimeRpc<unknown>(target, 'orchestration.routingWatchdogShow', {
-          ...(run ? { run } : {}),
-          from: undefined
-        })
-      )
-      setPaused(watchdog.watchdog.paused)
-      setError(null)
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setBusy(false)
-    }
+    await readEntryFacts(target, run, setInputs, setPaused, setError)
   }, [target, run])
 
   useEffect(() => {
-    void refresh()
+    void runWithBusy(setBusy, refresh)
   }, [refresh])
 
   const claim = useCallback(
-    async (subActionId: string, dispatchId: string) => {
+    (subActionId: string, dispatchId: string) => {
       if (!target) {
-        return
+        return Promise.resolve()
       }
-      setBusy(true)
-      try {
-        await callRuntimeRpc(target, 'orchestration.routingSubActionClaim', {
+      return runWithBusy(setBusy, () =>
+        callEntryAction(target, run, 'orchestration.routingSubActionClaim', {
           subAction: subActionId,
-          dispatch: dispatchId,
-          ...(run ? { run } : {}),
-          from: undefined
-        })
-        await refresh()
-      } finally {
-        setBusy(false)
-      }
+          dispatch: dispatchId
+        }).then(refresh)
+      )
     },
     [target, run, refresh]
   )
 
   const handback = useCallback(
-    async (subActionId: string, dispatchId: string) => {
+    (subActionId: string, dispatchId: string) => {
       if (!target) {
-        return
+        return Promise.resolve()
       }
-      setBusy(true)
-      try {
-        await callRuntimeRpc(target, 'orchestration.routingSubActionHandback', {
+      return runWithBusy(setBusy, () =>
+        callEntryAction(target, run, 'orchestration.routingSubActionHandback', {
           subAction: subActionId,
-          dispatch: dispatchId,
-          ...(run ? { run } : {}),
-          from: undefined
-        })
-        await refresh()
-      } finally {
-        setBusy(false)
-      }
+          dispatch: dispatchId
+        }).then(refresh)
+      )
     },
     [target, run, refresh]
   )
 
-  return { inputs, paused, busy, error, refresh, claim, handback }
+  const sendSupplement = useCallback(
+    (inputId: string, subActionId: string, dispatchId: string, text: string) => {
+      if (!target) {
+        return Promise.resolve()
+      }
+      return runWithBusy(setBusy, () =>
+        callEntryAction(target, run, 'orchestration.routingSupplementSend', {
+          input: inputId,
+          subAction: subActionId,
+          dispatch: dispatchId,
+          text
+        }).then(refresh)
+      )
+    },
+    [target, run, refresh]
+  )
+
+  return { inputs, paused, busy, error, refresh, claim, handback, sendSupplement }
 }

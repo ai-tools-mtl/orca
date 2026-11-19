@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type RoutingEntrySubAction = {
   subActionId: string
@@ -22,46 +23,75 @@ export type RoutingEntryCardProps = {
   paused?: boolean
   inputs: RoutingEntryInput[]
   busy?: boolean
+  error?: string | null
   onRefresh?: () => void
-  onClaim?: (subActionId: string, dispatchId: string) => void
+  onHandback?: (subActionId: string, dispatchId: string) => void
   onSendSupplement?: (subActionId: string, text: string) => void
 }
 
+const ENTRY = 'auto.components.sidebar.RoutingEntryCard'
+
 const STATE_BADGES: Record<
   RoutingEntrySubAction['state'],
-  { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }
+  { variant: 'default' | 'secondary' | 'destructive' | 'outline' }
 > = {
-  registered: { label: '已收到', variant: 'secondary' },
-  delivered: { label: '已投递', variant: 'outline' },
-  processed: { label: '本轮已处理', variant: 'default' },
-  violated: { label: '本轮未按补充执行', variant: 'destructive' },
-  pending_verification: { label: '待核对', variant: 'secondary' }
+  registered: { variant: 'secondary' },
+  delivered: { variant: 'outline' },
+  processed: { variant: 'default' },
+  violated: { variant: 'destructive' },
+  pending_verification: { variant: 'secondary' }
+}
+
+function stateLabel(
+  t: (key: string, fallback: string) => string,
+  state: RoutingEntrySubAction['state']
+): string {
+  switch (state) {
+    case 'registered':
+      return t('auto.components.sidebar.RoutingEntryCard.registered', 'Received')
+    case 'delivered':
+      return t('auto.components.sidebar.RoutingEntryCard.delivered', 'Delivered')
+    case 'processed':
+      return t('auto.components.sidebar.RoutingEntryCard.processed', 'Processed this turn')
+    case 'violated':
+      return t('auto.components.sidebar.RoutingEntryCard.violated', 'Turn ignored the supplement')
+    case 'pending_verification':
+      return t(
+        'auto.components.sidebar.RoutingEntryCard.pending_verification',
+        'Pending verification'
+      )
+  }
 }
 
 /** 简洁入口 (plan §9 A / §10): the four-state supplement cards over the runtime's own facts.
  *  Presentational only — facts come from orchestration.routingInputsShow, actions delegate to
- *  the claim/send RPCs. Internal ids stay in the expandable details. */
+ *  the handback/send RPCs. Internal ids stay in the expandable details. */
 export default function RoutingEntryCard({
   paused,
   inputs,
   busy,
+  error,
   onRefresh,
-  onClaim,
+  onHandback,
   onSendSupplement
 }: RoutingEntryCardProps) {
+  const t = useTranslate()
   return (
     <div className="flex flex-col gap-2 px-3 py-2 text-sm">
       <div className="flex items-center justify-between">
-        <span className="font-medium">调度入口</span>
+        <span className="font-medium">{t(`${ENTRY}.title`, 'Dispatch entry')}</span>
         <div className="flex items-center gap-1">
-          {paused ? <Badge variant="destructive">已暂停</Badge> : null}
+          {paused ? <Badge variant="destructive">{t(`${ENTRY}.paused`, 'Paused')}</Badge> : null}
           <Button variant="ghost" size="sm" disabled={busy} onClick={onRefresh}>
-            刷新
+            {t(`${ENTRY}.refresh`, 'Refresh')}
           </Button>
         </div>
       </div>
+      {error ? <p className="text-xs text-destructive">{error}</p> : null}
       {inputs.length === 0 ? (
-        <p className="text-muted-foreground text-xs">暂无记录的输入。</p>
+        <p className="text-muted-foreground text-xs">
+          {t(`${ENTRY}.noInputs`, 'No recorded inputs.')}
+        </p>
       ) : null}
       {inputs.map((input) => (
         <div key={input.inputId} className="flex flex-col gap-1 rounded-md border p-2">
@@ -71,7 +101,10 @@ export default function RoutingEntryCard({
             </summary>
             <p className="mt-1 text-xs whitespace-pre-wrap">{input.text}</p>
             <p className="mt-1 text-xs text-muted-foreground" title={input.inputId}>
-              输入 {input.inputId} · {input.decisionStatus === 'decided' ? '已决定' : '待路由'}
+              {t(`${ENTRY}.input`, 'Input')} {input.inputId} ·{' '}
+              {input.decisionStatus === 'decided'
+                ? t(`${ENTRY}.decided`, 'Decided')
+                : t(`${ENTRY}.awaitingRouting`, 'Awaiting routing')}
             </p>
           </details>
           {input.subActions.map((subAction) => {
@@ -80,17 +113,19 @@ export default function RoutingEntryCard({
               <div key={subAction.subActionId} className="flex flex-col gap-1 border-t pt-1">
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate">{subAction.text}</span>
-                  <Badge variant={badge.variant}>{badge.label}</Badge>
+                  <Badge variant={badge.variant}>{stateLabel(t, subAction.state)}</Badge>
                 </div>
                 {subAction.state === 'violated' && subAction.firstActionSummary ? (
                   <p className="text-xs text-destructive">{subAction.firstActionSummary}</p>
                 ) : null}
                 {subAction.lastOutcome === 'refused' && subAction.refusalKind ? (
-                  <p className="text-xs text-muted-foreground">拒收：{subAction.refusalKind}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t(`${ENTRY}.refused`, 'Refused')}: {subAction.refusalKind}
+                  </p>
                 ) : null}
                 {subAction.claimedBy ? (
                   <p className="text-xs text-muted-foreground" title={subAction.claimedBy}>
-                    执行目标 {subAction.claimedBy}
+                    {t(`${ENTRY}.executionTarget`, 'Execution target')} {subAction.claimedBy}
                   </p>
                 ) : null}
                 <div className="flex items-center gap-1">
@@ -100,16 +135,16 @@ export default function RoutingEntryCard({
                     disabled={busy || !onSendSupplement}
                     onClick={() => onSendSupplement?.(subAction.subActionId, subAction.text)}
                   >
-                    补充
+                    {t(`${ENTRY}.supplement`, 'Supplement')}
                   </Button>
                   {subAction.claimedBy ? (
                     <Button
                       variant="ghost"
                       size="sm"
-                      disabled={busy || !onClaim}
-                      onClick={() => onClaim?.(subAction.subActionId, subAction.claimedBy ?? '')}
+                      disabled={busy || !onHandback}
+                      onClick={() => onHandback?.(subAction.subActionId, subAction.claimedBy ?? '')}
                     >
-                      交回
+                      {t(`${ENTRY}.handback`, 'Hand back')}
                     </Button>
                   ) : null}
                 </div>

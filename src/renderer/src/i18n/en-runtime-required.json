@@ -948,6 +948,25 @@
           "openTerminalWarning_one": "{{count}} open terminal in this project will be closed.",
           "openTerminalWarning_other": "{{count}} open terminals in this project will be closed."
         },
+        "RoutingEntryCard": {
+          "awaitingRouting": "Awaiting routing",
+          "decided": "Decided",
+          "delivered": "Delivered",
+          "executionTarget": "Execution target",
+          "handback": "Hand back",
+          "input": "Input",
+          "noInputs": "No recorded inputs.",
+          "noSendTarget": "No execution target: claim a Dispatch first, or keep exactly one active worker here.",
+          "paused": "Paused",
+          "pending_verification": "Pending verification",
+          "processed": "Processed this turn",
+          "refresh": "Refresh",
+          "refused": "Refused",
+          "registered": "Received",
+          "supplement": "Supplement",
+          "title": "Dispatch entry",
+          "violated": "Turn ignored the supplement"
+        },
         "SetupScriptCodeBlock": {
           "showMore_one": "Show {{count}} more line",
           "showMore_other": "Show {{count}} more lines"

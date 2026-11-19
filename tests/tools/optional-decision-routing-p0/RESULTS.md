@@ -153,3 +153,53 @@ node 目录；命令覆盖统一走 `settings.mutateAgentLaunch`；fake 模式�
   updateSettings 的 agentCmdOverrides 不进主进程启动链）；`orca serve` 开发仓不可用，
   必须走 Playwright electron 无头；隔离 home 会预建空 `.codex` 挡 auth 软链（EEXIST 需重建）。
 - worker-start 就绪判定要求输入回显（`turn_start: observed`）：gate 轮必须先回 userMessage。
+
+## §9-A 入口挂载（2026-11-19）
+
+「统一任务入口」此前只有组件层（RoutingEntryCard + facts hook + fixtures），未挂进任何界面
+——用户在应用里找不到。本次挂载到工作区卡片模板（唯一活路径）：
+
+- `WorktreeCardRoutingEntry`：经 per-worktree 编排索引（`selectWorktreeAgentOrchestration`）
+  发现本工作区 orchestration panes 所属的 `orchestrationRunId`，以
+  `ipcOrRuntimeTargetForHostId(hostId)` 取 runtime target，调 facts hook。无 run 或无输入
+  且未暂停时渲染 null（无闲置卡片噪音）。
+- 挂载点：`CARD_ACTIVITY_PARTS.RoutingEntry` + `default-workspace-card.json` 根 Stack 末行
+  （模板 render 不得调 hooks，元件返回组件元素，与 Agents 同法）。
+- 动作接线：刷新 / 交回（routingSubActionHandback）/ 补充
+  （routingSupplementSend → claimedBy ?? 本工作区唯一 Dispatch，无目标时显式报错，
+  不猜多个候选）；修复了原卡「交回」误接 onClaim 的接线。
+- 验证：tc:web 0 错、oxlint/oxfmt 绿、card-template-compiler 测试 2/2、
+  fixtures:shot fourStates 渲染正确（四态徽章/拒收详情/按钮齐全）。
+
+## 分支积压缺陷清理（2026-11-19，入口挂载门禁暴露）
+
+入口挂载后首次完整跑 check:changed，暴露了此前增量只跑定向检查漏掉的门禁违规（分支上真实存在）：
+
+1. **tc:cli 两错**（上一增量 CLI 拆分引入）：`routing-sub-action-verify` handler 的
+   `client.call` 误传 4 参（copy 自 callOrchestrationMutation 形）；`routing-handlers.ts`
+   引用拆分时丢失的 `attemptRowLine` —— 补回本地 helper。
+2. **main-sync 双 ratchet 违规**（zcode-credential-cipher.ts，凭据链增量引入）：
+   `execFileSync('security'/'powershell.exe')` ×2 → `@orca/process-host` 的 `runProcess`；
+   `statSync` → `node:fs/promises` 的 `stat`。整链异步化：cipher → v2-plan-credentials →
+   chat-credentials/usage-credentials/plan-credential-commands → 会话注册/发现/命名/探针/
+   fork/open/start 共 11 处消费点（多数本就在 async 流程，机械加 await；三个同步 ask 应答
+   改为 `void Promise.resolve(...).then(respond)` 延迟应答）。测试 3 文件适配 await。
+3. **localization**：RoutingEntryCard/WorktreeCardRoutingEntry/use-routing-entry-facts 的
+   硬编码中文改 `t()/translate()`（英文声明，仓库无中文回退先例）；en.json + zh.json 补
+   `auto.components.sidebar.RoutingEntryCard.*`；`sync:localization-runtime-catalog` 再生。
+   fixtures 样例文本保持中文（样例数据非 UI copy，coverage 不扫）。
+4. **react-compiler ratchet**：hook 内新增 try/finally → 提为模块级
+   `runWithBusy`/`readEntryFacts`/`callEntryAction`（ratchet 建议的标准修复）。
+5. **casting**：`dispatchIds[0] as string` → `.filter((id): id is string => id != null)`。
+
+验证（单项）：typecheck node/web/cli 0 错；main-sync 双 ratchet、react-compiler、
+localization coverage/catalogs、import-boundaries、changed-quality 全绿；
+zcode-v2-plan-credentials 28/28（含 FIFO 子进程超时围栏）、overlay-raw-json 14/14、
+service-zcode-usage 2/2、usage-credentials 2/2、card-template-compiler 2/2；
+fixtures:shot fourStates 重拍正常（英文声明渲染，zh 目录翻译）。
+
+**新发现的本机环境性失败**：`service-zcode-usage.test.ts` 在本 ZCode CLI 会话的 shell 里
+失败——会话注入 `ZCODE_PERSONAL_PROVIDER_CONFIG_FILE`（指向真实个人配置），
+`localZcodeCredentialHost()` 的 `env: process.env` 读到它，fixture 选择不匹配 →
+unavailable。`env -u ZCODE_PERSONAL_PROVIDER_CONFIG_FILE -u ZCODE_BUILTIN_PROVIDER_CONFIG_FILE`
+后 2/2 绿。与 native-process-spawn/runner-wsl-gh-fallback 同类，origin/main 同样受影响。

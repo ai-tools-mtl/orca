@@ -51,7 +51,7 @@ export const fourStates = defineFixture({
     <RoutingEntryCard
       inputs={inputs}
       onRefresh={() => undefined}
-      onClaim={() => undefined}
+      onHandback={() => undefined}
       onSendSupplement={() => undefined}
     />
   )
