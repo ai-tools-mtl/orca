@@ -9,10 +9,8 @@ import {
   shouldKeepHiddenWorktreeSurfacePaintable,
   shouldMountRetainedBrowserOverlay
 } from './browser-pane/host-guest/retention/browser-worktree-surface-paintability'
-import { useDispatchEntryPaneListener } from './sidebar/dispatch-entry/use-dispatch-entry-pane-listener'
 import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import { WorkspacePaneOverlayLayers } from './WorkspacePaneOverlayLayers'
-import DispatchEntryPaneLayer from './sidebar/dispatch-entry/dispatch-entry-pane-layer'
 import type { TerminalPrewarmStage } from './terminal/worktree-prewarm/terminal-worktree-prewarm'
 
 export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
@@ -45,8 +43,6 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
 }): React.JSX.Element {
   const browserPageIds = useWorktreeBrowserPageIds(worktreeId)
   const needsBrowserGuestPaint = useBrowserGuestPaintRetention(browserPageIds)
-  // The 统一任务入口 fills this surface's pane area while open; only the visible surface answers.
-  const dispatchEntry = useDispatchEntryPaneListener(isVisible)
   const shouldKeepPaintable = shouldKeepHiddenWorktreeSurfacePaintable({
     // A mount-stage prewarm stays display:none so its style/layout cost lands in a later task.
     shouldMeasureHiddenWorktree: shouldMeasureHiddenWorktree && prewarmStage !== 'mount',
@@ -90,12 +86,6 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
         })}
         mountEmulatorOverlay={isVisible || backgroundMountTabIds === null}
       />
-      {dispatchEntry.target ? (
-        <DispatchEntryPaneLayer
-          hostId={dispatchEntry.target.hostId}
-          repoId={dispatchEntry.target.repoId}
-        />
-      ) : null}
     </div>
   )
 })

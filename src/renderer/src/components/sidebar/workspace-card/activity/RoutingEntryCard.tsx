@@ -2,13 +2,27 @@ import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import type { RoutingEntryWorker, RoutingReviewState } from './routing-entry-model'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../../../../../shared/agent-launch/catalog/tui-agent-display-names'
+import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import type {
+  RoutingEntryExecution,
+  RoutingEntryWorker,
+  RoutingReviewState
+} from './routing-entry-model'
 
 export type RoutingEntrySubAction = {
   subActionId: string
   text: string
   state: 'registered' | 'delivered' | 'processed' | 'violated' | 'pending_verification'
   taskId?: string
+  execution?: RoutingEntryExecution
   claimedBy?: string
   refusalKind?: string
   firstActionSummary?: string
@@ -44,9 +58,20 @@ export type RoutingRequestCardProps = {
   onReassign?: (subActionId: string, targetDispatchId: string) => void
   onFetchWorkers?: () => Promise<RoutingEntryWorker[]>
   onSendSupplement?: (subActionId: string, text: string) => void
+  onAssign?: (subActionId: string, agent: TuiAgent) => void
+  agents?: TuiAgent[]
 }
 
 const ENTRY = 'auto.components.sidebar.RoutingEntryCard'
+
+const EXECUTION_LABELS = {
+  pending: ['workerStarting', 'Starting worker'],
+  dispatched: ['workerRunning', 'Running'],
+  attention: ['workerAttention', 'Needs attention'],
+  completed: ['workerCompleted', 'Completed'],
+  failed: ['workerFailed', 'Failed'],
+  circuit_broken: ['workerFailed', 'Failed']
+} as const
 
 const STATE_BADGES: Record<
   RoutingEntrySubAction['state'],
@@ -130,14 +155,16 @@ export default function RoutingRequestCard({
   onHandback,
   onReassign,
   onFetchWorkers,
-  onSendSupplement
+  onSendSupplement,
+  onAssign,
+  agents
 }: RoutingRequestCardProps) {
   const t = useTranslate()
   const [reassignFor, setReassignFor] = useState<string | null>(null)
   const [candidates, setCandidates] = useState<RoutingEntryWorker[] | null>(null)
   const claimed = input.subActions.find((subAction) => subAction.claimedBy)
   return (
-    <div className="flex flex-col gap-1.5 rounded-lg border bg-card p-2.5">
+    <div className="flex flex-col gap-2">
       {error ? <p className="text-destructive text-xs">{error}</p> : null}
       {input.subActions.map((subAction) => {
         const badge = STATE_BADGES[subAction.state]
@@ -145,15 +172,74 @@ export default function RoutingRequestCard({
         const lastAttempt = subAction.history.at(-1)
         const retryDispatch = subAction.claimedBy ?? subAction.lastTargetDispatchId
         const retryText = subAction.lastSupplementText ?? input.text
+        const execution = subAction.execution
+        const executionLabel = execution && EXECUTION_LABELS[execution.status]
         return (
-          <div
+          <article
             key={subAction.subActionId}
-            className="flex flex-col gap-1 border-b pb-1.5 last:border-b-0 last:pb-0"
+            aria-label={subAction.text}
+            className="flex flex-col gap-1 rounded-lg border bg-card p-2.5"
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="truncate text-sm">{subAction.text}</span>
-              <Badge variant={badge.variant}>{stateLabel(t, subAction.state)}</Badge>
+              <span className="min-w-0 whitespace-pre-wrap break-words text-sm">
+                {subAction.text}
+              </span>
+              {executionLabel ? (
+                <Badge
+                  variant={
+                    execution.status === 'failed' || execution.status === 'circuit_broken'
+                      ? 'destructive'
+                      : 'secondary'
+                  }
+                >
+                  {t(`${ENTRY}.${executionLabel[0]}`, executionLabel[1])}
+                </Badge>
+              ) : (
+                <Badge variant={badge.variant}>{stateLabel(t, subAction.state)}</Badge>
+              )}
             </div>
+            {execution?.agent ? (
+              <p className="text-muted-foreground text-xs">
+                {isTuiAgent(execution.agent)
+                  ? TUI_AGENT_DISPLAY_NAMES[execution.agent]
+                  : execution.agent}
+              </p>
+            ) : null}
+            {execution?.result ? (
+              <p className="whitespace-pre-wrap break-words text-sm">{execution.result}</p>
+            ) : null}
+            {execution?.failure ? (
+              <p className="whitespace-pre-wrap break-words text-destructive text-xs">
+                {execution.failure}
+              </p>
+            ) : null}
+            {!subAction.taskId && onAssign && agents ? (
+              <div className="self-start">
+                {agents.length > 0 ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" disabled={busy}>
+                        {t(`${ENTRY}.assignWorker`, 'Assign worker')}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      {agents.map((agent) => (
+                        <DropdownMenuItem
+                          key={agent}
+                          onSelect={() => onAssign(subAction.subActionId, agent)}
+                        >
+                          {TUI_AGENT_DISPLAY_NAMES[agent]}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : (
+                  <p className="text-muted-foreground text-xs">
+                    {t(`${ENTRY}.noAgents`, 'No workers detected on this project host.')}
+                  </p>
+                )}
+              </div>
+            ) : null}
             {subAction.state === 'violated' && subAction.firstActionSummary ? (
               <p className="text-destructive text-xs">{subAction.firstActionSummary}</p>
             ) : null}
@@ -237,7 +323,7 @@ export default function RoutingRequestCard({
                 {t(`${ENTRY}.retry`, 'Retry')}
               </Button>
             ) : null}
-          </div>
+          </article>
         )
       })}
       {claimed ? (

@@ -15,6 +15,8 @@ import { TitlebarLeftControls } from './chrome/TitlebarLeftControls'
 import { RightSidebarToggle, TitlebarMainStrip } from './chrome/TitlebarMainStrip'
 import type { AppChromeLayout } from './chrome/use-app-chrome-layout'
 import type { FloatingWorkspacePanelState } from '../components/floating-terminal/workspace/use-floating-workspace-panel'
+import DispatchEntryPaneLayer from '../components/sidebar/dispatch-entry/dispatch-entry-pane-layer'
+import { useDispatchEntryPaneListener } from '../components/sidebar/dispatch-entry/use-dispatch-entry-pane-listener'
 
 // Skips the shell render each workspace switch causes; its props only change on toggle.
 const MemoFloatingTerminalToggleButton = memo(FloatingTerminalToggleButton)
@@ -117,6 +119,7 @@ export function AppWorkspaceShell(props: {
   floatingWorkspace: FloatingWorkspacePanelState
 }): React.JSX.Element {
   const t = useTranslate()
+  const dispatchEntry = useDispatchEntryPaneListener()
   const { layout, floatingWorkspace } = props
   const titlebarLeftControls = <TitlebarLeftControls layout={layout} />
   const titlebarMainStrip = <TitlebarMainStrip layout={layout} />
@@ -243,6 +246,12 @@ export function AppWorkspaceShell(props: {
                     </RecoverableRenderErrorBoundary>
                   </Suspense>
                 </div>
+                {dispatchEntry.target && layout.activeView === 'terminal' ? (
+                  <DispatchEntryPaneLayer
+                    hostId={dispatchEntry.target.hostId}
+                    repoId={dispatchEntry.target.repoId}
+                  />
+                ) : null}
                 {floatingWorkspace.showToggleButton && !capturingPluginShot ? (
                   <MemoFloatingTerminalToggleButton
                     open={floatingWorkspace.open}

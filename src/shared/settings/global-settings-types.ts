@@ -491,6 +491,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   sourceControlAi?: SourceControlAiSettings
   /** The model the 任务入口's routing step (§5.1) uses to propose sub-actions for auto-routing. */
   decisionModel?: DecisionModelSettings
+  dispatchEntryAutoRoute?: Record<string, boolean>
   /** GitLab project preferences (pinned + recent paths). Optional for pre-GitLab profiles; persistence merge fills the default. */
   gitlabProjects?: GitLabProjectSettings
   /** Anonymous telemetry consent, identity, frozen experiments, and daily usage limits; optional before migration. */

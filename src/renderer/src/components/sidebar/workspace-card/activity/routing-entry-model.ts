@@ -1,8 +1,11 @@
 import { z } from 'zod'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { useAppStore } from '@/store'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { RoutingEntryInput, RoutingEntrySubAction } from './RoutingEntryCard'
+
+export type { RoutingEntryInput }
 
 const attemptSchema = z.object({
   // The ledger CHECK constrains outcomes to exactly these three (migrate-v49's outcome enum).
@@ -13,6 +16,16 @@ const attemptSchema = z.object({
   expected_turn_id: z.string().nullable(),
   turn_id: z.string().nullable()
 })
+
+const entryExecutionSchema = z.object({
+  agent: z.string().nullable(),
+  dispatchId: z.string(),
+  status: z.enum(['pending', 'dispatched', 'completed', 'failed', 'circuit_broken', 'attention']),
+  result: z.string().nullable(),
+  failure: z.string().nullable()
+})
+
+export type RoutingEntryExecution = z.infer<typeof entryExecutionSchema>
 
 export const entryShowResultSchema = z.object({
   inputs: z.array(
@@ -38,6 +51,7 @@ export const entryShowResultSchema = z.object({
             ]),
             claimed_dispatch_id: z.string().nullable()
           }),
+          execution: entryExecutionSchema.nullish(),
           deliveries: z.array(
             z.object({
               supplement: z.object({
@@ -136,6 +150,7 @@ export function toEntryInputs(result: EntryShowResult): RoutingEntryInput[] {
         text: subAction.subAction.text,
         state: subAction.subAction.state,
         taskId: subAction.subAction.task_id ?? undefined,
+        execution: subAction.execution ?? undefined,
         claimedBy: subAction.subAction.claimed_dispatch_id ?? undefined,
         refusalKind: last?.refusalKind,
         firstActionSummary: last?.firstActionSummary,
@@ -172,6 +187,8 @@ export const entryApprovalsSchema = z.object({
 
 export type RoutingEntryApproval = z.infer<typeof entryApprovalsSchema>['approvals'][number]
 
+export type EntryRoutingResult = { routed: boolean; reason?: string; dispatchErrors?: string[] }
+
 export async function entryApprovals(target: RuntimeClientTarget, group: string): Promise<unknown> {
   return callRuntimeRpc(target, 'orchestration.entryApprovals', { group })
 }
@@ -198,4 +215,50 @@ export async function entryWorkers(
     await callRuntimeRpc(target, 'orchestration.entryWorkers', { group })
   )
   return result.workers
+}
+
+export async function readEntrySnapshot(target: RuntimeClientTarget, group: string) {
+  const show = entryShowResultSchema.parse(
+    await callRuntimeRpc<unknown>(target, 'orchestration.entryShow', { group })
+  )
+  const taskIds = new Set(
+    show.inputs.flatMap((entry) => entry.subActions).map((entry) => entry.subAction.task_id)
+  )
+  const reviews = new Map<string, RoutingReviewState>()
+  taskIds.delete(null)
+  const [approvals] = await Promise.all([
+    entryApprovals(target, group).then((result) => entryApprovalsSchema.parse(result).approvals),
+    Promise.allSettled(
+      [...taskIds].map(async (taskId) => {
+        if (taskId) {
+          reviews.set(
+            taskId,
+            entryReviewResultSchema.parse(await entryReview(target, group, taskId))
+          )
+        }
+      })
+    )
+  ])
+  return { inputs: toEntryInputs(show), paused: show.watchdog.paused, reviews, approvals }
+}
+
+/** Auto-route through the model provider, with the settings-configured decision model. */
+export async function routeViaModel(
+  target: RuntimeClientTarget,
+  group: string,
+  inputId: string,
+  dispatch: boolean
+): Promise<EntryRoutingResult> {
+  const decisionModel = useAppStore.getState().settings?.decisionModel
+  return callRuntimeRpc<EntryRoutingResult>(
+    target,
+    'orchestration.entryAutoRoute',
+    {
+      group,
+      input: inputId,
+      dispatch,
+      ...(decisionModel ? { decisionModel } : {})
+    },
+    { timeoutMs: 120_000 }
+  )
 }

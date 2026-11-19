@@ -1,18 +1,12 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import type { RoutingEntryInput } from './RoutingEntryCard'
-import {
-  entryApprovals,
-  entryApprovalsSchema,
-  entryWorkers,
-  entryReview,
-  entryReviewResultSchema,
-  entryShowResultSchema,
-  toEntryInputs
-} from './routing-entry-model'
+import { entryWorkers, readEntrySnapshot, routeViaModel } from './routing-entry-model'
 import type {
+  EntryRoutingResult,
   RoutingEntryApproval,
+  RoutingEntryInput,
   RoutingEntryWorker,
   RoutingReviewState
 } from './routing-entry-model'
@@ -30,60 +24,6 @@ async function runWithBusy<T>(
   }
 }
 
-async function readEntryFacts(
-  target: RuntimeClientTarget,
-  group: string,
-  setInputs: (inputs: RoutingEntryInput[]) => void,
-  setPaused: (paused: boolean) => void,
-  setError: (error: string | null) => void,
-  setReviews: (reviews: ReadonlyMap<string, RoutingReviewState>) => void,
-  setApprovals: (approvals: RoutingEntryApproval[]) => void
-): Promise<void> {
-  try {
-    const show = entryShowResultSchema.parse(
-      await callRuntimeRpc<unknown>(target, 'orchestration.entryShow', { group })
-    )
-    setInputs(toEntryInputs(show))
-    setPaused(show.watchdog.paused)
-    setError(null)
-    // Review state per delegated task (§7): fetched alongside so cards render it inline.
-    const taskIds = [
-      ...new Set(
-        show.inputs
-          .flatMap((entry) => entry.subActions)
-          .map((subAction) => subAction.subAction.task_id)
-          .filter((taskId): taskId is string => taskId != null)
-      )
-    ]
-    const reviews = new Map<string, RoutingReviewState>()
-    await Promise.all(
-      taskIds.map(async (taskId) => {
-        try {
-          reviews.set(
-            taskId,
-            entryReviewResultSchema.parse(await entryReview(target, group, taskId))
-          )
-        } catch {
-          // A task without a cycle shows no review state; read failures stay silent.
-        }
-      })
-    )
-    setReviews(reviews)
-    const approvals = entryApprovalsSchema.parse(await entryApprovals(target, group))
-    setApprovals(approvals.approvals)
-  } catch (cause) {
-    setError(cause instanceof Error ? cause.message : String(cause))
-  }
-}
-
-async function callEntryAction(
-  target: RuntimeClientTarget,
-  method: string,
-  params: Record<string, unknown>
-): Promise<void> {
-  await callRuntimeRpc(target, method, params)
-}
-
 /** The §9-A entry facts over the desktop entry's own methods — the renderer keeps no second
  *  flow state (§10): every read goes to orchestration.entryShow for this project's group. */
 export function useRoutingEntryFacts(target: RuntimeClientTarget | null, group: string) {
@@ -94,25 +34,78 @@ export function useRoutingEntryFacts(target: RuntimeClientTarget | null, group: 
   const [reviews, setReviews] = useState<ReadonlyMap<string, RoutingReviewState>>(new Map())
   const [approvals, setApprovals] = useState<RoutingEntryApproval[]>([])
 
+  const refreshVersion = useRef(0)
   const refresh = useCallback(async () => {
     if (!target) {
       return
     }
-    await readEntryFacts(target, group, setInputs, setPaused, setError, setReviews, setApprovals)
+    const version = ++refreshVersion.current
+    await readEntrySnapshot(target, group).then(
+      (snapshot) => {
+        if (version !== refreshVersion.current) {
+          return
+        }
+        setInputs(snapshot.inputs)
+        setPaused(snapshot.paused)
+        setReviews(snapshot.reviews)
+        setApprovals(snapshot.approvals)
+        setError(null)
+      },
+      (cause: unknown) => {
+        if (version === refreshVersion.current) {
+          setError(cause instanceof Error ? cause.message : String(cause))
+        }
+      }
+    )
   }, [target, group])
 
   useEffect(() => {
     void runWithBusy(setBusy, refresh)
   }, [refresh])
 
+  useEffect(() => {
+    if (
+      !busy &&
+      !inputs.some((input) =>
+        input.subActions.some(
+          (action) =>
+            action.execution?.status === 'pending' ||
+            action.execution?.status === 'dispatched' ||
+            action.execution?.status === 'attention'
+        )
+      )
+    ) {
+      return
+    }
+    let disposed = false
+    let timer = window.setTimeout(poll, 2000)
+    function poll(): void {
+      void refresh().then(() => {
+        if (!disposed) {
+          timer = window.setTimeout(poll, 2000)
+        }
+      })
+    }
+    return () => {
+      disposed = true
+      window.clearTimeout(timer)
+    }
+  }, [inputs, refresh, busy])
+
   const submit = useCallback(
     (text: string) => {
       if (!target) {
-        return Promise.resolve()
+        return Promise.resolve(undefined)
       }
-      return runWithBusy(setBusy, () =>
-        callEntryAction(target, 'orchestration.entrySubmit', { group, text }).then(refresh)
-      )
+      return runWithBusy(setBusy, async () => {
+        const { input } = await callRuntimeRpc<{ input: { input_id: string } }>(
+          target,
+          'orchestration.entrySubmit',
+          { group, text }
+        )
+        await refresh()
+        return input.input_id
+      })
     },
     [target, group, refresh]
   )
@@ -123,7 +116,7 @@ export function useRoutingEntryFacts(target: RuntimeClientTarget | null, group: 
         return Promise.resolve()
       }
       return runWithBusy(setBusy, () =>
-        callEntryAction(target, 'orchestration.entryHandback', {
+        callRuntimeRpc(target, 'orchestration.entryHandback', {
           group,
           subAction: subActionId,
           dispatch: dispatchId
@@ -139,7 +132,7 @@ export function useRoutingEntryFacts(target: RuntimeClientTarget | null, group: 
         return Promise.resolve()
       }
       return runWithBusy(setBusy, () =>
-        callEntryAction(target, 'orchestration.entrySupplement', {
+        callRuntimeRpc(target, 'orchestration.entrySupplement', {
           group,
           input: inputId,
           subAction: subActionId,
@@ -152,19 +145,60 @@ export function useRoutingEntryFacts(target: RuntimeClientTarget | null, group: 
   )
 
   const autoRoute = useCallback(
-    (inputId: string) => {
+    (inputId: string, dispatch: boolean): Promise<EntryRoutingResult> => {
       if (!target) {
         return Promise.resolve({ routed: true as const })
       }
-      return runWithBusy(setBusy, async () => {
-        const result = await callRuntimeRpc<{ routed: boolean; reason?: string }>(
-          target,
-          'orchestration.entryAutoRoute',
-          { group, input: inputId }
+      return runWithBusy(setBusy, () =>
+        routeViaModel(target, group, inputId, dispatch).then((result) =>
+          refresh().then(() => result)
         )
-        await refresh()
-        return result
-      })
+      )
+    },
+    [target, group, refresh]
+  )
+
+  const savePlan = useCallback(
+    (inputId: string, subActions: string[]) => {
+      if (!target) {
+        return Promise.resolve()
+      }
+      return runWithBusy(setBusy, () =>
+        callRuntimeRpc(target, 'orchestration.entryPlan', {
+          group,
+          input: inputId,
+          subActions
+        }).then(refresh)
+      )
+    },
+    [target, group, refresh]
+  )
+
+  const fetchAgents = useCallback(async () => {
+    if (!target) {
+      return []
+    }
+    const { agents } = await callRuntimeRpc<{ agents: TuiAgent[] }>(
+      target,
+      'orchestration.entryAgents',
+      { group }
+    )
+    return agents
+  }, [target, group])
+
+  const assign = useCallback(
+    (inputId: string, subActionId: string, agent: TuiAgent) => {
+      if (!target) {
+        return Promise.resolve()
+      }
+      return runWithBusy(setBusy, () =>
+        callRuntimeRpc(
+          target,
+          'orchestration.entryAssign',
+          { group, input: inputId, subAction: subActionId, agent },
+          { timeoutMs: 120_000 }
+        ).then(refresh)
+      )
     },
     [target, group, refresh]
   )
@@ -182,7 +216,7 @@ export function useRoutingEntryFacts(target: RuntimeClientTarget | null, group: 
         return Promise.resolve()
       }
       return runWithBusy(setBusy, () =>
-        callEntryAction(target, 'orchestration.entryClaim', {
+        callRuntimeRpc(target, 'orchestration.entryClaim', {
           group,
           subAction: subActionId,
           dispatch: dispatchId
@@ -198,7 +232,7 @@ export function useRoutingEntryFacts(target: RuntimeClientTarget | null, group: 
         return Promise.resolve()
       }
       return runWithBusy(setBusy, () =>
-        callEntryAction(
+        callRuntimeRpc(
           target,
           pausedNext ? 'orchestration.entryPause' : 'orchestration.entryResume',
           {
@@ -216,7 +250,7 @@ export function useRoutingEntryFacts(target: RuntimeClientTarget | null, group: 
         return Promise.resolve()
       }
       return runWithBusy(setBusy, () =>
-        callEntryAction(target, 'orchestration.approvalAnswer', {
+        callRuntimeRpc(target, 'orchestration.approvalAnswer', {
           dispatch: dispatchId,
           prompt: approvalId,
           decision
@@ -232,7 +266,7 @@ export function useRoutingEntryFacts(target: RuntimeClientTarget | null, group: 
         return Promise.resolve()
       }
       return runWithBusy(setBusy, () =>
-        callEntryAction(target, 'orchestration.entryReviewAccept', { group, task: taskId }).then(
+        callRuntimeRpc(target, 'orchestration.entryReviewAccept', { group, task: taskId }).then(
           refresh
         )
       )
@@ -250,6 +284,9 @@ export function useRoutingEntryFacts(target: RuntimeClientTarget | null, group: 
     refresh,
     submit,
     autoRoute,
+    savePlan,
+    fetchAgents,
+    assign,
     handback,
     claim,
     fetchWorkers,

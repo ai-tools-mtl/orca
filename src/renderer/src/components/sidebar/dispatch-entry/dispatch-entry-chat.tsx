@@ -1,11 +1,14 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
+import { EntryManualPlan } from './entry-manual-plan'
 import { Check, SendHorizonal, Sparkles, TriangleAlert } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import RoutingRequestCard from '../workspace-card/activity/RoutingEntryCard'
 import { useRoutingEntryFacts } from '../workspace-card/activity/use-routing-entry-facts'
 
@@ -25,11 +28,57 @@ export default function DispatchEntryChat({
   repoDisplayName: string
 }): React.JSX.Element {
   const t = useTranslate()
-  const target = ipcOrRuntimeTargetForHostId(hostId)
+  const target = useMemo(() => ipcOrRuntimeTargetForHostId(hostId), [hostId])
   const facts = useRoutingEntryFacts(target, repoId)
+  const projectKey = JSON.stringify([hostId, repoId])
+  const automatic = useAppStore(
+    (state) => state.settings?.dispatchEntryAutoRoute?.[projectKey] ?? true
+  )
+  const [savingMode, setSavingMode] = useState(false)
   const [draft, setDraft] = useState('')
-  const [routingHint, setRoutingHint] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [routingHints, setRoutingHints] = useState<Record<string, string>>({})
+  const [agents, setAgents] = useState<TuiAgent[]>()
   const streamRef = useRef<HTMLDivElement | null>(null)
+
+  const { fetchAgents } = facts
+  const needsAgents = facts.inputs.some((input) =>
+    input.subActions.some((action) => !action.taskId)
+  )
+  useEffect(() => {
+    if (!needsAgents || facts.busy) {
+      return
+    }
+    let current = true
+    void fetchAgents().then(
+      (next) => {
+        if (current) {
+          setAgents(next)
+        }
+      },
+      (error: unknown) => {
+        if (current) {
+          setActionError(String(error))
+        }
+      }
+    )
+    return () => {
+      current = false
+    }
+  }, [needsAgents, fetchAgents, facts.busy])
+
+  async function routeInput(inputId: string, dispatch: boolean) {
+    setRoutingHints((current) => ({ ...current, [inputId]: '' }))
+    try {
+      const result = await facts.autoRoute(inputId, dispatch)
+      const hint = result.routed ? result.dispatchErrors?.join('\n') : result.reason
+      if (hint) {
+        setRoutingHints((current) => ({ ...current, [inputId]: hint }))
+      }
+    } catch (error) {
+      setRoutingHints((current) => ({ ...current, [inputId]: String(error) }))
+    }
+  }
 
   const inputCount = facts.inputs.length
   useEffect(() => {
@@ -50,11 +99,37 @@ export default function DispatchEntryChat({
             <Badge variant="destructive">{t(`${ENTRY}.paused`, 'Paused')}</Badge>
           ) : null}
           <span className="flex-1" />
+          <label className="flex items-center gap-2 text-xs">
+            <Switch
+              size="compact"
+              checked={automatic}
+              disabled={facts.busy || savingMode}
+              onCheckedChange={(checked) => {
+                const state = useAppStore.getState()
+                setSavingMode(true)
+                setActionError(null)
+                void state
+                  .updateSettingsOrThrow({
+                    dispatchEntryAutoRoute: {
+                      ...state.settings?.dispatchEntryAutoRoute,
+                      [projectKey]: checked
+                    }
+                  })
+                  .catch((error: unknown) => setActionError(String(error)))
+                  .finally(() => setSavingMode(false))
+              }}
+            />
+            {t(`${ENTRY}.autoRoute`, 'Auto-route')}
+          </label>
           <Button
             variant="ghost"
             size="sm"
-            disabled={facts.busy}
-            onClick={() => void facts.setPaused(!facts.paused)}
+            disabled={facts.busy || inputCount === 0}
+            onClick={() => {
+              void facts
+                .setPaused(!facts.paused)
+                .catch((error: unknown) => setActionError(String(error)))
+            }}
           >
             {facts.paused ? t(`${ENTRY}.resume`, 'Resume') : t(`${ENTRY}.pause`, 'Pause')}
           </Button>
@@ -66,6 +141,11 @@ export default function DispatchEntryChat({
       >
         <div className="mx-auto flex w-full max-w-[760px] flex-col gap-3 px-5 py-4">
           {facts.error ? <p className="text-destructive text-xs">{facts.error}</p> : null}
+          {actionError ? (
+            <p className="text-destructive text-xs" role="alert">
+              {actionError}
+            </p>
+          ) : null}
           {facts.approvals.map((approval) => (
             <div
               key={approval.approvalId}
@@ -152,22 +232,64 @@ export default function DispatchEntryChat({
                       size="sm"
                       className="ms-1"
                       disabled={facts.busy}
-                      onClick={() =>
-                        void facts.autoRoute(input.inputId).then((result) => {
-                          if (result && result.routed === false && result.reason) {
-                            setRoutingHint(result.reason)
-                          }
-                        })
-                      }
+                      onClick={() => void routeInput(input.inputId, automatic && !facts.paused)}
                     >
-                      {t(`${ENTRY}.autoRoute`, 'Auto-route')}
+                      {t(`${ENTRY}.retryRouting`, 'Retry routing')}
                     </Button>
                   ) : null}
                 </div>
+                {routingHints[input.inputId] ? (
+                  <div className="flex flex-col items-start gap-1" role="status">
+                    <p className="whitespace-pre-wrap text-muted-foreground text-xs">
+                      {routingHints[input.inputId]}
+                    </p>
+                    {input.decisionStatus === 'received' ? (
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="h-auto px-0"
+                        onClick={() => {
+                          const state = useAppStore.getState()
+                          state.openSettingsTarget({
+                            pane: 'task-entry',
+                            repoId: null,
+                            sectionId: 'dispatch-decision-model'
+                          })
+                          state.openSettingsPage()
+                        }}
+                      >
+                        {t(`${ENTRY}.goConfigure`, 'Configure the decision model')}
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
+                {input.decisionStatus === 'received' ? (
+                  <EntryManualPlan
+                    original={input.text}
+                    busy={facts.busy}
+                    onSave={(actions) => facts.savePlan(input.inputId, actions)}
+                  />
+                ) : null}
                 {input.subActions.length > 0 ? (
                   <RoutingRequestCard
                     input={input}
                     busy={facts.busy}
+                    agents={agents}
+                    onAssign={
+                      facts.paused
+                        ? undefined
+                        : (subActionId, agent) => {
+                            setRoutingHints((current) => ({ ...current, [input.inputId]: '' }))
+                            void facts
+                              .assign(input.inputId, subActionId, agent)
+                              .catch((error: unknown) => {
+                                setRoutingHints((current) => ({
+                                  ...current,
+                                  [input.inputId]: String(error)
+                                }))
+                              })
+                          }
+                    }
                     reviews={facts.reviews}
                     onAcceptReview={(taskId) => void facts.acceptReview(taskId)}
                     onFetchWorkers={() => facts.fetchWorkers()}
@@ -206,25 +328,6 @@ export default function DispatchEntryChat({
           )}
         </div>
       </div>
-      {routingHint ? (
-        <div className="mx-auto w-full max-w-[760px] px-5 pb-1">
-          <div className="flex flex-col gap-1.5 rounded-lg border border-status-warning/30 bg-status-warning/5 p-2.5">
-            <p className="text-sm">
-              {t(`${ENTRY}.routingHintTitle`, 'Auto-routing is unavailable.')}
-            </p>
-            <p className="text-muted-foreground text-xs">{routingHint}</p>
-            <div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => useAppStore.getState().setActiveView('settings')}
-              >
-                {t(`${ENTRY}.goConfigure`, 'Configure the decision model')}
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
       <div className="px-5 pb-4 pt-2">
         <form
           className="mx-auto w-full max-w-[760px] rounded-xl border border-input bg-card p-2 pb-1 shadow-xs"
@@ -232,10 +335,19 @@ export default function DispatchEntryChat({
             event.preventDefault()
             const raw = new FormData(event.currentTarget).get('request')
             const text = typeof raw === 'string' ? raw.trim() : ''
-            if (!text) {
+            if (!text || facts.busy || savingMode) {
               return
             }
-            void facts.submit(text).then(() => setDraft(''))
+            setActionError(null)
+            void facts.submit(text).then(
+              (inputId) => {
+                if (inputId) {
+                  setDraft((current) => (current.trim() === text ? '' : current))
+                  void routeInput(inputId, automatic && !facts.paused)
+                }
+              },
+              (error: unknown) => setActionError(String(error))
+            )
           }}
         >
           <textarea
@@ -261,7 +373,7 @@ export default function DispatchEntryChat({
             <Button
               type="submit"
               size="icon"
-              disabled={facts.busy || !draft.trim()}
+              disabled={facts.busy || savingMode || !draft.trim()}
               aria-label={t(`${ENTRY}.send`, 'Send')}
             >
               <SendHorizonal className="size-4" />

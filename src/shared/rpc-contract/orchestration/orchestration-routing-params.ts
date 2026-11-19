@@ -174,8 +174,22 @@ export const DecisionModelParams = z.object({
 export const EntryAutoRouteParams = z.object({
   group: requiredString('Missing --group'),
   input: requiredString('Missing --input'),
+  dispatch: z.boolean().optional(),
   /** custom: the settings-configured decision model; omitted routes on the ZCode plan credential. */
   decisionModel: DecisionModelParams.optional()
+})
+
+export const EntryPlanParams = z.object({
+  group: requiredString('Missing --group'),
+  input: requiredString('Missing --input'),
+  subActions: z.array(z.string().trim().min(1)).min(1).max(6)
+})
+
+export const EntryAssignParams = z.object({
+  group: requiredString('Missing --group'),
+  input: requiredString('Missing --input'),
+  subAction: requiredString('Missing --sub-action'),
+  agent: requiredString('Missing --agent')
 })
 
 export const EntryWorkersParams = z.object({

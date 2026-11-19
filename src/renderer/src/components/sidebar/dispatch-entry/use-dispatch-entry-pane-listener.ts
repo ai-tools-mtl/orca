@@ -4,16 +4,14 @@ import {
   type ExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
 import { OPEN_DISPATCH_ENTRY_EVENT } from '../worktree-list/rows/project-routing-entry-line'
-
-// Listens for the entry row's open event on behalf of ONE workspace surface: only the visible
-// surface responds (retained background surfaces stay dormant), and the layer fills its area.
+import { useAppStore } from '@/store'
 
 export type DispatchEntryPaneTarget = {
   repoId: string
   hostId: ExecutionHostId
 }
 
-export function useDispatchEntryPaneListener(enabled: boolean): {
+export function useDispatchEntryPaneListener(): {
   target: DispatchEntryPaneTarget | null
   close: () => void
 } {
@@ -24,9 +22,6 @@ export function useDispatchEntryPaneListener(enabled: boolean): {
   }, [])
 
   useEffect(() => {
-    if (!enabled) {
-      return
-    }
     const handleOpen = (event: Event): void => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the entry row dispatched this event with exactly this detail shape.
       const detail = (event as CustomEvent<{ repoId?: unknown; hostId?: unknown }>).detail
@@ -38,6 +33,7 @@ export function useDispatchEntryPaneListener(enabled: boolean): {
       if (!hostId || typeof repoId !== 'string') {
         return
       }
+      useAppStore.getState().setActiveView('terminal')
       // Clicking the same project's row again toggles the pane closed — the row is the door.
       setTarget((current) =>
         current?.repoId === repoId && current.hostId === hostId ? null : { repoId, hostId }
@@ -45,7 +41,7 @@ export function useDispatchEntryPaneListener(enabled: boolean): {
     }
     window.addEventListener(OPEN_DISPATCH_ENTRY_EVENT, handleOpen)
     return () => window.removeEventListener(OPEN_DISPATCH_ENTRY_EVENT, handleOpen)
-  }, [enabled])
+  }, [])
 
   return { target, close }
 }
