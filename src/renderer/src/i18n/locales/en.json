@@ -8255,7 +8255,10 @@
           "reviewRework": "Rework",
           "reviewAccepted": "Accepted",
           "reviewBlocking": "blocking",
-          "accept": "Accept"
+          "accept": "Accept",
+          "approvalTitle": "The worker asks for approval",
+          "allow": "Allow",
+          "deny": "Deny"
         }
       },
       "shared": {

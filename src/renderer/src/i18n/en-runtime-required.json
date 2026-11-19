@@ -950,10 +950,13 @@
         },
         "RoutingEntryCard": {
           "accept": "Accept",
+          "allow": "Allow",
+          "approvalTitle": "The worker asks for approval",
           "awaitingRouting": "Awaiting routing",
           "composerAria": "Task input",
           "composerPlaceholder": "Describe a request for this project",
           "decided": "Decided",
+          "deny": "Deny",
           "emptyHint": "One message may contain several requests. It is saved first and shown as Received; routing splits the independent requests, dependent steps stay with one worker.",
           "emptyTitle": "Start work on this project",
           "executionTarget": "Execution target",

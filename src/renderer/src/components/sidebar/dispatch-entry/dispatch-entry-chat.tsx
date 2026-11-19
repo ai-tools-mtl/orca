@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Check, SendHorizonal, Sparkles } from 'lucide-react'
+import { Check, SendHorizonal, Sparkles, TriangleAlert } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
@@ -64,6 +64,51 @@ export default function DispatchEntryChat({
       >
         <div className="mx-auto flex w-full max-w-[760px] flex-col gap-3 px-5 py-4">
           {facts.error ? <p className="text-destructive text-xs">{facts.error}</p> : null}
+          {facts.approvals.map((approval) => (
+            <div
+              key={approval.approvalId}
+              className="flex flex-col gap-1.5 rounded-lg border border-status-warning/30 bg-status-warning/5 p-2.5"
+            >
+              <div className="flex items-center gap-1.5 text-xs font-medium text-status-warning">
+                <TriangleAlert className="size-3.5" />
+                {t(`${ENTRY}.approvalTitle`, 'The worker asks for approval')}
+              </div>
+              <p className="text-sm">{approval.title}</p>
+              {approval.detail ? (
+                <p className="text-muted-foreground text-xs whitespace-pre-wrap">
+                  {approval.detail}
+                </p>
+              ) : null}
+              {approval.reason ? (
+                <p className="text-muted-foreground text-xs">{approval.reason}</p>
+              ) : null}
+              <p className="font-mono text-[10px] text-muted-foreground opacity-70">
+                {t(`${ENTRY}.executionTarget`, 'Execution target')} {approval.workerHandle}
+              </p>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={facts.busy}
+                  onClick={() =>
+                    void facts.answerApproval(approval.dispatchId, approval.approvalId, 'allow')
+                  }
+                >
+                  {t(`${ENTRY}.allow`, 'Allow')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={facts.busy}
+                  onClick={() =>
+                    void facts.answerApproval(approval.dispatchId, approval.approvalId, 'deny')
+                  }
+                >
+                  {t(`${ENTRY}.deny`, 'Deny')}
+                </Button>
+              </div>
+            </div>
+          ))}
           {inputCount === 0 ? (
             <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
               <div className="grid size-11 place-items-center rounded-xl border bg-secondary text-muted-foreground">

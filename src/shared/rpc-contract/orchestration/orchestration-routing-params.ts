@@ -159,3 +159,7 @@ export const EntryReviewParams = z.object({
   group: requiredString('Missing --group'),
   task: requiredString('Missing --task')
 })
+
+export const EntryApprovalsParams = z.object({
+  group: requiredString('Missing --group')
+})

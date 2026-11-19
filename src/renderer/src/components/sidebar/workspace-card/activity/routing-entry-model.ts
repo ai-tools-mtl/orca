@@ -155,3 +155,23 @@ export async function entryReview(
 ): Promise<unknown> {
   return callRuntimeRpc(target, 'orchestration.entryReviewShow', { group, task })
 }
+
+export const entryApprovalsSchema = z.object({
+  approvals: z.array(
+    z.object({
+      approvalId: z.string(),
+      dispatchId: z.string(),
+      workerHandle: z.string(),
+      title: z.string(),
+      detail: z.string().nullable(),
+      reason: z.string().nullable(),
+      personOnly: z.boolean()
+    })
+  )
+})
+
+export type RoutingEntryApproval = z.infer<typeof entryApprovalsSchema>['approvals'][number]
+
+export async function entryApprovals(target: RuntimeClientTarget, group: string): Promise<unknown> {
+  return callRuntimeRpc(target, 'orchestration.entryApprovals', { group })
+}

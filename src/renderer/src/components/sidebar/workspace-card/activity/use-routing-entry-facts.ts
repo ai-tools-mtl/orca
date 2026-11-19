@@ -3,12 +3,14 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { RoutingEntryInput } from './RoutingEntryCard'
 import {
+  entryApprovals,
+  entryApprovalsSchema,
   entryReview,
   entryReviewResultSchema,
   entryShowResultSchema,
   toEntryInputs
 } from './routing-entry-model'
-import type { RoutingReviewState } from './routing-entry-model'
+import type { RoutingEntryApproval, RoutingReviewState } from './routing-entry-model'
 
 // Module-level so hooks stay React-Compiler compatible (no in-hook try/finally).
 async function runWithBusy(
@@ -29,7 +31,8 @@ async function readEntryFacts(
   setInputs: (inputs: RoutingEntryInput[]) => void,
   setPaused: (paused: boolean) => void,
   setError: (error: string | null) => void,
-  setReviews: (reviews: ReadonlyMap<string, RoutingReviewState>) => void
+  setReviews: (reviews: ReadonlyMap<string, RoutingReviewState>) => void,
+  setApprovals: (approvals: RoutingEntryApproval[]) => void
 ): Promise<void> {
   try {
     const show = entryShowResultSchema.parse(
@@ -61,6 +64,8 @@ async function readEntryFacts(
       })
     )
     setReviews(reviews)
+    const approvals = entryApprovalsSchema.parse(await entryApprovals(target, group))
+    setApprovals(approvals.approvals)
   } catch (cause) {
     setError(cause instanceof Error ? cause.message : String(cause))
   }
@@ -82,12 +87,13 @@ export function useRoutingEntryFacts(target: RuntimeClientTarget | null, group: 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [reviews, setReviews] = useState<ReadonlyMap<string, RoutingReviewState>>(new Map())
+  const [approvals, setApprovals] = useState<RoutingEntryApproval[]>([])
 
   const refresh = useCallback(async () => {
     if (!target) {
       return
     }
-    await readEntryFacts(target, group, setInputs, setPaused, setError, setReviews)
+    await readEntryFacts(target, group, setInputs, setPaused, setError, setReviews, setApprovals)
   }, [target, group])
 
   useEffect(() => {
@@ -158,6 +164,22 @@ export function useRoutingEntryFacts(target: RuntimeClientTarget | null, group: 
     [target, group, refresh]
   )
 
+  const answerApproval = useCallback(
+    (dispatchId: string, approvalId: string, decision: 'allow' | 'deny') => {
+      if (!target) {
+        return Promise.resolve()
+      }
+      return runWithBusy(setBusy, () =>
+        callEntryAction(target, 'orchestration.approvalAnswer', {
+          dispatch: dispatchId,
+          prompt: approvalId,
+          decision
+        }).then(refresh)
+      )
+    },
+    [target, refresh]
+  )
+
   const acceptReview = useCallback(
     (taskId: string) => {
       if (!target) {
@@ -178,11 +200,13 @@ export function useRoutingEntryFacts(target: RuntimeClientTarget | null, group: 
     busy,
     error,
     reviews,
+    approvals,
     refresh,
     submit,
     handback,
     sendSupplement,
     setPaused: setPausedState,
+    answerApproval,
     acceptReview
   }
 }

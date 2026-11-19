@@ -7,8 +7,10 @@ import {
   desktopEntryAddress
 } from '../../../orchestration/addressing/desktop-entry-identity'
 import { deliverTargetedSupplement } from '../../../orchestration/routing/targeted-supplement-delivery'
+import { recentOpenApprovalReports } from '../../../orchestration/workers/approvals/worker-approval-report'
 import { routingInputsPayload, supplementReceipt } from './routing-supplements'
 import {
+  EntryApprovalsParams,
   EntryHandbackParams,
   EntryPauseParams,
   EntryReviewParams,
@@ -215,6 +217,32 @@ export const ORCHESTRATION_ENTRY_METHODS = [
         })
       }
       return { cycle: db.acceptReviewCycle(cycle.cycle_id) }
+    }
+  }),
+  // The prototype's 授权追问卡: approvals Orca reported open for this Run's workers, from the
+  // persisted escalation reports. Answering goes through orchestration.approvalAnswer, where the
+  // desktop transport already proves the person.
+  defineOrchestrationMethod({
+    name: 'orchestration.entryApprovals',
+    permission: 'workspace',
+    params: EntryApprovalsParams,
+    access: { kind: 'reads', targets: {} },
+    handler: ({ group }, { runtime }) => {
+      const db = runtime.getOrchestrationDb()
+      const { run } = coordinatedEntryRun(db, group)
+      return {
+        approvals: recentOpenApprovalReports(db)
+          .filter((report) => report.dispatch.run_id === run.id)
+          .map((report) => ({
+            approvalId: report.approval.approvalId,
+            dispatchId: report.approval.worker.dispatchId,
+            workerHandle: report.approval.worker.handle,
+            title: report.approval.summary.title,
+            detail: report.approval.summary.detail,
+            reason: report.approval.summary.reason,
+            personOnly: report.approval.personOnly === true
+          }))
+      }
     }
   })
 ]

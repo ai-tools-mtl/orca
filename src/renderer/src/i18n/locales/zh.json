@@ -7390,7 +7390,10 @@
           "reviewRework": "返工中",
           "reviewAccepted": "已验收",
           "reviewBlocking": "条阻塞",
-          "accept": "验收"
+          "accept": "验收",
+          "approvalTitle": "Worker 请求授权",
+          "allow": "允许",
+          "deny": "拒绝"
         }
       },
       "shared": {
