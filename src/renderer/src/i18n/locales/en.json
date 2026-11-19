@@ -8248,7 +8248,8 @@
           "emptyTitle": "Start work on this project",
           "emptyHint": "One message may contain several requests. It is saved first and shown as Received; routing splits the independent requests, dependent steps stay with one worker.",
           "composerAria": "Task input",
-          "supplementPlaceholder": "Supplement · deliver to the active turn"
+          "supplementPlaceholder": "Supplement · deliver to the active turn",
+          "sendHint": "Enter to send · Shift+Enter for a newline"
         }
       },
       "shared": {

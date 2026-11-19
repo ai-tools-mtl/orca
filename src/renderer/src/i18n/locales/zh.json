@@ -7383,7 +7383,8 @@
           "emptyTitle": "向项目发起工作",
           "emptyHint": "一条消息可以包含多项要求。输入会先保存并显示「已收到」，调度拆分独立要求，依赖步骤保持在同一 Worker，任务卡持续跟进结果。",
           "composerAria": "任务输入",
-          "supplementPlaceholder": "补充要求 · 投递到当前轮次"
+          "supplementPlaceholder": "补充要求 · 投递到当前轮次",
+          "sendHint": "Enter 发送 · Shift+Enter 换行"
         }
       },
       "shared": {

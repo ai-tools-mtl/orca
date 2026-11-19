@@ -963,6 +963,7 @@
           "refresh": "Refresh",
           "refused": "Refused",
           "send": "Send",
+          "sendHint": "Enter to send · Shift+Enter for a newline",
           "supplementPlaceholder": "Supplement · deliver to the active turn"
         },
         "SetupScriptCodeBlock": {

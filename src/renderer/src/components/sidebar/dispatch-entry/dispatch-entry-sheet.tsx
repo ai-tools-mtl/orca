@@ -81,7 +81,8 @@ export default function DispatchEntrySheet({
             top: WORKSPACE_TOP_CHROME_HEIGHT,
             bottom: drawerBottom,
             height: 'auto',
-            width: `min(calc(100vw - ${drawerLeftCss}), 760px)`
+            // The entry fills the pane area agent chats live in — it is not a narrow dialog.
+            width: `calc(100vw - ${drawerLeftCss})`
           } as React.CSSProperties
         }
         data-dispatch-entry-sheet=""
