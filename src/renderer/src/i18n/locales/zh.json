@@ -76,20 +76,6 @@
         "turnOn": "开启",
         "turnOff": "关闭",
         "toggle": "默认使用 Chat UI"
-      },
-      "decisionModel": {
-        "title": "任务入口 · 决策模型",
-        "description": "任务入口自动调度时用于拆分请求的模型。",
-        "provider": "提供商",
-        "providerZcodePlan": "ZCode 编码计划凭据（使用其模型选择）",
-        "providerCustom": "自定义 OpenAI 兼容提供商",
-        "baseUrl": "Base URL",
-        "apiKey": "API 密钥",
-        "modelId": "模型",
-        "save": "保存",
-        "unsaved": "有未保存的修改",
-        "baseUrlPlaceholder": "https://api.example.com/v1",
-        "modelIdPlaceholder": "gpt-4o-mini / deepseek-chat / …"
       }
     },
     "terminal": {
@@ -8508,7 +8494,21 @@
           "coordinatorApprovalsTitle": "允许协调者批准工作者的权限提示",
           "coordinatorApprovalsDescription": "协调智能体可以允许工作者的权限提示并说明原因，你仍会看到“允许”和“拒绝”，以最先给出的回答为准，此设置仅适用于在这台计算机上运行的工作者",
           "coordinatorApprovalsKeywordApprove": "批准",
-          "coordinatorApprovalsKeywordPermission": "权限"
+          "coordinatorApprovalsKeywordPermission": "权限",
+          "decisionModel": {
+            "title": "任务入口 · 决策模型",
+            "description": "任务入口自动调度时用于拆分请求的模型。",
+            "provider": "提供商",
+            "providerZcodePlan": "ZCode 编码计划凭据（使用其模型选择）",
+            "providerCustom": "自定义 OpenAI 兼容提供商",
+            "baseUrl": "Base URL",
+            "baseUrlPlaceholder": "https://api.example.com/v1",
+            "apiKey": "API 密钥",
+            "modelId": "模型",
+            "modelIdPlaceholder": "gpt-4o-mini / deepseek-chat / …",
+            "save": "保存",
+            "unsaved": "有未保存的修改"
+          }
         },
         "OrchestrationSetupCard": {
           "e7d2a5146c": "使代理能够通过 Orca 传递上下文并协调工作",

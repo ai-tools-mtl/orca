@@ -668,21 +668,7 @@
         "searchTerminal": "terminal",
         "antigravityAccount": "Account"
       },
-      "permissionsDescriptionOwnAgents": "New chats follow each agent’s permission in Settings → Agents.",
-      "decisionModel": {
-        "title": "Task entry · decision model",
-        "description": "The model the task entry uses to split requests into sub-actions for auto-routing.",
-        "provider": "Provider",
-        "providerZcodePlan": "ZCode coding plan credential (its own model selection)",
-        "providerCustom": "Custom OpenAI-compatible provider",
-        "baseUrl": "Base URL",
-        "apiKey": "API key",
-        "modelId": "Model",
-        "save": "Save",
-        "unsaved": "Unsaved changes",
-        "baseUrlPlaceholder": "https://api.example.com/v1",
-        "modelIdPlaceholder": "gpt-4o-mini / deepseek-chat / …"
-      }
+      "permissionsDescriptionOwnAgents": "New chats follow each agent’s permission in Settings → Agents."
     },
     "terminal": {
       "optionLayoutAlt": "ABC or U.S. — Option sends Alt/Esc sequences",
@@ -9427,7 +9413,21 @@
           "coordinatorApprovalsKeywordApprove": "approve",
           "coordinatorApprovalsKeywordPermission": "permission",
           "7bc082f4de": "Copy install command",
-          "8a94078d05": "Agent orchestration"
+          "8a94078d05": "Agent orchestration",
+          "decisionModel": {
+            "title": "Task entry · decision model",
+            "description": "The model the task entry uses to split requests into sub-actions for auto-routing.",
+            "provider": "Provider",
+            "providerZcodePlan": "ZCode coding plan credential (its own model selection)",
+            "providerCustom": "Custom OpenAI-compatible provider",
+            "baseUrl": "Base URL",
+            "baseUrlPlaceholder": "https://api.example.com/v1",
+            "apiKey": "API key",
+            "modelId": "Model",
+            "modelIdPlaceholder": "gpt-4o-mini / deepseek-chat / …",
+            "save": "Save",
+            "unsaved": "Unsaved changes"
+          }
         },
         "OrchestrationSetupCard": {
           "e7d2a5146c": "Enables agents to hand off context and coordinate work through Orca.",

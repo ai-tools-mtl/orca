@@ -2,7 +2,6 @@ import { useTranslate } from '@/i18n/use-translate'
 import { AppearanceChatSection } from '../appearance/chat/AppearanceChatSection'
 import { ChatBehaviorSetting } from './ChatBehaviorSetting'
 import { ChatNamingSetting } from './ChatNamingSetting'
-import { DecisionModelSetting } from './DecisionModelSetting'
 import { NativeChatInlineVisualsSetting } from './NativeChatInlineVisualsSetting'
 import { SettingsSection } from '../section-layout/SettingsSection'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
@@ -117,14 +116,6 @@ export function ChatSettingsSection({
             settings={settings}
             updateSettings={updateSettings}
             forceVisible={showAllBehavior}
-          />
-          <DecisionModelSetting
-            settings={settings}
-            updateSettings={updateSettings}
-            forceVisible={matchesSettingsSearch(query, [
-              { title },
-              { title: t('settings.chat.decisionModel.title', 'Task entry · decision model') }
-            ])}
           />
           {showDesktopOnlySettings ? (
             <ChatNamingSetting
