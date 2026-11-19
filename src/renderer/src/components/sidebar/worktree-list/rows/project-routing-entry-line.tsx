@@ -1,12 +1,13 @@
 import React from 'react'
 import type { VirtualItem } from '@tanstack/react-virtual'
+import { MessagesSquare } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { ChevronRight } from 'lucide-react'
 import type { Row } from '../../../../../../shared/sidebar-list/row-types'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
 
 // The project's standing 统一任务入口 row (plan §1/§9-A, per-project unique): a door to the
 // entry's conversation sheet, which opens through the window event the panel hook listens for.
+// Reads as a sidebar list row — same indent and flat hover as the worktree rows under it.
 
 export const OPEN_DISPATCH_ENTRY_EVENT = 'orca:open-dispatch-entry'
 
@@ -25,21 +26,13 @@ export default function ProjectRoutingEntryLine({
   return (
     <button
       type="button"
-      className="mx-2 mb-1.5 flex w-[calc(100%-16px)] items-center gap-2 rounded-md border px-2 py-1.5 text-start transition-colors hover:bg-accent"
+      className="flex w-full items-center gap-2 py-1 ps-[22px] pe-3 text-start hover:bg-accent/50"
       onClick={() => openDispatchEntry(repoId, hostId)}
     >
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="text-xs font-medium">
-          {t('auto.components.sidebar.RoutingEntryCard.title', 'Dispatch entry')}
-        </span>
-        <span className="text-muted-foreground truncate text-[11px]">
-          {t(
-            'auto.components.sidebar.RoutingEntryCard.composerPlaceholder',
-            'Describe a request for this project'
-          )}
-        </span>
+      <MessagesSquare className="size-3.5 shrink-0 text-muted-foreground" />
+      <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+        {t('auto.components.sidebar.RoutingEntryCard.title', 'Dispatch entry')}
       </span>
-      <ChevronRight className="text-muted-foreground size-3.5 shrink-0" />
     </button>
   )
 }

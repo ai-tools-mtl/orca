@@ -76,6 +76,7 @@ function SheetContent({
   className,
   children,
   side = 'right',
+  surface = 'default',
   showCloseButton = true,
   overlayClassName,
   overlayStyle,
@@ -95,7 +96,7 @@ function SheetContent({
       <OverlayFocusScope value={scope}>
         <SheetPrimitive.Content
           data-slot="sheet-content"
-          className={cn(sheetContentVariants({ side }), className)}
+          className={cn(sheetContentVariants({ side, surface }), className)}
           // Disable native dragging where portaled sheet headers overlap the titlebar.
           style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           {...props}

@@ -143,7 +143,6 @@ export default function DispatchEntryChat({
             <Button
               type="submit"
               size="icon"
-              className="size-7 rounded-lg"
               disabled={facts.busy || !draft.trim()}
               aria-label={t(`${ENTRY}.send`, 'Send')}
             >
