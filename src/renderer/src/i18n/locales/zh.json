@@ -2142,7 +2142,7 @@
         "shareSkillsDescription": "通过非公开链接分享技能，任何拥有链接的人都可以安装",
         "floatingWorkspaceWebDescription": "全局终端和 Markdown 选项卡",
         "taskEntryTitle": "任务入口",
-        "taskEntryDescription": "The per-project entry where requests are recorded, routed, and tracked."
+        "taskEntryDescription": "配置按项目记录、路由并跟进请求的任务入口。"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "粘贴内容过大"
@@ -13685,7 +13685,7 @@
             "provider": "提供商",
             "providerZcodePlan": "ZCode 编码计划凭据（使用其模型选择）",
             "providerCustom": "自定义 OpenAI 兼容提供商",
-            "baseUrl": "Base URL",
+            "baseUrl": "接口地址",
             "baseUrlPlaceholder": "https://api.example.com/v1",
             "apiKey": "API 密钥",
             "modelId": "模型",
