@@ -66,7 +66,7 @@ describe('upstream-written ZCode v2 stores', () => {
     async (name) => {
       install(name)
       const before = readFileSync(join(dir, '.zcode', 'v2', 'credentials.json'))
-      expect(readZcodeV2PlanCredential(host)).toMatchObject({
+      expect(await readZcodeV2PlanCredential(host)).toMatchObject({
         status: 'ok',
         apiKey: `synthetic-${name}-key`,
         baseUrl: name === 'zai' ? 'https://api.z.ai' : 'https://open.bigmodel.cn'
@@ -135,11 +135,11 @@ describe('upstream-written ZCode v2 stores', () => {
     expect(JSON.stringify(result)).not.toContain('synthetic-legacy-key')
   })
 
-  it('honors custom secret and does not decrypt another host secret', () => {
+  it('honors custom secret and does not decrypt another host secret', async () => {
     install()
-    expect(readZcodeV2PlanCredential(host).status).toBe('ok')
+    expect((await readZcodeV2PlanCredential(host)).status).toBe('ok')
     expect(
-      readZcodeV2PlanCredential({
+      await readZcodeV2PlanCredential({
         ...host,
         env: { ...host.env, ZCODE_CREDENTIAL_SECRET: 'wrong-secret' }
       })
@@ -156,7 +156,7 @@ describe('upstream-written ZCode v2 stores', () => {
       path,
       JSON.stringify({ [identityKey]: 'synthetic', [apiKey]: 'synthetic-plain-key' })
     )
-    expect(readZcodeV2PlanCredential(host)).toMatchObject({
+    expect(await readZcodeV2PlanCredential(host)).toMatchObject({
       status: 'ok',
       apiKey: 'synthetic-plain-key'
     })
@@ -168,10 +168,10 @@ describe('upstream-written ZCode v2 stores', () => {
     expect(fetch).not.toHaveBeenCalled()
   })
 
-  it('uses execution-host identity, not data-directory identity, for the fallback cipher', () => {
+  it('uses execution-host identity, not data-directory identity, for the fallback cipher', async () => {
     install('fallback-host')
     const fallback = { ...host, home: '/synthetic/home', env: { ZCODE_DATA_BASE_DIR: dir } }
-    expect(readZcodeV2PlanCredential(fallback)).toMatchObject({
+    expect(await readZcodeV2PlanCredential(fallback)).toMatchObject({
       status: 'ok',
       apiKey: 'synthetic-fallback-host-key'
     })
@@ -180,7 +180,9 @@ describe('upstream-written ZCode v2 stores', () => {
       { platform: 'win32' },
       { username: 'other-user' }
     ]) {
-      expect(readZcodeV2PlanCredential({ ...fallback, ...changed })).toEqual({ status: 'error' })
+      expect(await readZcodeV2PlanCredential({ ...fallback, ...changed })).toEqual({
+        status: 'error'
+      })
     }
   })
 
@@ -211,24 +213,27 @@ describe('upstream-written ZCode v2 stores', () => {
 describe('external v2 file boundaries', () => {
   it.each(['provider_config.json', 'credentials.json'])(
     'refuses oversized %s without legacy fallback',
-    (name) => {
+    async (name) => {
       install()
       legacy()
       const path = join(dir, '.zcode', 'v2', name)
       const record = JSON.parse(readFileSync(path, 'utf8'))
       record['unrelated'] = 'x'.repeat(4 * 1024 * 1024)
       writeFileSync(path, JSON.stringify(record))
-      expect(readZcodeUsageCredentials({ credentialHost: host }).status).toBe('error')
+      expect((await readZcodeUsageCredentials({ credentialHost: host })).status).toBe('error')
     }
   )
 
-  it.each(['provider_config.json', 'credentials.json'])('refuses a directory at %s', (name) => {
-    install()
-    const path = join(dir, '.zcode', 'v2', name)
-    rmSync(path)
-    mkdirSync(path)
-    expect(readZcodeV2PlanCredential(host).status).toBe('error')
-  })
+  it.each(['provider_config.json', 'credentials.json'])(
+    'refuses a directory at %s',
+    async (name) => {
+      install()
+      const path = join(dir, '.zcode', 'v2', name)
+      rmSync(path)
+      mkdirSync(path)
+      expect((await readZcodeV2PlanCredential(host)).status).toBe('error')
+    }
+  )
 
   it.skipIf(process.platform === 'win32').each([
     { name: 'provider_config.json', replace: false },
@@ -258,7 +263,7 @@ describe('external v2 file boundaries', () => {
       const script = join(dir, 'read.cjs')
       writeFileSync(
         script,
-        `${bundle}\n${setup}\nconsole.log(module.exports.readZcodeV2PlanCredential(${JSON.stringify(host)}).status)`
+        `${bundle}\n${setup}\nmodule.exports.readZcodeV2PlanCredential(${JSON.stringify(host)}).then((r) => console.log(r.status))`
       )
       const result = await runProcess({
         program: process.execPath,
@@ -289,7 +294,7 @@ describe('external v2 file boundaries', () => {
       ]
       writeFileSync(path, JSON.stringify(config))
       rmSync(join(dir, '.zcode', 'v2', 'credentials.json'))
-      expect(readZcodeUsageCredentials({ credentialHost: host }).status).toBe('unavailable')
+      expect((await readZcodeUsageCredentials({ credentialHost: host })).status).toBe('unavailable')
       expect((await fetchZcodeRateLimits({ credentialHost: host })).status).toBe('unavailable')
       expect(fetch).not.toHaveBeenCalled()
       expect(readFileSync(path, 'utf8')).toBe(JSON.stringify(config))

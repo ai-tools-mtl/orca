@@ -86,8 +86,8 @@ describe('raw persisted personal rule keys', () => {
       const open = vi.spyOn(fs, 'openSync')
       const read = vi.spyOn(fs, 'readFileSync')
 
-      expect(readZcodeV2PlanCredential(host).status).toBe('unavailable')
-      expect(readZcodeUsageCredentials({ credentialHost: host }).status).toBe('unavailable')
+      expect((await readZcodeV2PlanCredential(host)).status).toBe('unavailable')
+      expect((await readZcodeUsageCredentials({ credentialHost: host })).status).toBe('unavailable')
       expect((await fetchZcodeRateLimits({ credentialHost: host })).status).toBe('unavailable')
       expect(fetch).not.toHaveBeenCalled()
       for (const calls of [stat.mock.calls, lstat.mock.calls, open.mock.calls, read.mock.calls]) {
@@ -109,16 +109,19 @@ describe('raw persisted personal rule keys', () => {
     }
   )
 
-  it.each(['providerRules', 'providerModelRules'])('accepts a known empty %s config', (group) => {
-    installRawLeaf(group, '{}')
-    expect(readZcodeV2PlanCredential(host)).toMatchObject({
-      status: 'ok',
-      baseUrl: 'https://open.bigmodel.cn'
-    })
-  })
+  it.each(['providerRules', 'providerModelRules'])(
+    'accepts a known empty %s config',
+    async (group) => {
+      installRawLeaf(group, '{}')
+      expect(await readZcodeV2PlanCredential(host)).toMatchObject({
+        status: 'ok',
+        baseUrl: 'https://open.bigmodel.cn'
+      })
+    }
+  )
 
-  it.each(['null', '[]', '42'])('rejects a malformed raw config %s', (raw) => {
+  it.each(['null', '[]', '42'])('rejects a malformed raw config %s', async (raw) => {
     installRawLeaf('providerRules', raw)
-    expect(readZcodeV2PlanCredential(host).status).toBe('error')
+    expect((await readZcodeV2PlanCredential(host)).status).toBe('error')
   })
 })
