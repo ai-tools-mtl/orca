@@ -61,9 +61,9 @@ function stateLabel(
   }
 }
 
-/** One request card of the 统一任务入口 stream (plan §24): the original message on top, its
- *  sub-actions below with the four-state facts, and the card-level supplement form delivering
- *  to the claimed Dispatch's active turn. Presentational — facts come from entryShow. */
+/** The answer side of one request (plan §24): the sub-action facts under the bubble, with the
+ *  card-level handback and the 「补充要求 · 投递到当前轮次」 form delivering to the claimed
+ *  Dispatch's active turn. Presentational — facts come from entryShow. */
 export default function RoutingRequestCard({
   input,
   busy,
@@ -74,19 +74,15 @@ export default function RoutingRequestCard({
   const t = useTranslate()
   const claimed = input.subActions.find((subAction) => subAction.claimedBy)
   return (
-    <div className="flex flex-col gap-1.5 rounded-lg border p-2.5">
-      <p className="text-sm whitespace-pre-wrap">{input.text}</p>
-      <p className="text-muted-foreground text-xs" title={input.inputId}>
-        {t(`${ENTRY}.input`, 'Input')} {input.inputId} ·{' '}
-        {input.decisionStatus === 'decided'
-          ? t(`${ENTRY}.decided`, 'Decided')
-          : t(`${ENTRY}.awaitingRouting`, 'Awaiting routing')}
-      </p>
+    <div className="flex flex-col gap-1.5 rounded-lg border bg-card p-2.5">
       {error ? <p className="text-destructive text-xs">{error}</p> : null}
       {input.subActions.map((subAction) => {
         const badge = STATE_BADGES[subAction.state]
         return (
-          <div key={subAction.subActionId} className="flex flex-col gap-1 border-t pt-1.5">
+          <div
+            key={subAction.subActionId}
+            className="flex flex-col gap-1 border-b pb-1.5 last:border-b-0 last:pb-0"
+          >
             <div className="flex items-center justify-between gap-2">
               <span className="truncate text-sm">{subAction.text}</span>
               <Badge variant={badge.variant}>{stateLabel(t, subAction.state)}</Badge>

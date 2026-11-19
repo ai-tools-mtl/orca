@@ -34,9 +34,14 @@ export function useDispatchEntryPaneListener(enabled: boolean): {
         return
       }
       const hostId = parseExecutionHostId(detail.hostId)?.id
-      if (hostId) {
-        setTarget({ repoId: detail.repoId, hostId })
+      const repoId = detail.repoId
+      if (!hostId || typeof repoId !== 'string') {
+        return
       }
+      // Clicking the same project's row again toggles the pane closed — the row is the door.
+      setTarget((current) =>
+        current?.repoId === repoId && current.hostId === hostId ? null : { repoId, hostId }
+      )
     }
     window.addEventListener(OPEN_DISPATCH_ENTRY_EVENT, handleOpen)
     return () => window.removeEventListener(OPEN_DISPATCH_ENTRY_EVENT, handleOpen)

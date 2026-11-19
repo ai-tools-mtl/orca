@@ -8,23 +8,16 @@ import DispatchEntryChat from './dispatch-entry-chat'
 
 export default function DispatchEntryPaneLayer({
   hostId,
-  onClose,
   repoId
 }: {
   hostId: ExecutionHostId
-  onClose: () => void
   repoId: string
 }): React.JSX.Element {
   const repoMap = useRepoMap()
   const repoDisplayName = repoMap.get(repoId)?.displayName ?? repoId
   return (
     <div className="absolute inset-0 z-40 flex flex-col bg-chat-pane">
-      <DispatchEntryChat
-        repoId={repoId}
-        hostId={hostId}
-        repoDisplayName={repoDisplayName}
-        onClose={onClose}
-      />
+      <DispatchEntryChat repoId={repoId} hostId={hostId} repoDisplayName={repoDisplayName} />
     </div>
   )
 }

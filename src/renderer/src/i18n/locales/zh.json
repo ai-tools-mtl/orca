@@ -7363,7 +7363,6 @@
         "RoutingEntryCard": {
           "title": "调度入口",
           "paused": "已暂停",
-          "input": "输入",
           "decided": "已决定",
           "awaitingRouting": "待路由",
           "registered": "已收到",
@@ -7378,7 +7377,6 @@
           "composerPlaceholder": "输入这个项目的请求…",
           "send": "发送",
           "paneTitle": "任务入口",
-          "close": "关闭",
           "emptyTitle": "向项目发起工作",
           "emptyHint": "一条消息可以包含多项要求。输入会先保存并显示「已收到」，调度拆分独立要求，依赖步骤保持在同一 Worker，任务卡持续跟进结果。",
           "composerAria": "任务输入",

@@ -950,7 +950,6 @@
         },
         "RoutingEntryCard": {
           "awaitingRouting": "Awaiting routing",
-          "close": "Close",
           "composerAria": "Task input",
           "composerPlaceholder": "Describe a request for this project",
           "decided": "Decided",
@@ -958,7 +957,6 @@
           "emptyTitle": "Start work on this project",
           "executionTarget": "Execution target",
           "handback": "Hand back",
-          "input": "Input",
           "paneTitle": "Task entry",
           "paused": "Paused",
           "refused": "Refused",
