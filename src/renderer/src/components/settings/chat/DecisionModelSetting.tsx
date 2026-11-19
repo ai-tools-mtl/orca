@@ -13,10 +13,8 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '../../../store/index'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
-import type {
-  DecisionModelSettings,
-  GlobalSettings
-} from '../../../../../shared/settings/global-settings-types'
+import type { DecisionModelSettings } from '../../../../../shared/settings/decision-model-settings'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 
 type DecisionModelSettingProps = {
   settings: GlobalSettings
