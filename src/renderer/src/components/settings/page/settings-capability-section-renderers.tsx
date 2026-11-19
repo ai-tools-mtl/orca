@@ -5,6 +5,7 @@ import { AgentDefaultSurfaceSection } from '../agents/surfaces/AgentDefaultSurfa
 import { ComputerUsePane } from '../computer-use/ComputerUsePane'
 import { LinearAgentSkillPane } from '../skills/linear/LinearAgentSkillPane'
 import { OrchestrationPane } from '../orchestration/OrchestrationPane'
+import { TaskEntryPane } from '../task-entry/TaskEntryPane'
 import { VoicePane } from '../voice/VoicePane'
 import { SettingsSection } from '../section-layout/SettingsSection'
 import { SettingsHostScopeUnavailableNotice } from '../host-scope/SettingsHostScopePicker'
@@ -186,4 +187,26 @@ export function renderDesktopCapabilitySettingsSections(
       </SettingsSection>
     </>
   ) : null
+}
+
+export function renderTaskEntrySettingsSection(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.JSX.Element {
+  const { model } = context
+  return (
+    <SettingsSection
+      id="task-entry"
+      title={t('auto.components.settings.TaskEntryPane.title', 'Task entry')}
+      description={t(
+        'auto.components.settings.TaskEntryPane.description',
+        'Configure the per-project entry that records, routes, and tracks requests.'
+      )}
+      searchEntries={context.navigation.getSectionSearchEntries('task-entry')}
+    >
+      {context.view.isSectionMounted('task-entry') ? (
+        <TaskEntryPane settings={model.settings} updateSettings={model.updateSettings} />
+      ) : null}
+    </SettingsSection>
+  )
 }

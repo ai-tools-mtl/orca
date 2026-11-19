@@ -2828,7 +2828,9 @@
         "automationsDescription": "Schedule agent work and choose whether Automations appears in the sidebar.",
         "shareSkillsTitle": "Share Skills",
         "shareSkillsDescription": "Share your skills with an unlisted link. Anyone who has it can install them.",
-        "floatingWorkspaceWebDescription": "Global terminal and markdown tabs."
+        "floatingWorkspaceWebDescription": "Global terminal and markdown tabs.",
+        "taskEntryTitle": "Task entry",
+        "taskEntryDescription": "The per-project entry where requests are recorded, routed, and tracked."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Paste is too large."
@@ -8262,8 +8264,13 @@
           "autoRoute": "Auto-route",
           "reassign": "Reassign",
           "noOtherWorkers": "No other worker to reassign to.",
-          "routingHintTitle": "Auto-routing is unavailable.",
-          "goConfigure": "Configure the decision model"
+          "goConfigure": "Configure the decision model",
+          "assignWorker": "Assign worker",
+          "manualPlan": "Split manually",
+          "manualPlanHint": "Enter up to six independent tasks, one per line.",
+          "noAgents": "No workers detected on this project host.",
+          "retryRouting": "Retry routing",
+          "savePlan": "Save tasks"
         }
       },
       "shared": {
@@ -9413,21 +9420,7 @@
           "coordinatorApprovalsKeywordApprove": "approve",
           "coordinatorApprovalsKeywordPermission": "permission",
           "7bc082f4de": "Copy install command",
-          "8a94078d05": "Agent orchestration",
-          "decisionModel": {
-            "title": "Task entry · decision model",
-            "description": "The model the task entry uses to split requests into sub-actions for auto-routing.",
-            "provider": "Provider",
-            "providerZcodePlan": "ZCode coding plan credential (its own model selection)",
-            "providerCustom": "Custom OpenAI-compatible provider",
-            "baseUrl": "Base URL",
-            "baseUrlPlaceholder": "https://api.example.com/v1",
-            "apiKey": "API key",
-            "modelId": "Model",
-            "modelIdPlaceholder": "gpt-4o-mini / deepseek-chat / …",
-            "save": "Save",
-            "unsaved": "Unsaved changes"
-          }
+          "8a94078d05": "Agent orchestration"
         },
         "OrchestrationSetupCard": {
           "e7d2a5146c": "Enables agents to hand off context and coordinate work through Orca.",
@@ -14550,6 +14543,18 @@
           "cancel": "Cancel",
           "confirm": "Remove",
           "unknownHost": "Unknown host"
+        },
+        "TaskEntryPane": {
+          "title": "Task entry",
+          "description": "Configure the per-project entry that records, routes, and tracks requests.",
+          "providerCustom": "Custom OpenAI-compatible provider",
+          "baseUrl": "Base URL",
+          "baseUrlPlaceholder": "https://api.example.com/v1",
+          "apiKey": "API key",
+          "modelId": "Model",
+          "modelIdPlaceholder": "gpt-4o-mini / deepseek-chat / …",
+          "save": "Save",
+          "unsaved": "Unsaved changes"
         }
       },
       "right": {

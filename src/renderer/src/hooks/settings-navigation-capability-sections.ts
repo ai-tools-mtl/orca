@@ -7,6 +7,7 @@ import { getIntegrationsPaneSearchEntries } from '@/components/settings/integrat
 import { getLinearAgentSkillPaneSearchEntries } from '@/components/settings/skills/linear/linear-agent-skill-search'
 import { getMobileSettingsPaneSearchEntries } from '@/components/settings/mobile/mobile-settings-search'
 import { getOrcaAccountSettingsSearchEntries } from '@/components/settings/accounts/orca/orca-account-settings-search'
+import { getTaskEntryPaneSearchEntries } from '@/components/settings/task-entry/task-entry-search'
 import { OrcaLogoSettingsIcon } from '@/components/settings/page/orca-logo-settings-icon'
 import { getOrchestrationPaneSearchEntries } from '@/components/settings/orchestration/orchestration-search'
 import { getVoicePaneSearchEntries } from '@/components/settings/voice/voice-pane-search'
@@ -21,6 +22,7 @@ import {
   CircleUserRound,
   Mic,
   MousePointerClick,
+  MessagesSquare,
   Network,
   SlidersHorizontal,
   Smartphone,
@@ -74,6 +76,17 @@ export function buildCapabilitySettingsSections(
       searchEntries: getOrchestrationPaneSearchEntries({
         includeLocalRuntimeSettings: !isWebClient
       }),
+      group: 'capabilities'
+    },
+    {
+      id: 'task-entry',
+      title: t('auto.hooks.useSettingsNavigationMetadata.taskEntryTitle', 'Task entry'),
+      description: t(
+        'auto.hooks.useSettingsNavigationMetadata.taskEntryDescription',
+        'The per-project entry where requests are recorded, routed, and tracked.'
+      ),
+      icon: MessagesSquare,
+      searchEntries: getTaskEntryPaneSearchEntries(t),
       group: 'capabilities'
     },
     // Expose only with connected Linear; its skill needs linked provider capability.
