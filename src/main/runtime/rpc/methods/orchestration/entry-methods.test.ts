@@ -9,7 +9,7 @@ import {
 } from '../../../orca-runtime-tests/runtime-store-partial-fixture'
 
 const decisionModel = {
-  provider: 'custom',
+  source: 'custom' as const,
   baseUrl: 'https://custom.example/v1',
   apiKey: 'synthetic-key',
   modelId: 'test'
@@ -434,7 +434,7 @@ describe('desktop entry methods (plan §1/§9-A per-project 入口)', () => {
         group: 'proj_alpha',
         input: submitted.input.input_id,
         decisionModel: {
-          provider: 'custom',
+          source: 'custom' as const,
           baseUrl: 'https://custom.example/v1',
           apiKey: 'synthetic-custom-key',
           modelId: 'custom-model'

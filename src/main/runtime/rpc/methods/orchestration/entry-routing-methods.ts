@@ -1,7 +1,10 @@
 import type { RpcContext } from '../../core'
 import { isAgentRpcCaller } from '../../callers/rpc-caller-identity'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
+import { createAgentDecisionProvider } from '../../../orchestration/routing/agent-decision-provider'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { autoRouteWithModelProvider } from '../../../orchestration/routing/model-decision-provider'
+import { routeRoutingInput } from '../../../orchestration/routing/routing-router'
 import { readZcodeV2PlanCredential } from '../../../../zcode/zcode-v2-plan-credentials'
 import {
   EntryAssignParams,
@@ -83,17 +86,32 @@ export const ORCHESTRATION_ENTRY_ROUTING_METHODS = [
       const { runtime } = ctx
       const db = runtime.getOrchestrationDb()
       const run = entryRunOfInput(db, params.group, params.input)
-      const credential =
-        params.decisionModel?.provider === 'custom'
-          ? {
-              status: 'ok' as const,
-              protocol: 'openai' as const,
-              apiKey: params.decisionModel.apiKey ?? '',
-              baseUrl: params.decisionModel.baseUrl ?? '',
-              modelId: params.decisionModel.modelId ?? ''
-            }
-          : await readZcodeV2PlanCredential()
-      const decision = await autoRouteWithModelProvider(db, { inputId: params.input }, credential)
+      const source = params.decisionModel?.source ?? 'zcode-plan'
+      let decision: Awaited<ReturnType<typeof autoRouteWithModelProvider>>
+      if (source === 'agent') {
+        const agent = params.decisionModel?.agent
+        if (!agent) {
+          return { routed: false, reason: '决策模型未选择已接入的 Agent；输入保持待路由' }
+        }
+        const cwd = runtime.requireStore().getSettings().workspaceDir || process.cwd()
+        decision = await routeRoutingInput(db, {
+          inputId: params.input,
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the params zod validated the agent id; dispatch re-checks availability.
+          provider: createAgentDecisionProvider({ agent: agent as TuiAgent, cwd })
+        })
+      } else {
+        const credential =
+          source === 'custom'
+            ? {
+                status: 'ok' as const,
+                protocol: 'openai' as const,
+                apiKey: params.decisionModel?.apiKey ?? '',
+                baseUrl: params.decisionModel?.baseUrl ?? '',
+                modelId: params.decisionModel?.modelId ?? ''
+              }
+            : await readZcodeV2PlanCredential()
+        decision = await autoRouteWithModelProvider(db, { inputId: params.input }, credential)
+      }
       if (!params.dispatch || !decision.routed || decision.reused) {
         return decision
       }

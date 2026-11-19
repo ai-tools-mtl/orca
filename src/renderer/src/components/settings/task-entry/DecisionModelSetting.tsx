@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -22,10 +22,11 @@ type DecisionModelSettingProps = {
   forceVisible?: boolean
 }
 
-const DEFAULT_CONFIG: DecisionModelSettings = { provider: 'zcode-plan' }
+const DEFAULT_CONFIG: DecisionModelSettings = { source: 'zcode-plan' }
 
 /** The 任务入口's 决策模型 (plan §5.1): which model proposes sub-actions for auto-routing —
- *  the user's ZCode coding plan credential, or any OpenAI-compatible provider. */
+ *  the user's ZCode coding plan credential, a connected agent, or any OpenAI-compatible
+ *  provider. */
 export default function DecisionModelSetting({
   settings,
   updateSettings,
@@ -40,7 +41,7 @@ export default function DecisionModelSetting({
   const [draft, setDraft] = useState<DecisionModelSettings>(
     settings.decisionModel ?? DEFAULT_CONFIG
   )
-  const custom = draft.provider === 'custom'
+  const custom = draft.source === 'custom'
   const dirty = JSON.stringify(draft) !== JSON.stringify(settings.decisionModel ?? DEFAULT_CONFIG)
 
   const save = (): void => {
@@ -62,23 +63,25 @@ export default function DecisionModelSetting({
         </p>
         <div className="flex flex-col gap-1">
           <Label>
-            {t('auto.components.settings.TaskEntryPane.decisionModel.provider', 'Provider')}
+            {t('auto.components.settings.TaskEntryPane.decisionModel.provider', 'Source')}
           </Label>
           <Select
-            value={draft.provider}
-            onValueChange={(provider) => {
-              if (provider !== 'zcode-plan' && provider !== 'custom') {
+            value={draft.source}
+            onValueChange={(source) => {
+              if (source !== 'zcode-plan' && source !== 'agent' && source !== 'custom') {
                 return
               }
               setDraft((current) => ({
-                ...(provider === 'custom'
+                ...(source === 'custom'
                   ? {
                       baseUrl: current.baseUrl ?? '',
                       apiKey: current.apiKey ?? '',
                       modelId: current.modelId ?? ''
                     }
-                  : {}),
-                provider
+                  : source === 'agent'
+                    ? { agent: current.agent ?? 'codex' }
+                    : {}),
+                source
               }))
             }}
           >
@@ -92,6 +95,12 @@ export default function DecisionModelSetting({
                   'ZCode coding plan credential (its own model selection)'
                 )}
               </SelectItem>
+              <SelectItem value="agent">
+                {t(
+                  'auto.components.settings.TaskEntryPane.decisionModel.providerAgent',
+                  'A connected agent (one-shot split call)'
+                )}
+              </SelectItem>
               <SelectItem value="custom">
                 {t(
                   'auto.components.settings.TaskEntryPane.decisionModel.providerCustom',
@@ -101,6 +110,28 @@ export default function DecisionModelSetting({
             </SelectContent>
           </Select>
         </div>
+        {draft.source === 'agent' ? (
+          <div className="flex flex-col gap-1">
+            <Label>
+              {t('auto.components.settings.TaskEntryPane.decisionModel.agentLabel', 'Agent')}
+            </Label>
+            <Select
+              value={draft.agent ?? 'codex'}
+              onValueChange={(agent) => setDraft((current) => ({ ...current, agent }))}
+            >
+              <SelectTrigger className="w-72">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {['codex', 'claude', 'gemini', 'copilot'].map((agent) => (
+                  <SelectItem key={agent} value={agent}>
+                    {agent}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
         {custom ? (
           <div className="flex flex-col gap-2">
             <div className="flex flex-col gap-1">

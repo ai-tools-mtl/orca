@@ -14550,7 +14550,7 @@
           "decisionModel": {
             "title": "Task entry · decision model",
             "description": "The model the task entry uses to split requests into sub-actions for auto-routing.",
-            "provider": "Provider",
+            "provider": "Source",
             "providerZcodePlan": "ZCode coding plan credential (its own model selection)",
             "providerCustom": "Custom OpenAI-compatible provider",
             "baseUrl": "Base URL",
@@ -14559,7 +14559,9 @@
             "modelId": "Model",
             "modelIdPlaceholder": "gpt-4o-mini / deepseek-chat / …",
             "save": "Save",
-            "unsaved": "Unsaved changes"
+            "unsaved": "Unsaved changes",
+            "providerAgent": "A connected agent (one-shot split call)",
+            "agentLabel": "Agent"
           }
         }
       },
