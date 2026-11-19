@@ -8228,7 +8228,6 @@
         "RoutingEntryCard": {
           "title": "Dispatch entry",
           "paused": "Paused",
-          "refresh": "Refresh",
           "input": "Input",
           "decided": "Decided",
           "awaitingRouting": "Awaiting routing",

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { SendHorizonal, Sparkles } from 'lucide-react'
+import { SendHorizonal, Sparkles, X } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
@@ -53,14 +53,12 @@ export default function DispatchEntryChat({
           <span className="flex-1" />
           <Button
             variant="ghost"
-            size="sm"
-            disabled={facts.busy}
-            onClick={() => void facts.refresh()}
+            size="icon"
+            className="size-7"
+            onClick={onClose}
+            aria-label={t(`${ENTRY}.close`, 'Close')}
           >
-            {t(`${ENTRY}.refresh`, 'Refresh')}
-          </Button>
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            {t(`${ENTRY}.close`, 'Close')}
+            <X className="size-4" />
           </Button>
         </div>
       </div>

@@ -18,7 +18,7 @@ export default function DispatchEntryPaneLayer({
   const repoMap = useRepoMap()
   const repoDisplayName = repoMap.get(repoId)?.displayName ?? repoId
   return (
-    <div className="absolute inset-0 z-40 bg-chat-pane">
+    <div className="absolute inset-0 z-40 flex flex-col bg-chat-pane">
       <DispatchEntryChat
         repoId={repoId}
         hostId={hostId}

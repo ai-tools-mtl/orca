@@ -7363,7 +7363,6 @@
         "RoutingEntryCard": {
           "title": "调度入口",
           "paused": "已暂停",
-          "refresh": "刷新",
           "input": "输入",
           "decided": "已决定",
           "awaitingRouting": "待路由",
