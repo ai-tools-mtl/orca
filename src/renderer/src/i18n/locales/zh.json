@@ -7394,7 +7394,9 @@
           "approvalTitle": "Worker 请求授权",
           "allow": "允许",
           "deny": "拒绝",
-          "autoRoute": "自动调度"
+          "autoRoute": "自动调度",
+          "reassign": "换人",
+          "noOtherWorkers": "没有可换的其他 Worker。"
         }
       },
       "shared": {

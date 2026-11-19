@@ -14,12 +14,14 @@ import { routingInputsPayload, supplementReceipt } from './routing-supplements'
 import {
   EntryApprovalsParams,
   EntryAutoRouteParams,
+  EntryClaimParams,
   EntryHandbackParams,
   EntryPauseParams,
   EntryReviewParams,
   EntryShowParams,
   EntrySubmitParams,
-  EntrySupplementParams
+  EntrySupplementParams,
+  EntryWorkersParams
 } from '../../../../../shared/rpc-contract/orchestration/orchestration-routing-params'
 import type { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
 
@@ -220,6 +222,53 @@ export const ORCHESTRATION_ENTRY_METHODS = [
         })
       }
       return { cycle: db.acceptReviewCycle(cycle.cycle_id) }
+    }
+  }),
+  // §5.2 换人: the entry Run's workers (id, handle, state) a sub-action can be re-assigned to.
+  defineOrchestrationMethod({
+    name: 'orchestration.entryWorkers',
+    permission: 'workspace',
+    params: EntryWorkersParams,
+    access: { kind: 'reads', targets: {} },
+    handler: ({ group }, { runtime }) => {
+      const db = runtime.getOrchestrationDb()
+      const { run } = coordinatedEntryRun(db, group)
+      return {
+        workers: db.listWorkerTerminalResources({ runId: run.id }).map((row) => ({
+          dispatchId: row.dispatchId,
+          handle: row.agentTerminalHandle ?? row.dispatchId,
+          workerState: row.workerState,
+          dispatchStatus: row.dispatchStatus,
+          pendingApproval: row.pendingApproval
+        }))
+      }
+    }
+  }),
+  // Claim a sub-action for one of the entry Run's workers (the claim step of 换人: handback
+  // releases, claim re-points, the supplement form re-delivers).
+  defineOrchestrationMethod({
+    name: 'orchestration.entryClaim',
+    permission: 'workspace',
+    params: EntryClaimParams,
+    access: { kind: 'writes', targets: {} },
+    handler: ({ group, subAction, dispatch }, { runtime }) => {
+      const db = runtime.getOrchestrationDb()
+      const subActionRow = db.getSubAction(subAction)
+      if (!subActionRow) {
+        throw new OrchestrationError(
+          'lifecycle_not_found',
+          `Sub-action ${subAction} was not found.`,
+          { subActionId: subAction }
+        )
+      }
+      entryRunOfInput(db, group, subActionRow.input_id)
+      if (!db.getDispatchContextById(dispatch)) {
+        throw new OrchestrationError('dispatch_not_found', `Dispatch ${dispatch} was not found.`, {
+          dispatchId: dispatch
+        })
+      }
+      const claimed = db.claimSubActionForDispatch(subAction, dispatch)
+      return { subAction: claimed, claimVersion: claimed.claim_version }
     }
   }),
   // §5.1's model-backed routing, on the entry's own authority: the desktop's coding-plan

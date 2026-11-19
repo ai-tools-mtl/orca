@@ -162,6 +162,23 @@ export default function DispatchEntryChat({
                     busy={facts.busy}
                     reviews={facts.reviews}
                     onAcceptReview={(taskId) => void facts.acceptReview(taskId)}
+                    onFetchWorkers={() => facts.fetchWorkers()}
+                    onReassign={(subActionId, targetDispatchId) => {
+                      void facts.claim(subActionId, targetDispatchId).then(() => {
+                        const subAction = input.subActions.find(
+                          (candidate) => candidate.subActionId === subActionId
+                        )
+                        const text = subAction?.lastSupplementText ?? input.text
+                        if (text) {
+                          void facts.sendSupplement(
+                            input.inputId,
+                            subActionId,
+                            targetDispatchId,
+                            text
+                          )
+                        }
+                      })
+                    }}
                     onHandback={(subActionId, dispatchId) =>
                       void facts.handback(subActionId, dispatchId)
                     }

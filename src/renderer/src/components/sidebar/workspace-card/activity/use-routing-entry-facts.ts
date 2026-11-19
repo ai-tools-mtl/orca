@@ -5,12 +5,17 @@ import type { RoutingEntryInput } from './RoutingEntryCard'
 import {
   entryApprovals,
   entryApprovalsSchema,
+  entryWorkers,
   entryReview,
   entryReviewResultSchema,
   entryShowResultSchema,
   toEntryInputs
 } from './routing-entry-model'
-import type { RoutingEntryApproval, RoutingReviewState } from './routing-entry-model'
+import type {
+  RoutingEntryApproval,
+  RoutingEntryWorker,
+  RoutingReviewState
+} from './routing-entry-model'
 
 // Module-level so hooks stay React-Compiler compatible (no in-hook try/finally).
 async function runWithBusy(
@@ -160,6 +165,29 @@ export function useRoutingEntryFacts(target: RuntimeClientTarget | null, group: 
     [target, group, refresh]
   )
 
+  const fetchWorkers = useCallback(async () => {
+    if (!target) {
+      return [] satisfies RoutingEntryWorker[]
+    }
+    return entryWorkers(target, group)
+  }, [target, group])
+
+  const claim = useCallback(
+    (subActionId: string, dispatchId: string) => {
+      if (!target) {
+        return Promise.resolve()
+      }
+      return runWithBusy(setBusy, () =>
+        callEntryAction(target, 'orchestration.entryClaim', {
+          group,
+          subAction: subActionId,
+          dispatch: dispatchId
+        }).then(refresh)
+      )
+    },
+    [target, group, refresh]
+  )
+
   const setPausedState = useCallback(
     (pausedNext: boolean) => {
       if (!target) {
@@ -219,6 +247,8 @@ export function useRoutingEntryFacts(target: RuntimeClientTarget | null, group: 
     submit,
     autoRoute,
     handback,
+    claim,
+    fetchWorkers,
     sendSupplement,
     setPaused: setPausedState,
     answerApproval,

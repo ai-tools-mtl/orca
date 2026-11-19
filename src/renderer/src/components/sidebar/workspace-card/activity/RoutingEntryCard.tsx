@@ -1,7 +1,8 @@
+import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import type { RoutingReviewState } from './routing-entry-model'
+import type { RoutingEntryWorker, RoutingReviewState } from './routing-entry-model'
 
 export type RoutingEntrySubAction = {
   subActionId: string
@@ -40,6 +41,8 @@ export type RoutingRequestCardProps = {
   reviews?: ReadonlyMap<string, RoutingReviewState>
   onAcceptReview?: (taskId: string) => void
   onHandback?: (subActionId: string, dispatchId: string) => void
+  onReassign?: (subActionId: string, targetDispatchId: string) => void
+  onFetchWorkers?: () => Promise<RoutingEntryWorker[]>
   onSendSupplement?: (subActionId: string, text: string) => void
 }
 
@@ -125,9 +128,13 @@ export default function RoutingRequestCard({
   reviews,
   onAcceptReview,
   onHandback,
+  onReassign,
+  onFetchWorkers,
   onSendSupplement
 }: RoutingRequestCardProps) {
   const t = useTranslate()
+  const [reassignFor, setReassignFor] = useState<string | null>(null)
+  const [candidates, setCandidates] = useState<RoutingEntryWorker[] | null>(null)
   const claimed = input.subActions.find((subAction) => subAction.claimedBy)
   return (
     <div className="flex flex-col gap-1.5 rounded-lg border bg-card p-2.5">
@@ -243,6 +250,54 @@ export default function RoutingRequestCard({
           >
             {t(`${ENTRY}.handback`, 'Hand back')}
           </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={busy || !onFetchWorkers}
+            onClick={() => {
+              if (!onFetchWorkers) {
+                return
+              }
+              if (reassignFor === claimed.subActionId && candidates) {
+                setReassignFor(null)
+                setCandidates(null)
+                return
+              }
+              setReassignFor(claimed.subActionId)
+              setCandidates([])
+              void onFetchWorkers().then((workers) => {
+                setCandidates(workers.filter((worker) => worker.dispatchId !== claimed.claimedBy))
+              })
+            }}
+          >
+            {t(`${ENTRY}.reassign`, 'Reassign')}
+          </Button>
+          {reassignFor === claimed.subActionId && candidates !== null ? (
+            <div className="flex flex-col gap-0.5 rounded-md border border-dashed p-1.5">
+              {candidates.length === 0 ? (
+                <p className="text-muted-foreground text-xs">
+                  {t(`${ENTRY}.noOtherWorkers`, 'No other worker to reassign to.')}
+                </p>
+              ) : null}
+              {candidates.map((worker) => (
+                <Button
+                  key={worker.dispatchId}
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy || !onReassign}
+                  className="justify-start"
+                  onClick={() => {
+                    onReassign?.(claimed.subActionId, worker.dispatchId)
+                    setReassignFor(null)
+                    setCandidates(null)
+                  }}
+                >
+                  {worker.handle}
+                  <span className="text-muted-foreground"> · {worker.dispatchStatus}</span>
+                </Button>
+              ))}
+            </div>
+          ) : null}
           <form
             className="flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-md border px-2"
             onSubmit={(event) => {

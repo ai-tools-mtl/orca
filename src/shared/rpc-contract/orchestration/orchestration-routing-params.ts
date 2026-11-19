@@ -168,3 +168,13 @@ export const EntryAutoRouteParams = z.object({
   group: requiredString('Missing --group'),
   input: requiredString('Missing --input')
 })
+
+export const EntryWorkersParams = z.object({
+  group: requiredString('Missing --group')
+})
+
+export const EntryClaimParams = z.object({
+  group: requiredString('Missing --group'),
+  subAction: requiredString('Missing --sub-action'),
+  dispatch: requiredString('Missing --dispatch')
+})

@@ -175,3 +175,27 @@ export type RoutingEntryApproval = z.infer<typeof entryApprovalsSchema>['approva
 export async function entryApprovals(target: RuntimeClientTarget, group: string): Promise<unknown> {
   return callRuntimeRpc(target, 'orchestration.entryApprovals', { group })
 }
+
+export const entryWorkersSchema = z.object({
+  workers: z.array(
+    z.object({
+      dispatchId: z.string(),
+      handle: z.string(),
+      workerState: z.string(),
+      dispatchStatus: z.string(),
+      pendingApproval: z.boolean()
+    })
+  )
+})
+
+export type RoutingEntryWorker = z.infer<typeof entryWorkersSchema>['workers'][number]
+
+export async function entryWorkers(
+  target: RuntimeClientTarget,
+  group: string
+): Promise<RoutingEntryWorker[]> {
+  const result = entryWorkersSchema.parse(
+    await callRuntimeRpc(target, 'orchestration.entryWorkers', { group })
+  )
+  return result.workers
+}
