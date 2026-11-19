@@ -465,6 +465,10 @@ import {
   PeerMailPullParams
 } from './orchestration/orchestration-peer-mail-params'
 import {
+  EntryHandbackParams,
+  EntryShowParams,
+  EntrySubmitParams,
+  EntrySupplementParams,
   ReviewCycleParams,
   ReviewCycleStartParams,
   ReviewOpinionRecordParams,
@@ -1430,6 +1434,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.crewSubscribe': CrewSubscribeParams,
   'orchestration.dispatch': DispatchParams,
   'orchestration.dispatchShow': DispatchShowParams,
+  'orchestration.entryHandback': EntryHandbackParams,
+  'orchestration.entryShow': EntryShowParams,
+  'orchestration.entrySubmit': EntrySubmitParams,
+  'orchestration.entrySupplement': EntrySupplementParams,
   'orchestration.federationAck': FederationAckParams,
   'orchestration.federationAttachStart': FederationAttachStartParams,
   'orchestration.federationFleetSnapshot': FederationFleetSnapshotParams,

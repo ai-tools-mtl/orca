@@ -60,11 +60,43 @@ function parseSubActions(raw: string): RoutingSubActionInput[] {
   return parsed as RoutingSubActionInput[]
 }
 
-function supplementReceipt(
+/** The §5.5 recovery payload: every recorded input of one Run with its sub-actions and
+ *  delivery attempts. Shared by the coordinated read and the desktop entry's own read. */
+export function routingInputsPayload(db: OrchestrationDb, runId: string) {
+  return {
+    inputs: db.listRunRoutingInputs(runId).map((input) => ({
+      input,
+      subActions: db.listSubActions(input.input_id).map((subAction) => ({
+        subAction,
+        deliveries: db.listSupplements(subAction.sub_action_id).map((supplement) => ({
+          supplement,
+          attempts: db.listSupplementAttempts(supplement.supplement_id)
+        }))
+      }))
+    }))
+  }
+}
+
+export type SupplementReceipt = {
+  inputId: string
+  supplementId: string
+  subActionId: string
+  dispatchId: string
+  attemptId: string
+  requestId: string
+  expectedTurnId: string | null
+  outcome: string
+  refusalKind?: string
+  detail?: string
+  turnId?: string
+  sessionId?: string
+}
+
+export function supplementReceipt(
   supplement: RoutingSupplementRow,
   attempt: RoutingSupplementAttemptRow,
   session?: string
-) {
+): SupplementReceipt {
   return {
     inputId: supplement.input_id,
     supplementId: supplement.supplement_id,
@@ -113,18 +145,7 @@ export const ORCHESTRATION_ROUTING_METHODS = [
     },
     handler: (_params, { runtime }, { run }) => {
       const db = runtime.getOrchestrationDb()
-      return {
-        inputs: db.listRunRoutingInputs(run.id).map((input) => ({
-          input,
-          subActions: db.listSubActions(input.input_id).map((subAction) => ({
-            subAction,
-            deliveries: db.listSupplements(subAction.sub_action_id).map((supplement) => ({
-              supplement,
-              attempts: db.listSupplementAttempts(supplement.supplement_id)
-            }))
-          }))
-        }))
-      }
+      return routingInputsPayload(db, run.id)
     }
   }),
   defineOrchestrationMethod({

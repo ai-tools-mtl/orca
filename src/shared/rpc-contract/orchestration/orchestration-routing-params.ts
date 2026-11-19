@@ -123,3 +123,30 @@ export const ReviewOpinionRecordParams = z.object({
   from: OptionalString,
   run: OptionalString
 })
+
+// The desktop 统一任务入口's own surface: the entry coordinates its Run as
+// `desktop-entry:<group>`, so these name a project group instead of a Run or a caller handle.
+export const EntryShowParams = z.object({
+  group: requiredString('Missing --group')
+})
+
+export const EntrySubmitParams = z.object({
+  group: requiredString('Missing --group'),
+  text: requiredString('Missing --text')
+})
+
+export const EntrySupplementParams = z.object({
+  group: requiredString('Missing --group'),
+  input: requiredString('Missing --input'),
+  subAction: requiredString('Missing --sub-action'),
+  dispatch: requiredString('Missing --dispatch'),
+  text: requiredString('Missing --text'),
+  /** Omitted: steer the Dispatch's active turn at send time. Given: steer exactly that turn. */
+  expectedTurn: OptionalString
+})
+
+export const EntryHandbackParams = z.object({
+  group: requiredString('Missing --group'),
+  subAction: requiredString('Missing --sub-action'),
+  dispatch: requiredString('Missing --dispatch')
+})
