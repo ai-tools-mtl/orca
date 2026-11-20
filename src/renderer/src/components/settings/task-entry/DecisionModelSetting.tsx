@@ -54,7 +54,7 @@ export default function DecisionModelSetting({
   }
   return (
     <SettingsGroup id="dispatch-decision-model" title={title}>
-      <div className="flex flex-col gap-2.5 text-sm">
+      <div className="flex flex-col gap-2.5 py-4 text-sm">
         <p className="text-muted-foreground text-xs">
           {t(
             'auto.components.settings.TaskEntryPane.decisionModel.description',
