@@ -249,7 +249,13 @@ export function settleWorkerReportInTransaction(
     this.closeQuestionsForDispatch(sibling.id)
   }
   if (reportingWorker && this.workerAutoReleaseEnabled?.() !== false) {
-    this.armWorkerTerminalAutoReleaseStatement(params.dispatchId)
+    // 项目调度 worker 有自己的开关（默认关，保持打开）；其余来源沿用全局开关。
+    const entryOwned = !!this.db
+      .prepare('SELECT 1 FROM routing_sub_actions WHERE claimed_dispatch_id = ?')
+      .get(params.dispatchId)
+    if (!entryOwned || this.entryWorkerAutoReleaseEnabled?.() === true) {
+      this.armWorkerTerminalAutoReleaseStatement(params.dispatchId)
+    }
   }
   recordAcceptedReportFact(this, params)
   markUnreadFollowUpMail(this, params.dispatchId)

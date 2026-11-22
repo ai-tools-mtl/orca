@@ -3,8 +3,12 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
-import { OPEN_DISPATCH_ENTRY_EVENT } from '../worktree-list/rows/project-routing-entry-line'
+import {
+  CLOSE_DISPATCH_ENTRY_EVENT,
+  OPEN_DISPATCH_ENTRY_EVENT
+} from '../worktree-list/rows/project-routing-entry-line'
 import { useAppStore } from '@/store'
+import { useEntryAutoCloseOnWorkspaceSwitch } from './use-entry-auto-close-on-workspace-switch'
 
 export type DispatchEntryPaneTarget = {
   repoId: string
@@ -18,8 +22,28 @@ export function useDispatchEntryPaneListener(): {
   const [target, setTarget] = useState<DispatchEntryPaneTarget | null>(null)
 
   const close = useCallback((): void => {
-    setTarget(null)
-  }, [])
+    setTarget((current) => (current === target ? null : current))
+  }, [target])
+
+  useEntryAutoCloseOnWorkspaceSwitch(target !== null, close)
+
+  useEffect(() => {
+    window.addEventListener(CLOSE_DISPATCH_ENTRY_EVENT, close)
+    return () => window.removeEventListener(CLOSE_DISPATCH_ENTRY_EVENT, close)
+  }, [close])
+
+  useEffect(() => {
+    if (!target) {
+      return
+    }
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        close()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [close, target])
 
   useEffect(() => {
     const handleOpen = (event: Event): void => {
@@ -34,9 +58,8 @@ export function useDispatchEntryPaneListener(): {
         return
       }
       useAppStore.getState().setActiveView('terminal')
-      // Clicking the same project's row again toggles the pane closed — the row is the door.
       setTarget((current) =>
-        current?.repoId === repoId && current.hostId === hostId ? null : { repoId, hostId }
+        current?.repoId === repoId && current.hostId === hostId ? current : { repoId, hostId }
       )
     }
     window.addEventListener(OPEN_DISPATCH_ENTRY_EVENT, handleOpen)

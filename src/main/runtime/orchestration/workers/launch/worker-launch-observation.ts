@@ -31,6 +31,10 @@ function startOptions(json: string): Record<string, unknown> {
   }
 }
 
+export function workerStartOptionsReadOnly(json: string | undefined): boolean {
+  return json !== undefined && startOptions(json).readOnly === true
+}
+
 export function workerStartOptionsAgent(json: string): string | null {
   const options = startOptions(json)
   return workerLaunchAgent(options.launch) || (isTuiAgent(options.agent) ? options.agent : null)

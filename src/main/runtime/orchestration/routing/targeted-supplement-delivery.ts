@@ -1,6 +1,8 @@
+import { entrySubActionRequiresWriteApproval, isEntryReadOnlyWorker } from './entry-write-policy'
 import { generateId } from '../db/generated-id'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import type { RoutingSupplementAttemptRow, RoutingSupplementRow } from '../db/routing-records'
+import { recentOpenApprovalReports } from '../workers/approvals/worker-approval-report'
 import { structuredMailboxCustody } from '../mailbox/routing/structured-session-mail-target'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { steerExpectedTurnViaAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-expected-steer'
@@ -14,6 +16,7 @@ export type TargetedSupplementRefusalReason =
   | 'dispatch-not-active'
   | 'claimed-elsewhere'
   | 'paused'
+  | 'awaiting-answer'
   | 'not-structured-here'
   | 'host-unavailable'
   | 'session-unavailable'
@@ -42,42 +45,26 @@ type DeliverParams = {
 export async function deliverTargetedSupplement(
   params: DeliverParams
 ): Promise<TargetedSupplementResult> {
-  const { db } = params
-  const dispatch = db.getDispatchContextById(params.targetDispatchId)
-  if (!dispatch) {
-    // recordRoutingSupplement already refuses unknown Dispatches; nothing was delivered.
-    throw new Error(`dispatch_not_found: ${params.targetDispatchId}`)
+  const supplement = params.db.recordRoutingSupplement(params)
+  return deliverRecordedSupplement(params.db, supplement, params.expectedTurnId)
+}
+
+export async function deliverRecordedSupplement(
+  db: OrchestrationDb,
+  supplement: RoutingSupplementRow,
+  expectedTurn?: string
+): Promise<TargetedSupplementResult> {
+  const lastAttempt = db.listSupplementAttempts(supplement.supplement_id).at(-1)
+  if (lastAttempt && (lastAttempt.outcome !== 'refused' || lastAttempt.refusal_kind !== 'paused')) {
+    return { supplement, attempt: lastAttempt }
   }
-  // §5.2: one valid execution target — a sub-action claimed elsewhere refuses this delivery.
-  const claimed = db.getSubAction(params.subActionId)
-  if (claimed?.claimed_dispatch_id && claimed.claimed_dispatch_id !== params.targetDispatchId) {
-    const supplementRow = db.recordRoutingSupplement({
-      inputId: params.inputId,
-      subActionId: params.subActionId,
-      targetDispatchId: params.targetDispatchId,
-      text: params.text
-    })
-    const attempt = db.recordSupplementAttempt({
-      supplementId: supplementRow.supplement_id,
-      requestId: generateId('rtsend'),
-      targetDispatchId: params.targetDispatchId,
-      expectedTurnId: params.expectedTurnId ?? null,
-      outcome: 'refused',
-      refusalKind: 'claimed-elsewhere',
-      detail: `claimed by ${claimed.claimed_dispatch_id}`
-    })
-    return { supplement: supplementRow, attempt }
+  const dispatch = db.getDispatchContextById(supplement.target_dispatch_id)
+  const requestId = lastAttempt?.request_id ?? generateId('rtsend')
+  let expectedTurnId = lastAttempt?.expected_turn_id ?? expectedTurn
+  const newerAttempt = (): RoutingSupplementAttemptRow | undefined => {
+    const latest = db.listSupplementAttempts(supplement.supplement_id).at(-1)
+    return latest?.attempt_id === lastAttempt?.attempt_id ? undefined : latest
   }
-  const supplement = db.recordRoutingSupplement({
-    inputId: params.inputId,
-    subActionId: params.subActionId,
-    targetDispatchId: params.targetDispatchId,
-    text: params.text
-  })
-  // Retrying the same delivery reuses the last attempt's request id (plan §6): retries and
-  // re-sends of one supplement stay one logical call; only a re-target mints a new id.
-  const requestId =
-    db.listSupplementAttempts(supplement.supplement_id).at(-1)?.request_id ?? generateId('rtsend')
   const recordRefusal = (
     reason: TargetedSupplementRefusalReason,
     expectedTurnId: string | null,
@@ -86,97 +73,151 @@ export async function deliverTargetedSupplement(
   ): TargetedSupplementResult => ({
     supplement,
     ...(session ? { session } : {}),
-    attempt: db.recordSupplementAttempt({
-      supplementId: supplement.supplement_id,
-      requestId,
-      targetDispatchId: dispatch.id,
-      expectedTurnId: expectedTurnId ?? null,
-      outcome: 'refused',
-      refusalKind: reason,
-      detail: detail ?? null
-    })
+    attempt:
+      newerAttempt() ??
+      db.recordSupplementAttempt({
+        supplementId: supplement.supplement_id,
+        requestId,
+        targetDispatchId: supplement.target_dispatch_id,
+        expectedTurnId,
+        outcome: 'refused',
+        refusalKind: reason,
+        detail: detail ?? null
+      })
   })
-  if (dispatch.status !== 'dispatched') {
-    return recordRefusal(
-      'dispatch-not-active',
-      params.expectedTurnId ?? null,
-      undefined,
-      `Dispatch ${dispatch.id} is ${dispatch.status}; the supplement stays recorded with it.`
-    )
+  const checkTarget = (): TargetedSupplementRefusalReason | undefined => {
+    const action = db.getSubAction(supplement.sub_action_id)
+    if (
+      action?.claimed_dispatch_id &&
+      action.claimed_dispatch_id !== supplement.target_dispatch_id
+    ) {
+      return 'claimed-elsewhere'
+    }
+    if (db.isRoutingRunPaused(supplement.run_id)) {
+      return 'paused'
+    }
+    if (db.isRoutingSubActionPaused(supplement.sub_action_id)) {
+      return 'paused'
+    }
+    if (
+      action &&
+      entrySubActionRequiresWriteApproval(db, action) &&
+      !isEntryReadOnlyWorker(db, supplement.target_dispatch_id)
+    ) {
+      return 'admission-refused'
+    }
+    if (db.getDispatchContextById(supplement.target_dispatch_id)?.status !== 'dispatched') {
+      return 'dispatch-not-active'
+    }
+    if (
+      db.awaitsAnswerToLatestQuestion(supplement.target_dispatch_id) ||
+      recentOpenApprovalReports(db).some(
+        ({ dispatch }) => dispatch.id === supplement.target_dispatch_id
+      )
+    ) {
+      return 'awaiting-answer'
+    }
+    return undefined
   }
-  // §5.5: the send re-checks the entry pause after the ledger write — a paused entry holds the
-  // supplement as refused-paused, re-driven by resume without a new supplement row.
-  if (db.isRoutingRunPaused(dispatch.run_id)) {
-    return recordRefusal('paused', params.expectedTurnId ?? null, undefined)
+  const refusal = checkTarget()
+  if ((refusal && refusal !== 'paused') || !dispatch) {
+    return recordRefusal(refusal ?? 'dispatch-not-active', expectedTurnId ?? null, undefined)
   }
   const custody = structuredMailboxCustody(`dispatch:${dispatch.id}`, db)
   if (typeof custody !== 'object' || custody.dispatchId !== dispatch.id) {
     return recordRefusal(
-      'not-structured-here',
-      params.expectedTurnId ?? null,
+      refusal ?? 'not-structured-here',
+      expectedTurnId ?? null,
       undefined,
       `Dispatch ${dispatch.id} mail is not held by a reachable structured session here.`
     )
   }
   const host = getStructuredAgentSessionHost()
   if (!host) {
-    return recordRefusal('host-unavailable', params.expectedTurnId ?? null, undefined)
+    return recordRefusal(refusal ?? 'host-unavailable', expectedTurnId ?? null, undefined)
   }
   const sessionId = custody.sessionId
-  let expectedTurnId = params.expectedTurnId
+  if (lastAttempt?.refusal_kind === 'paused' && !expectedTurnId && refusal !== 'paused') {
+    return recordRefusal(
+      'no-active-turn',
+      null,
+      sessionId,
+      'The paused supplement had no verified original turn.'
+    )
+  }
   if (!expectedTurnId) {
-    const work = await host.currentWorkAtRest(sessionId)
-    expectedTurnId = work?.activeTurnId() ?? undefined
+    try {
+      const work = await host.currentWorkAtRest(sessionId)
+      expectedTurnId = work?.activeTurnId() ?? undefined
+    } catch (error) {
+      return recordRefusal(refusal ?? 'session-unavailable', null, sessionId, String(error))
+    }
     if (!expectedTurnId) {
       return recordRefusal(
-        'no-active-turn',
+        checkTarget() ?? 'no-active-turn',
         null,
         sessionId,
         `Session ${sessionId} has no active turn; the supplement stays recorded with Dispatch ${dispatch.id}.`
       )
     }
   }
+  const latest = newerAttempt()
+  if (latest) {
+    return { supplement, attempt: latest }
+  }
+  const sendRefusal = checkTarget()
+  if (sendRefusal) {
+    return recordRefusal(sendRefusal, expectedTurnId, sessionId)
+  }
+  // A crash or ambiguous transport failure after admission must never resend to a newer turn.
+  const pending = db.recordSupplementAttempt({
+    supplementId: supplement.supplement_id,
+    requestId,
+    targetDispatchId: supplement.target_dispatch_id,
+    expectedTurnId,
+    outcome: 'unverified'
+  })
   let outcome: AgentSessionExpectedSteerOutcome
   try {
     outcome = await steerExpectedTurnViaAdapter(host.deps.adapter, {
       sessionId,
       clientMessageId: requestId,
-      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: params.text }] },
+      body: {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: supplement.raw_text }]
+      },
       expectedTurnId
     })
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    if ((error as Error)?.name === 'StructuredAgentSessionInputNotAdmitted') {
-      return recordRefusal('admission-refused', expectedTurnId, sessionId, message)
+    if (error instanceof Error && error.name === 'StructuredAgentSessionInputNotAdmitted') {
+      return {
+        supplement,
+        session: sessionId,
+        attempt: db.settleSupplementAttempt(pending.attempt_id, {
+          outcome: 'refused',
+          refusalKind: 'admission-refused',
+          detail: error.message
+        })
+      }
     }
-    return recordRefusal('session-unavailable', expectedTurnId, sessionId, message)
+    return { supplement, session: sessionId, attempt: pending }
   }
   if (outcome.status === 'delivered') {
-    db.setSubActionState(params.subActionId, 'delivered')
-    return {
-      supplement,
-      session: sessionId,
-      attempt: db.recordSupplementAttempt({
-        supplementId: supplement.supplement_id,
-        requestId,
-        targetDispatchId: dispatch.id,
-        expectedTurnId,
-        outcome: 'delivered',
-        turnId: outcome.turnId
-      })
-    }
+    db.setSubActionState(supplement.sub_action_id, 'delivered')
   }
   return {
     supplement,
     session: sessionId,
-    attempt: db.recordSupplementAttempt({
-      supplementId: supplement.supplement_id,
-      requestId,
-      targetDispatchId: dispatch.id,
-      expectedTurnId,
-      outcome: 'refused',
-      refusalKind: outcome.kind,
-      detail: outcome.detail ? JSON.stringify(outcome.detail) : null
-    })
+    attempt: db.settleSupplementAttempt(
+      pending.attempt_id,
+      outcome.status === 'delivered'
+        ? { outcome: 'delivered', turnId: outcome.turnId }
+        : {
+            outcome: 'refused',
+            refusalKind: outcome.kind,
+            detail: outcome.detail ? JSON.stringify(outcome.detail) : null
+          }
+    )
   }
 }

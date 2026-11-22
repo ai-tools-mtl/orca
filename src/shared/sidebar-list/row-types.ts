@@ -138,6 +138,7 @@ export type ProjectRoutingEntryRow = {
   key: string
   repoId: string
   hostId: ExecutionHostId
+  groupDepth: number
 }
 
 /** Stable create/repo identity only: subscribing to full progress records would rebuild the list on phase/loader churn. */

@@ -128,6 +128,7 @@ export type RuntimeStore = {
     deleteChatHistoryWithWorkspace?: GlobalSettings['deleteChatHistoryWithWorkspace']
     nestedWorkerMaxDepth?: GlobalSettings['nestedWorkerMaxDepth']
     orchestrationWorkerAutoReleaseEnabled?: GlobalSettings['orchestrationWorkerAutoReleaseEnabled']
+    entryWorkerAutoReleaseEnabled?: GlobalSettings['entryWorkerAutoReleaseEnabled']
     orchestrationCoordinatorApprovalsEnabled?: GlobalSettings['orchestrationCoordinatorApprovalsEnabled']
     workspaceDir: string
     nestWorkspaces: boolean
@@ -141,6 +142,8 @@ export type RuntimeStore = {
     localBaseRefSuggestionDismissed?: boolean
     branchPrefix: string
     branchPrefixCustom: string
+    decisionModel?: GlobalSettings['decisionModel']
+    routeBypass?: GlobalSettings['routeBypass']
     defaultTuiAgent?: GlobalSettings['defaultTuiAgent']
     newWorkspaceSetupOnly?: GlobalSettings['newWorkspaceSetupOnly']
     disabledTuiAgents?: GlobalSettings['disabledTuiAgents']

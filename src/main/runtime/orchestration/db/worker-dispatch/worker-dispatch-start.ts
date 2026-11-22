@@ -1,3 +1,5 @@
+import { resolveStageUpstream } from '../../routing/routing-stage-gates'
+import { bindEntryReviewDispatch } from '../../review/entry-review-dispatch-intent'
 import type { DispatchContextRow, TaskRow, WorkerDispatchRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { ensureMutationReceiptCapacity } from '../mutation-receipts/mutation-receipt-capacity'
@@ -16,6 +18,7 @@ export function createStartingWorkerDispatch(
   params: {
     taskId?: string
     entrySubActionId?: string
+    entryReviewIntentId?: string
     taskSpec?: string
     /** The paired coordinator's ID for this Task: an existing one is reopened, else the new one takes it. */
     adoptTaskId?: string
@@ -188,10 +191,20 @@ export function createStartingWorkerDispatch(
       if (this.isRoutingRunPaused(task.run_id)) {
         throw new OrchestrationError('paused', 'The project task entry is paused.')
       }
+      if (this.isRoutingSubActionPaused(params.entrySubActionId)) {
+        throw new OrchestrationError('paused', 'The task card is paused.')
+      }
+      const action = this.getSubAction(params.entrySubActionId)
+      if (action?.run_id === task.run_id && resolveStageUpstream(this, action)?.blockedOn.length) {
+        throw new OrchestrationError(
+          'lifecycle_conflict',
+          'The upstream stage has not been accepted.'
+        )
+      }
       const bound = this.db
         .prepare(
-          `UPDATE routing_sub_actions SET task_id = ?
-         WHERE sub_action_id = ? AND run_id = ? AND task_id IS NULL`
+          `UPDATE routing_sub_actions SET task_id = ?, entry_error = NULL
+         WHERE sub_action_id = ? AND run_id = ? AND task_id IS NULL AND entry_deleted_at IS NULL`
         )
         .run(task.id, params.entrySubActionId, task.run_id)
       if (bound.changes !== 1) {
@@ -201,6 +214,9 @@ export function createStartingWorkerDispatch(
         )
       }
       this.claimSubActionForDispatch(params.entrySubActionId, id)
+    }
+    if (params.entryReviewIntentId) {
+      bindEntryReviewDispatch(this, params.entryReviewIntentId, task.run_id, id)
     }
     if (params.federation) {
       this.db

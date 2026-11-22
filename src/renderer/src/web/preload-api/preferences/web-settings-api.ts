@@ -1,4 +1,12 @@
 import type { PreloadApi } from '../../../../../preload/api-types'
+import {
+  normalizeDecisionModelSettings,
+  normalizeRouteBypassSettings
+} from '../../../../../shared/settings/decision-model-settings'
+import {
+  DecisionModelPatchParams,
+  RouteBypassPatchParams
+} from '../../../../../shared/rpc-contract/orchestration/orchestration-routing-params'
 import { legacyMatchTerminalSidebarWrite } from '../../../../../shared/plugins/appearance/plugin-theme-settings'
 import {
   computerAwakeSettingsForMode,
@@ -31,7 +39,7 @@ export function createWebSettingsApi(): Pick<Partial<PreloadApi>, 'agentAwake'> 
       get: async () => getRuntimeBackedStoredSettings(),
       // Why: localStorage-backed settings are synchronous, so the pre-hydration kill-switch read works the same as desktop.
       getSync: () => settingsForActiveVisibilityOwner(getStoredSettings()),
-      set: async (updates) => {
+      set: async ({ decisionModelPatch, routeBypassPatch, ...updates }) => {
         const sanitizedUpdates = stripRetiredWebChatSettings(updates)
         const runtimeEnvironment = requireActiveEnvironmentOrNull()
         delete sanitizedUpdates.activeRuntimeEnvironmentId
@@ -79,6 +87,22 @@ export function createWebSettingsApi(): Pick<Partial<PreloadApi>, 'agentAwake'> 
           )
         }
         const stored = getStoredSettings()
+        if (decisionModelPatch !== undefined) {
+          if (Object.keys(updates).length > 0) {
+            throw new Error('Decision settings must be saved separately.')
+          }
+          sanitizedUpdates.decisionModel = normalizeDecisionModelSettings(
+            DecisionModelPatchParams.parse(decisionModelPatch)
+          )
+        }
+        if (routeBypassPatch !== undefined) {
+          if (Object.keys(updates).length > 0) {
+            throw new Error('Route bypass settings must be saved separately.')
+          }
+          sanitizedUpdates.routeBypass = normalizeRouteBypassSettings(
+            RouteBypassPatchParams.parse(routeBypassPatch)
+          )
+        }
         Object.assign(sanitizedUpdates, legacyMatchTerminalSidebarWrite(stored, sanitizedUpdates))
         const localUpdates = { ...sanitizedUpdates }
         delete localUpdates.nativeChatAutoContinueAfterUsageLimit

@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { Input } from '@/components/ui/input'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -8,187 +7,173 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useAppStore } from '../../../store/index'
+import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
 import { matchesSettingsSearch } from '../search/settings-search'
-import { SettingsGroup } from '../section-layout/SettingsGroup'
-import type { DecisionModelSettings } from '../../../../../shared/settings/decision-model-settings'
+import { getTaskEntryPaneSearchEntries } from './task-entry-search'
+import { TaskRoutingBlock } from './TaskRoutingBlock'
+import { RouteBypassBlock } from './RouteBypassBlock'
+import { DecisionConfigFooter } from './DecisionConfigFooter'
+import { useDecisionConfigTest } from './use-decision-config-test'
+import { routeConfigOf, savedDecisionConfig } from './decision-config-values'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type {
+  DecisionModelSettings,
+  RouteBypassSettings
+} from '../../../../../shared/settings/decision-model-settings'
+import { normalizeRouteBypassSettings } from '../../../../../shared/settings/decision-model-settings'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+
+const LOCAL_HOST = 'local'
 
 type DecisionModelSettingProps = {
   settings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
+  updateSettings: (updates: {
+    decisionModelPatch?: DecisionModelSettings
+    routeBypassPatch?: RouteBypassSettings
+  }) => Promise<void>
   forceVisible?: boolean
 }
 
-const DEFAULT_CONFIG: DecisionModelSettings = { source: 'zcode-plan' }
-
-/** The 任务入口's 决策模型 (plan §5.1): which model proposes sub-actions for auto-routing —
- *  the user's ZCode coding plan credential, a connected agent, or any OpenAI-compatible
- *  provider. */
 export default function DecisionModelSetting({
   settings,
   updateSettings,
   forceVisible = false
 }: DecisionModelSettingProps): React.JSX.Element | null {
   const t = useTranslate()
+  const hostFieldId = useId()
   const query = useAppStore((state) => state.settingsSearchQuery)
-  const title = t(
-    'auto.components.settings.TaskEntryPane.decisionModel.title',
-    'Task entry · decision model'
-  )
-  const [draft, setDraft] = useState<DecisionModelSettings>(
-    settings.decisionModel ?? DEFAULT_CONFIG
-  )
-  const custom = draft.source === 'custom'
-  const dirty = JSON.stringify(draft) !== JSON.stringify(settings.decisionModel ?? DEFAULT_CONFIG)
+  const detectedAgents = useAppStore(readNativeDetectedAgents)
+  const environments = useAppStore((state) => state.runtimeEnvironments)
+  const [testHostId, setTestHostId] = useState<string>()
+  /** undefined = untouched (shows saved); null = explicit automatic selection. */
+  const [agentEdit, setAgentEdit] = useState<string | null | undefined>()
+  const [saving, setSaving] = useState(false)
+  const [saveFailed, setSaveFailed] = useState(false)
+  const savingRef = useRef(false)
 
-  const save = (): void => {
-    void updateSettings({ decisionModel: draft })
+  const saved = savedDecisionConfig(settings.decisionModel)
+  const savedRoute = routeConfigOf(saved)
+  const draftRoute = routeConfigOf({
+    source: 'agent',
+    ...(agentEdit === undefined ? savedRoute : agentEdit === null ? {} : { agent: agentEdit })
+  })
+  const dirty = JSON.stringify(draftRoute) !== JSON.stringify(savedRoute)
+
+  const webClient = isWebClientLocation()
+  const environment =
+    environments?.find((entry) => `runtime:${entry.id}` === testHostId) ??
+    (webClient
+      ? (environments?.find((entry) => entry.id === settings.activeRuntimeEnvironmentId) ??
+        environments?.[0])
+      : undefined)
+  const testHostUnavailable = webClient && !environment
+  const target: RuntimeClientTarget = environment
+    ? { kind: 'environment', environmentId: environment.id }
+    : { kind: 'local' }
+  const localLabel = t(
+    'auto.components.settings.TaskEntryPane.decisionModel.localTestHost',
+    'This machine'
+  )
+  const testHost = {
+    target,
+    label: testHostUnavailable
+      ? t('auto.components.settings.TaskEntryPane.decisionModel.noTestHost', 'No test host')
+      : (environment?.name ?? localLabel)
+  }
+  const routeVersion = JSON.stringify(draftRoute)
+  const savedRouteVersion = JSON.stringify(savedRoute)
+  const routeTest = useDecisionConfigTest(routeVersion, savedRouteVersion, testHost)
+
+  useEffect(() => {
+    if (!webClient) {
+      void useAppStore.getState().ensureNativeDetectedAgents()
+    }
+  }, [webClient])
+
+  async function save(): Promise<void> {
+    if (savingRef.current) {
+      return
+    }
+    savingRef.current = true
+    setSaving(true)
+    setSaveFailed(false)
+    // 无 finally：react-compiler 拒绝带 finalizer 的 try 语句，两个分支各自复位。
+    try {
+      await updateSettings({ decisionModelPatch: draftRoute })
+      setAgentEdit((edit) => (edit === agentEdit ? undefined : edit))
+      savingRef.current = false
+      setSaving(false)
+    } catch {
+      setSaveFailed(true)
+      savingRef.current = false
+      setSaving(false)
+    }
   }
 
-  const visible = forceVisible || dirty || matchesSettingsSearch(query, [{ title }])
-  if (!visible) {
+  if (!forceVisible && !dirty && !matchesSettingsSearch(query, getTaskEntryPaneSearchEntries(t))) {
     return null
   }
+  const hostLabel = t('auto.components.settings.TaskEntryPane.decisionModel.testHost', 'Test host')
+
   return (
-    <SettingsGroup id="dispatch-decision-model" title={title}>
-      <div className="flex flex-col gap-2.5 py-4 text-sm">
-        <p className="text-muted-foreground text-xs">
-          {t(
-            'auto.components.settings.TaskEntryPane.decisionModel.description',
-            'The model the task entry uses to split requests into sub-actions for auto-routing.'
-          )}
-        </p>
-        <div className="flex flex-col gap-1">
-          <Label>
-            {t('auto.components.settings.TaskEntryPane.decisionModel.provider', 'Source')}
-          </Label>
+    <div className="space-y-6">
+      {environments?.length ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <Label htmlFor={hostFieldId}>{hostLabel}</Label>
           <Select
-            value={draft.source}
-            onValueChange={(source) => {
-              if (source !== 'zcode-plan' && source !== 'agent' && source !== 'custom') {
-                return
-              }
-              setDraft((current) => ({
-                ...(source === 'custom'
-                  ? {
-                      baseUrl: current.baseUrl ?? '',
-                      apiKey: current.apiKey ?? '',
-                      modelId: current.modelId ?? ''
-                    }
-                  : source === 'agent'
-                    ? { agent: current.agent ?? 'codex' }
-                    : {}),
-                source
-              }))
-            }}
+            value={environment ? `runtime:${environment.id}` : LOCAL_HOST}
+            onValueChange={setTestHostId}
           >
-            <SelectTrigger className="w-72">
+            <SelectTrigger id={hostFieldId} className="w-56 max-w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="zcode-plan">
-                {t(
-                  'auto.components.settings.TaskEntryPane.decisionModel.providerZcodePlan',
-                  'ZCode coding plan credential (its own model selection)'
-                )}
-              </SelectItem>
-              <SelectItem value="agent">
-                {t(
-                  'auto.components.settings.TaskEntryPane.decisionModel.providerAgent',
-                  'A connected agent (one-shot split call)'
-                )}
-              </SelectItem>
-              <SelectItem value="custom">
-                {t(
-                  'auto.components.settings.TaskEntryPane.decisionModel.providerCustom',
-                  'Custom OpenAI-compatible provider'
-                )}
-              </SelectItem>
+              {!webClient ? <SelectItem value={LOCAL_HOST}>{localLabel}</SelectItem> : null}
+              {environments.map((entry) => (
+                <SelectItem key={entry.id} value={`runtime:${entry.id}`}>
+                  {entry.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
-        {draft.source === 'agent' ? (
-          <div className="flex flex-col gap-1">
-            <Label>
-              {t('auto.components.settings.TaskEntryPane.decisionModel.agentLabel', 'Agent')}
-            </Label>
-            <Select
-              value={draft.agent ?? 'codex'}
-              onValueChange={(agent) => setDraft((current) => ({ ...current, agent }))}
-            >
-              <SelectTrigger className="w-72">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {['codex', 'claude', 'gemini', 'copilot'].map((agent) => (
-                  <SelectItem key={agent} value={agent}>
-                    {agent}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        ) : null}
-        {custom ? (
-          <div className="flex flex-col gap-2">
-            <div className="flex flex-col gap-1">
-              <Label>
-                {t('auto.components.settings.TaskEntryPane.decisionModel.baseUrl', 'Base URL')}
-              </Label>
-              <Input
-                value={draft.baseUrl ?? ''}
-                placeholder={t(
-                  'auto.components.settings.TaskEntryPane.decisionModel.baseUrlPlaceholder',
-                  'https://api.example.com/v1'
-                )}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, baseUrl: event.target.value }))
-                }
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label>
-                {t('auto.components.settings.TaskEntryPane.decisionModel.apiKey', 'API key')}
-              </Label>
-              <Input
-                type="password"
-                value={draft.apiKey ?? ''}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, apiKey: event.target.value }))
-                }
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label>
-                {t('auto.components.settings.TaskEntryPane.decisionModel.modelId', 'Model')}
-              </Label>
-              <Input
-                value={draft.modelId ?? ''}
-                placeholder={t(
-                  'auto.components.settings.TaskEntryPane.decisionModel.modelIdPlaceholder',
-                  'gpt-4o-mini / deepseek-chat / …'
-                )}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, modelId: event.target.value }))
-                }
-              />
-            </div>
-          </div>
-        ) : null}
-        <div className="flex items-center gap-2">
-          <Button size="sm" disabled={!dirty} onClick={save}>
-            {t('auto.components.settings.TaskEntryPane.decisionModel.save', 'Save')}
-          </Button>
-          {dirty ? (
-            <span className="text-muted-foreground text-xs">
-              {t('auto.components.settings.TaskEntryPane.decisionModel.unsaved', 'Unsaved changes')}
-            </span>
-          ) : null}
-        </div>
-      </div>
-    </SettingsGroup>
+      ) : null}
+      <TaskRoutingBlock
+        saved={savedRoute}
+        draftAgent={agentEdit}
+        selectedLocalHost={!webClient && !environment}
+        detectedAgents={detectedAgents}
+        onAgentChange={setAgentEdit}
+      >
+        <DecisionConfigFooter
+          dirty={dirty}
+          defaultConfig={!settings.decisionModel}
+          saving={saving}
+          saveDisabled={Boolean(saving)}
+          saveFailed={saveFailed}
+          onSave={() => void save()}
+          test={routeTest}
+          testLabel={t(
+            'auto.components.settings.TaskEntryPane.decisionModel.testRouting',
+            'Test routing'
+          )}
+          testDisabled={testHostUnavailable}
+          onTest={() =>
+            routeTest.run({
+              method: 'orchestration.entryRoutingTest',
+              params: draftRoute
+            })
+          }
+        />
+      </TaskRoutingBlock>
+      <RouteBypassBlock
+        saved={normalizeRouteBypassSettings(settings.routeBypass)}
+        updateSettings={updateSettings}
+        forceVisible={forceVisible}
+      />
+    </div>
   )
 }

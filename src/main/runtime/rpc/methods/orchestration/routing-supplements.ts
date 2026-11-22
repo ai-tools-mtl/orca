@@ -62,10 +62,14 @@ function parseSubActions(raw: string): RoutingSubActionInput[] {
 
 /** The §5.5 recovery payload: every recorded input of one Run with its sub-actions and
  *  delivery attempts. Shared by the coordinated read and the desktop entry's own read. */
+export function exposeRoutingInput({ review_model_json: _reviewModel, ...input }: RoutingInputRow) {
+  return input
+}
+
 export function routingInputsPayload(db: OrchestrationDb, runId: string) {
   return {
     inputs: db.listRunRoutingInputs(runId).map((input) => ({
-      input,
+      input: exposeRoutingInput(input),
       subActions: db.listSubActions(input.input_id).map((subAction) => ({
         subAction,
         deliveries: db.listSupplements(subAction.sub_action_id).map((supplement) => ({
@@ -127,7 +131,7 @@ export const ORCHESTRATION_ROUTING_METHODS = [
     handler: (params, { runtime }, { run }) => {
       const db = runtime.getOrchestrationDb()
       const input = db.registerRoutingInput({ runId: run.id, text: params.text })
-      return { input }
+      return { input: exposeRoutingInput(input) }
     }
   }),
   // §5.5 recovery surface: after a restart the entry re-reads every recorded input with its

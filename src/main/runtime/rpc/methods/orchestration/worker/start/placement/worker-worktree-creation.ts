@@ -103,6 +103,7 @@ export async function createWorkerWorktree(args: {
   params: {
     name?: string
     baseBranch?: string
+    bootstrapIfUnborn?: boolean
     displayName?: string
     comment?: string
     setup?: 'run' | 'skip' | 'inherit'
@@ -135,6 +136,7 @@ export async function createWorkerWorktree(args: {
     repoSelector: target.repoSelector,
     ...(await resolveWorkerWorktreeName(runtime, target.repoSelector, params.name)),
     baseBranch: params.baseBranch,
+    bootstrapIfUnborn: params.bootstrapIfUnborn,
     displayName: params.displayName,
     ...(params.displayName !== undefined ? { displayNameKind: 'user' as const } : {}),
     comment: params.comment,

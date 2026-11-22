@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 
 import { cn } from '@/lib/class-names'
@@ -10,6 +10,10 @@ import type { WorktreeCardController } from '../controller/use-worktree-card-con
 import { DEFAULT_WORKSPACE_CARD_TEMPLATE } from '../template/default-workspace-card'
 import { renderWorkspaceCardTemplate } from '../template/render-workspace-card-template'
 import { WorktreeCardTitleStatusProvider } from './worktree-card-title-status'
+import {
+  SetWorktreeAgentSummaryTarget,
+  WorktreeAgentSummaryTarget
+} from '../activity/worktree-card-agent-summary-slot'
 
 export function WorktreeCardSurface({ card }: { card: WorktreeCardController }): React.JSX.Element {
   const {
@@ -46,6 +50,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
     contentIndent
   } = card
   const isSleeping = useIsSleepingWorktree(worktree.id)
+  const [agentSummaryTarget, setAgentSummaryTarget] = useState<HTMLSpanElement | null>(null)
   const geometryFor = (statusLane: boolean) =>
     getWorktreeCardFrameGeometry({ flushSurface, contentIndent, statusLane })
   const { content: templateContent, frame } = renderWorkspaceCardTemplate(
@@ -141,19 +146,25 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
 
   return (
     <>
-      {affiliateListMode ? (
-        cardBody
-      ) : (
-        <WorktreeContextMenu
-          worktree={worktree}
-          selectedWorktrees={selectedWorktrees}
-          onContextMenuSelect={handleContextMenuSelect}
-          onAssignWorkspaceStatus={onAssignWorkspaceStatus}
-          onOpenChange={card.detailsHoverControl.setContextMenuOpen}
-        >
-          {cardBody}
-        </WorktreeContextMenu>
-      )}
+      <SetWorktreeAgentSummaryTarget.Provider
+        value={flushSurface ? setAgentSummaryTarget : undefined}
+      >
+        <WorktreeAgentSummaryTarget.Provider value={agentSummaryTarget}>
+          {affiliateListMode ? (
+            cardBody
+          ) : (
+            <WorktreeContextMenu
+              worktree={worktree}
+              selectedWorktrees={selectedWorktrees}
+              onContextMenuSelect={handleContextMenuSelect}
+              onAssignWorkspaceStatus={onAssignWorkspaceStatus}
+              onOpenChange={card.detailsHoverControl.setContextMenuOpen}
+            >
+              {cardBody}
+            </WorktreeContextMenu>
+          )}
+        </WorktreeAgentSummaryTarget.Provider>
+      </SetWorktreeAgentSummaryTarget.Provider>
 
       {typeof worktree.firstAgentMessageRenameError === 'string' &&
         worktree.firstAgentMessageRenameError.length > 0 && (

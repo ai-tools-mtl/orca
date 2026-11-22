@@ -216,6 +216,7 @@ export function appendOrderedGroups(
               type: 'project-routing-entry',
               key: `entry:${repoId}`,
               repoId,
+              groupDepth: projectGroupDepth,
               hostId: getRepoExecutionHostIdOrDefault(entryRepo, defaultHostId)
             })
           }

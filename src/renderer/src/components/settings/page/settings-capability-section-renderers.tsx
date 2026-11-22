@@ -197,15 +197,19 @@ export function renderTaskEntrySettingsSection(
   return (
     <SettingsSection
       id="task-entry"
-      title={t('auto.components.settings.TaskEntryPane.title', 'Task entry')}
+      title={t('auto.components.settings.TaskEntryPane.title', 'Project dispatch')}
       description={t(
         'auto.components.settings.TaskEntryPane.description',
-        'Configure the per-project entry that records, routes, and tracks requests.'
+        'Configure intent recognition and request routing for projects.'
       )}
       searchEntries={context.navigation.getSectionSearchEntries('task-entry')}
     >
       {context.view.isSectionMounted('task-entry') ? (
-        <TaskEntryPane settings={model.settings} updateSettings={model.updateSettings} />
+        <TaskEntryPane
+          settings={model.settings}
+          updateSettings={model.updateSettingsOrThrow}
+          updateGlobalSettings={model.updateSettingsOrThrow}
+        />
       ) : null}
     </SettingsSection>
   )

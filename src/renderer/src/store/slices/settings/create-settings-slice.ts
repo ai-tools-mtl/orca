@@ -1,6 +1,10 @@
 import { normalizeNativeChatAppearanceSettings } from '../../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
+import type {
+  DecisionModelSettings,
+  RouteBypassSettings
+} from '../../../../../shared/settings/decision-model-settings'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { toast } from 'sonner'
 import {
@@ -45,7 +49,10 @@ export type SettingsSlice = SettingsSearchState & {
   awaitOwnerWorktreeVisibilityDefaultsHydration: () => Promise<void>
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
   updateSettingsOrThrow: (
-    updates: Partial<GlobalSettings>,
+    updates: Partial<GlobalSettings> & {
+      decisionModelPatch?: DecisionModelSettings
+      routeBypassPatch?: RouteBypassSettings
+    },
     onAcknowledged?: (settings: GlobalSettings) => void
   ) => Promise<void>
   setActiveRuntimeEnvironmentPreference: (environmentId: string | null) => Promise<boolean>

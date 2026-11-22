@@ -8,6 +8,8 @@ export const ApprovalAnswerParams = z.object({
   dispatch: requiredString('Missing --dispatch'),
   prompt: requiredString('Missing --prompt'),
   decision: z.enum(['allow', 'deny']),
+  /** Requests a fresh native prompt after a desktop investigation approval was interrupted. */
+  renew: z.literal(true).optional(),
   reason: z.string().max(APPROVAL_REASON_MAX_CHARS).optional(),
   from: OptionalString
 })

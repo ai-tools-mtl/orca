@@ -1,3 +1,4 @@
+import { entrySubActionRequiresWriteApproval, isEntryReadOnlyWorker } from './entry-write-policy'
 import { OrchestrationError } from '../orchestration-error'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import type { RoutingHandbackRow, RoutingSubActionRow } from '../db/routing-records'
@@ -21,6 +22,15 @@ export function claimSubActionForDispatch(
       {
         subActionId
       }
+    )
+  }
+  if (
+    entrySubActionRequiresWriteApproval(this, current) &&
+    !isEntryReadOnlyWorker(this, dispatchId)
+  ) {
+    throw new OrchestrationError(
+      'agent_unconfigured',
+      'This task requires a read-only Codex worker.'
     )
   }
   if (current.claimed_dispatch_id === dispatchId) {

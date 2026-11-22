@@ -2,6 +2,7 @@ import React from 'react'
 import { LinearAgentSkillSetupPrompt } from '../../LinearAgentSkillSetupPrompt'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 import WorktreeCardAgents from '../activity/WorktreeCardAgents'
+import { WorktreeAgentSummarySlot } from '../activity/worktree-card-agent-summary-slot'
 import {
   renderWorktreeCardIndicators,
   WorktreeCardIdentityHover,
@@ -50,6 +51,7 @@ export const CARD_ACTIVITY_PARTS = {
   StatusLane: part(['unreadAction'], (props, _children, card) => (
     <WorktreeCardStatusLane card={card} showUnreadAction={props.unreadAction === true} />
   )),
+  AgentSummarySlot: part([], () => <WorktreeAgentSummarySlot />),
   Agents: part(['tight'], (props, _children, card) => (
     <WorktreeCardAgents
       worktreeId={card.worktree.id}

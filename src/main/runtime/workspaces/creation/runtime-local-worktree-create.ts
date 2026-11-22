@@ -40,6 +40,7 @@ import {
   type WorktreeCreatePathClaim
 } from '../../../workspaces/creation/worktree-create-in-flight'
 import { resolveRuntimeSetupDecision } from './runtime-local-worktree-setup'
+import { bootstrapUnbornRepoMain } from '../../../git/refs/resolution/unborn-head-bootstrap'
 import { WorktreeCreateSetupChoiceRefusedError } from './worktree-create-setup-choice-refusal'
 import type { PreparationRearmHolder } from '../../../workspaces/creation/preparation/worktree-create-preparation'
 import {
@@ -102,6 +103,11 @@ async function performRuntimeLocalWorktreeCreate<T>(
   const gitExecOptions = getLocalProjectGitExecOptions(store, repo)
   const worktreeGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
   args.timing.recordExecutionHost(localWorktreeCreateExecutionHost(gitExecOptions))
+  // Opt-in 空仓引导: seed the first commit before base resolution so an unborn branch becomes a
+  // real ref. Only the entry dispatch passes this; UI/manual creates keep the strict refusal.
+  if (request.bootstrapIfUnborn === true) {
+    await bootstrapUnbornRepoMain(repo.path, gitExecOptions)
+  }
   // Resolve ask setup before Git work; checking after add formerly orphaned refused worktrees.
   if (getEffectiveHooks(repo)?.scripts.setup) {
     try {

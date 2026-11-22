@@ -18,18 +18,34 @@ import {
   registerRoutingDecision,
   registerRoutingInput
 } from './routing-input-decisions'
+import type { DispatchAuthorizationMethods } from './dispatch-authorization-attach'
 import {
   claimSubActionForDispatch,
   handbackSubAction,
   listSubActionHandbacks
 } from './routing-claims'
 import {
+  dequeueRoutingSubAction,
   isRoutingRunPaused,
+  routingWatchdogFacts,
+  isRoutingSubActionPaused,
+  listQueuedSubActions,
   pauseRoutingRun,
+  pauseRoutingSubAction,
+  queueRoutingSubAction,
   recordSupplementFirstActionEvidence,
   resumeRoutingRun,
-  setSubActionState
+  resumeRoutingSubAction,
+  setSubActionState,
+  settleSupplementAttempt
 } from './routing-card-state'
+import {
+  grantRoutingStageGate,
+  promoteRoutingMergeCheckpoint,
+  recordRoutingMergeOutcome,
+  saveRoutingPlanParse
+} from './routing-stage-gates'
+import { listDecisionModelAudits, recordDecisionModelAudit } from './decision-audit-store'
 
 /** Routing ledger (optional-decision-routing plan §6): the input→sub-action→supplement→attempt
  *  linkage only. Execution state stays in tasks/dispatch_contexts/worker_dispatches. */
@@ -144,14 +160,30 @@ export function getSubAction(
 ): RoutingSubActionRow | undefined {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
   return this.db
-    .prepare('SELECT * FROM routing_sub_actions WHERE sub_action_id = ?')
+    .prepare(
+      'SELECT * FROM routing_sub_actions WHERE sub_action_id = ? AND entry_deleted_at IS NULL'
+    )
     .get(subActionId) as RoutingSubActionRow | undefined
+}
+
+export function getRoutingSubActionByTask(
+  this: OrchestrationDb,
+  taskId: string
+): RoutingSubActionRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
+  return this.db
+    .prepare(
+      'SELECT * FROM routing_sub_actions WHERE task_id = ? AND entry_deleted_at IS NULL ORDER BY seq LIMIT 1'
+    )
+    .get(taskId) as RoutingSubActionRow | undefined
 }
 
 export function listSubActions(this: OrchestrationDb, inputId: string): RoutingSubActionRow[] {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
   return this.db
-    .prepare('SELECT * FROM routing_sub_actions WHERE input_id = ? ORDER BY seq')
+    .prepare(
+      'SELECT * FROM routing_sub_actions WHERE input_id = ? AND entry_deleted_at IS NULL ORDER BY seq'
+    )
     .all(inputId) as RoutingSubActionRow[]
 }
 
@@ -200,66 +232,21 @@ export function listSupplementAttempts(
 export function listRunRoutingInputs(this: OrchestrationDb, runId: string): RoutingInputRow[] {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
   return this.db
-    .prepare('SELECT * FROM routing_inputs WHERE run_id = ? ORDER BY received_seq, rowid')
+    .prepare(
+      'SELECT * FROM routing_inputs WHERE run_id = ? AND entry_deleted_at IS NULL ORDER BY received_seq, rowid'
+    )
     .all(runId) as RoutingInputRow[]
 }
 
-export type RoutingWatchdogFacts = {
-  paused: boolean
-  /** Delivered attempts without a consumption verdict — §5.3 待核对. */
-  awaitingVerification: {
-    inputId: string
-    subActionId: string
-    supplementId: string
-    attemptId: string
-    dispatchId: string
-    expectedTurnId: string | null
-  }[]
-  /** Continuations registered but not yet sent (§5.3 row 3 registered-not-sent). */
-  pendingContinuations: { subActionId: string; sourceDispatchId: string; requestId: string }[]
-}
-
-/** Deterministic §8 watchdog facts: stalled deliveries, pending continuations, pause state.
- *  No judgment beyond the recorded ledger facts. */
-export function routingWatchdogFacts(this: OrchestrationDb, runId: string): RoutingWatchdogFacts {
-  const awaitingVerification: RoutingWatchdogFacts['awaitingVerification'] = []
-  const pendingContinuations: RoutingWatchdogFacts['pendingContinuations'] = []
-  for (const input of this.listRunRoutingInputs(runId)) {
-    for (const subAction of this.listSubActions(input.input_id)) {
-      for (const supplement of this.listSupplements(subAction.sub_action_id)) {
-        for (const attempt of this.listSupplementAttempts(supplement.supplement_id)) {
-          if (attempt.outcome === 'delivered' && attempt.first_action_json === null) {
-            awaitingVerification.push({
-              inputId: input.input_id,
-              subActionId: subAction.sub_action_id,
-              supplementId: supplement.supplement_id,
-              attemptId: attempt.attempt_id,
-              dispatchId: attempt.target_dispatch_id,
-              expectedTurnId: attempt.expected_turn_id
-            })
-          }
-        }
-      }
-      const continuation = this.getRoutingContinuation(subAction.sub_action_id)
-      if (continuation && continuation.follow_up_dispatch_id === null) {
-        pendingContinuations.push({
-          subActionId: subAction.sub_action_id,
-          sourceDispatchId: continuation.source_dispatch_id,
-          requestId: continuation.request_id
-        })
-      }
-    }
-  }
-  return { paused: this.isRoutingRunPaused(runId), awaitingVerification, pendingContinuations }
-}
-
-export type RoutingLedgerMethods = {
+export type RoutingLedgerMethods = DispatchAuthorizationMethods & {
   registerRoutingInput: typeof registerRoutingInput
   registerRoutingDecision: typeof registerRoutingDecision
   recordRoutingSupplement: typeof recordRoutingSupplement
+  settleSupplementAttempt: typeof settleSupplementAttempt
   recordSupplementAttempt: typeof recordSupplementAttempt
   getRoutingInput: typeof getRoutingInput
   getSubAction: typeof getSubAction
+  getRoutingSubActionByTask: typeof getRoutingSubActionByTask
   listSubActions: typeof listSubActions
   getSupplement: typeof getSupplement
   listSupplements: typeof listSupplements
@@ -274,9 +261,21 @@ export type RoutingLedgerMethods = {
   pauseRoutingRun: typeof pauseRoutingRun
   resumeRoutingRun: typeof resumeRoutingRun
   isRoutingRunPaused: typeof isRoutingRunPaused
+  pauseRoutingSubAction: typeof pauseRoutingSubAction
+  resumeRoutingSubAction: typeof resumeRoutingSubAction
+  isRoutingSubActionPaused: typeof isRoutingSubActionPaused
+  queueRoutingSubAction: typeof queueRoutingSubAction
+  dequeueRoutingSubAction: typeof dequeueRoutingSubAction
+  listQueuedSubActions: typeof listQueuedSubActions
   claimSubActionForDispatch: typeof claimSubActionForDispatch
   handbackSubAction: typeof handbackSubAction
   listSubActionHandbacks: typeof listSubActionHandbacks
+  grantRoutingStageGate: typeof grantRoutingStageGate
+  saveRoutingPlanParse: typeof saveRoutingPlanParse
+  recordRoutingMergeOutcome: typeof recordRoutingMergeOutcome
+  promoteRoutingMergeCheckpoint: typeof promoteRoutingMergeCheckpoint
+  recordDecisionModelAudit: typeof recordDecisionModelAudit
+  listDecisionModelAudits: typeof listDecisionModelAudits
   routingWatchdogFacts: typeof routingWatchdogFacts
 }
 
@@ -285,9 +284,11 @@ export function attachRoutingLedger(ctor: { prototype: object }): void {
     registerRoutingInput,
     registerRoutingDecision,
     recordRoutingSupplement,
+    settleSupplementAttempt,
     recordSupplementAttempt,
     getRoutingInput,
     getSubAction,
+    getRoutingSubActionByTask,
     listSubActions,
     getSupplement,
     listSupplements,
@@ -302,9 +303,21 @@ export function attachRoutingLedger(ctor: { prototype: object }): void {
     pauseRoutingRun,
     resumeRoutingRun,
     isRoutingRunPaused,
+    pauseRoutingSubAction,
+    resumeRoutingSubAction,
+    isRoutingSubActionPaused,
+    queueRoutingSubAction,
+    dequeueRoutingSubAction,
+    listQueuedSubActions,
     routingWatchdogFacts,
     claimSubActionForDispatch,
     handbackSubAction,
-    listSubActionHandbacks
+    listSubActionHandbacks,
+    grantRoutingStageGate,
+    saveRoutingPlanParse,
+    recordRoutingMergeOutcome,
+    promoteRoutingMergeCheckpoint,
+    recordDecisionModelAudit,
+    listDecisionModelAudits
   })
 }

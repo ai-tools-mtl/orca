@@ -130,9 +130,44 @@ export const EntryShowParams = z.object({
   group: requiredString('Missing --group')
 })
 
+export const DecisionModelParams = z.object({
+  source: z.literal('agent'),
+  /** The installed agent proposing the route; omitted means the first installed one. */
+  agent: z.string().optional()
+})
+
+export const DecisionModelPatchParams = DecisionModelParams
+
+/** 专用决策模型旁路对照（评估）：endpoint identity only — the key never echoes back. */
+export const RouteBypassPatchParams = z.object({
+  enabled: z.boolean(),
+  baseUrl: z.string().optional(),
+  apiKey: z.string().optional(),
+  modelId: z.string().optional(),
+  protocol: z.enum(['openai', 'anthropic']).optional()
+})
+
+export const EntryRoutingTestParams = z.discriminatedUnion('source', [
+  DecisionModelParams,
+  z.object({
+    source: z.literal('dedicated'),
+    baseUrl: requiredString('Missing --base-url'),
+    apiKey: requiredString('Missing --api-key'),
+    modelId: requiredString('Missing --model'),
+    protocol: z.enum(['openai', 'anthropic']).optional()
+  })
+])
+
 export const EntrySubmitParams = z.object({
   group: requiredString('Missing --group'),
-  text: requiredString('Missing --text')
+  text: requiredString('Missing --text'),
+  /** 循环开发（本次）: this submission's dev sub-actions run the writer→reviewer loop. */
+  loop: z.boolean().optional(),
+  /** Selects the settings-backed reviewer model without carrying its credentials. */
+  decisionModel: DecisionModelParams.pick({ source: true, agent: true }).optional(),
+  /** 客户端请求 ID（8–64 字符，字母数字 _ -）：整个提交重放（响应丢失后重试）复用同一
+   *  输入——路由与派发去重从提交入口开始，而不是只从路由开始。 */
+  requestId: z.string().optional()
 })
 
 export const EntrySupplementParams = z.object({
@@ -151,8 +186,14 @@ export const EntryHandbackParams = z.object({
   dispatch: requiredString('Missing --dispatch')
 })
 
+export const EntryTransferParams = EntrySupplementParams.omit({ expectedTurn: true }).extend({
+  fromDispatch: requiredString('Missing source dispatch').nullable()
+})
+
 export const EntryPauseParams = z.object({
-  group: requiredString('Missing --group')
+  group: requiredString('Missing --group'),
+  /** Given: pause/resume that one task card (§5.5 per-card wait) instead of the whole entry. */
+  subAction: OptionalString
 })
 
 export const EntryReviewParams = z.object({
@@ -164,11 +205,9 @@ export const EntryApprovalsParams = z.object({
   group: requiredString('Missing --group')
 })
 
-export const DecisionModelParams = z.object({
-  provider: z.enum(['zcode-plan', 'custom']),
-  baseUrl: z.string().optional(),
-  apiKey: z.string().optional(),
-  modelId: z.string().optional()
+export const EntryReviewAcceptParams = EntryReviewParams.extend({
+  cycle: requiredString('Missing --cycle'),
+  revision: z.number().int().positive()
 })
 
 export const EntryAutoRouteParams = z.object({
@@ -182,7 +221,49 @@ export const EntryAutoRouteParams = z.object({
 export const EntryPlanParams = z.object({
   group: requiredString('Missing --group'),
   input: requiredString('Missing --input'),
-  subActions: z.array(z.string().trim().min(1)).min(1).max(6)
+  /** A plain string is a classic sub-action; the object form registers a pipeline stage. */
+  subActions: z
+    .array(
+      z.union([
+        z.string().trim().min(1),
+        z.object({
+          text: z.string().trim().min(1),
+          stageKind: z.enum(['clarification', 'prototype', 'plan', 'implement', 'merge']),
+          gate: z.enum(['auto', 'user_confirm']).optional(),
+          /** Upstream edges: 1-based seqs within this batch. */
+          dependsOn: z.array(z.number().int().min(1)).max(8).optional(),
+          agentHint: z.string().trim().optional()
+        })
+      ])
+    )
+    .min(1)
+    .max(8)
+})
+
+export const EntryGateGrantParams = z.object({
+  group: requiredString('Missing --group'),
+  subAction: requiredString('Missing --sub-action')
+})
+
+export const EntryGateRejectParams = z.object({
+  group: requiredString('Missing --group'),
+  subAction: requiredString('Missing --sub-action'),
+  /** The modification requirement: mailed to the stage worker as an unread follow-up. */
+  text: requiredString('Missing --text')
+})
+
+export const EntryAnswerAskParams = z.object({
+  group: requiredString('Missing --group'),
+  /** The pending question's message id (orchestration.entryShow exposes it). */
+  message: requiredString('Missing --message'),
+  body: requiredString('Missing --body')
+})
+
+export const DecisionAuditListParams = z.object({
+  group: requiredString('Missing --group'),
+  /** Filter to one input's attempts (原请求 / 重试 / 升级重拆各占一行). */
+  input: z.string().optional(),
+  limit: z.number().int().positive().max(200).optional()
 })
 
 export const EntryAssignParams = z.object({
@@ -201,3 +282,64 @@ export const EntryClaimParams = z.object({
   subAction: requiredString('Missing --sub-action'),
   dispatch: requiredString('Missing --dispatch')
 })
+
+export const EntryDeleteParams = z.discriminatedUnion('scope', [
+  EntryShowParams.extend({
+    scope: z.literal('request'),
+    input: requiredString('Missing --input')
+  }),
+  EntryShowParams.extend({
+    scope: z.literal('sub-action'),
+    input: requiredString('Missing --input'),
+    subAction: requiredString('Missing --sub-action')
+  }),
+  EntryShowParams.extend({ scope: z.literal('failed') }),
+  // 清空全部指令：best-effort 扫全部可删候选（received + 整条可删 + 失败），在跑/被认领的保留。
+  EntryShowParams.extend({ scope: z.literal('all') })
+])
+
+// ─── 专用决策模型旁路对照（评估）───────────────────────────────────────────────
+
+/** 人工标注的评估分组（entry-intent-routing-design §专用决策模型旁路验收）。 */
+/** 人工标注的评估分组（entry-intent-routing-design §专用决策模型旁路验收）。 */
+export const ROUTE_BYPASS_CATEGORIES = [
+  'status_only',
+  'single_task',
+  'composite',
+  'continuation_ambiguous',
+  'write_gated'
+] as const
+
+export type RouteBypassCategory = (typeof ROUTE_BYPASS_CATEGORIES)[number]
+
+const RouteBypassExpectedActionSchema = z.object({
+  type: z.enum(['query_status', 'continue_task', 'create_task', 'clarify']),
+  /** continue_task/create_task 的期望任务归属（账本候选 ID 或任务说明关键词）。 */
+  taskId: z.string().optional(),
+  instruction: z.string().optional()
+})
+
+export const RouteBypassLabelSetParams = z.object({
+  group: requiredString('Missing --group'),
+  input: requiredString('Missing --input'),
+  category: z.enum(ROUTE_BYPASS_CATEGORIES),
+  expected: z.array(RouteBypassExpectedActionSchema).min(0).max(8),
+  notes: z.string().optional()
+})
+
+export const RouteBypassLabelListParams = z.object({
+  group: requiredString('Missing --group'),
+  limit: z.number().int().positive().max(500).optional()
+})
+
+export const RouteBypassTrialListParams = z.object({
+  group: requiredString('Missing --group'),
+  input: z.string().optional(),
+  limit: z.number().int().positive().max(200).optional()
+})
+
+export const RouteBypassReportParams = z.object({
+  group: requiredString('Missing --group')
+})
+
+export type EntryDeleteRequest = z.output<typeof EntryDeleteParams>

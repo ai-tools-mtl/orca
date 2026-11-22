@@ -1,5 +1,6 @@
 import type { BranchContext } from './worktree-agent-branch-context'
-import React, { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
+import React, { useCallback, useContext, useLayoutEffect, useMemo, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
@@ -12,6 +13,7 @@ import {
 import { useAgentPresentation, useWorktreeAgentRow } from './useWorktreeAgentRows'
 import { useHostRootKeys } from './use-worktree-agent-host-roots'
 import { KeyedSummary } from './worktree-card-agent-keyed-summary'
+import { WorktreeAgentSummaryTarget } from './worktree-card-agent-summary-slot'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useWorktreeAgentDisplay } from './use-worktree-agent-display'
 import { cn } from '@/lib/class-names'
@@ -145,6 +147,18 @@ function WorktreeCardAgentsBody({
   )
   const compact = display.agentActivityDisplayMode === 'compact',
     summary = compact && roots.length > 1 && !targets
+  const summaryTarget = useContext(WorktreeAgentSummaryTarget)
+  const inlineSummary = summary && summaryTarget !== null
+  const summaryButton = summary ? (
+    <KeyedSummary
+      worktreeId={worktreeId}
+      roots={roots}
+      hostFiltered={hostFiltered}
+      expanded={expansion.compactRootListExpanded}
+      onToggle={expansion.toggleCompactRootList}
+      inline={inlineSummary}
+    />
+  ) : null
   const rootRef = useRef<HTMLDivElement | null>(null),
     previousExpanded = useRef(expansion.compactRootListExpanded)
   useLayoutEffect(() => {
@@ -160,7 +174,10 @@ function WorktreeCardAgentsBody({
   return (
     <div
       ref={rootRef}
-      className={cn(compact ? 'flex flex-col mt-1 gap-0.5' : 'flex flex-col mt-1', className)}
+      className={cn(
+        compact ? 'flex flex-col mt-1 gap-0.5' : 'flex flex-col mt-1',
+        inlineSummary ? (expansion.compactRootListExpanded ? 'mt-0' : 'hidden') : className
+      )}
       onClick={stopBubble}
       onDoubleClick={stopBubble}
       onMouseDown={stopBubble}
@@ -176,13 +193,7 @@ function WorktreeCardAgentsBody({
             expansion.compactRootListExpanded && 'compact-agent-summary-panel-expanded'
           )}
         >
-          <KeyedSummary
-            worktreeId={worktreeId}
-            roots={roots}
-            hostFiltered={hostFiltered}
-            expanded={expansion.compactRootListExpanded}
-            onToggle={expansion.toggleCompactRootList}
-          />
+          {summaryTarget ? createPortal(summaryButton, summaryTarget) : summaryButton}
           <CompactAgentExpansion expanded={expansion.compactRootListExpanded}>
             <AgentBranches
               keysToRender={roots}

@@ -1,4 +1,4 @@
-import { memo, Suspense, useCallback, useRef } from 'react'
+import { memo, Suspense, useCallback, useRef, useState } from 'react'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
@@ -15,8 +15,8 @@ import { TitlebarLeftControls } from './chrome/TitlebarLeftControls'
 import { RightSidebarToggle, TitlebarMainStrip } from './chrome/TitlebarMainStrip'
 import type { AppChromeLayout } from './chrome/use-app-chrome-layout'
 import type { FloatingWorkspacePanelState } from '../components/floating-terminal/workspace/use-floating-workspace-panel'
-import DispatchEntryPaneLayer from '../components/sidebar/dispatch-entry/dispatch-entry-pane-layer'
-import { useDispatchEntryPaneListener } from '../components/sidebar/dispatch-entry/use-dispatch-entry-pane-listener'
+import DispatchEntryPane from '../components/sidebar/dispatch-entry/dispatch-entry-pane'
+import type { useDispatchEntryPaneListener } from '../components/sidebar/dispatch-entry/use-dispatch-entry-pane-listener'
 
 // Skips the shell render each workspace switch causes; its props only change on toggle.
 const MemoFloatingTerminalToggleButton = memo(FloatingTerminalToggleButton)
@@ -117,10 +117,15 @@ function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element 
 export function AppWorkspaceShell(props: {
   layout: AppChromeLayout
   floatingWorkspace: FloatingWorkspacePanelState
+  dispatchEntry: ReturnType<typeof useDispatchEntryPaneListener>
 }): React.JSX.Element {
   const t = useTranslate()
-  const dispatchEntry = useDispatchEntryPaneListener()
-  const { layout, floatingWorkspace } = props
+  const { layout, floatingWorkspace, dispatchEntry } = props
+  const dispatchTarget = layout.dispatchEntryVisible ? dispatchEntry.target : null
+  const [dispatchSidebarViewport, setDispatchSidebarViewport] = useState<HTMLDivElement | null>(
+    null
+  )
+  const showRightSidebarToggle = showsFloatingRightSidebarToggle(layout)
   const titlebarLeftControls = <TitlebarLeftControls layout={layout} />
   const titlebarMainStrip = <TitlebarMainStrip layout={layout} />
   // Keep scroll memory above sidebar view remounts to preserve list position.
@@ -198,7 +203,7 @@ export function AppWorkspaceShell(props: {
               ) : null}
               <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
                 {/* Match the open sidebar header’s alignment to prevent toggle jitter. */}
-                {showsFloatingRightSidebarToggle(layout) && (
+                {showRightSidebarToggle && !dispatchTarget && (
                   <div
                     className="absolute top-0 z-10 flex items-center h-[36px]"
                     style={
@@ -231,27 +236,34 @@ export function AppWorkspaceShell(props: {
                       </Suspense>
                     </TerminalWorkbenchContainer>
                   ) : null}
-                  <Suspense fallback={null}>
-                    <RecoverableRenderErrorBoundary
-                      boundaryId={`page.${layout.activeView}`}
-                      surface="page"
-                      resetKey={layout.activeView}
-                      title={t('auto.App.b7a714db1e', 'This page hit an error.')}
-                      description={t(
-                        'auto.App.03a14f6b5b',
-                        'Retry the page or navigate to another Orca surface.'
-                      )}
-                    >
-                      <ActivePage layout={layout} />
-                    </RecoverableRenderErrorBoundary>
-                  </Suspense>
+                  {dispatchTarget ? (
+                    <DispatchEntryPane
+                      hostId={dispatchTarget.hostId}
+                      repoId={dispatchTarget.repoId}
+                      sidebarViewport={dispatchSidebarViewport}
+                      onWorkspaceOpened={dispatchEntry.close}
+                      reserveCollapsedSidebarHeaderSpace={
+                        layout.leftTitlebarChromeLayout.isFloating
+                      }
+                      headerAction={showRightSidebarToggle ? <RightSidebarToggle /> : null}
+                    />
+                  ) : (
+                    <Suspense fallback={null}>
+                      <RecoverableRenderErrorBoundary
+                        boundaryId={`page.${layout.activeView}`}
+                        surface="page"
+                        resetKey={layout.activeView}
+                        title={t('auto.App.b7a714db1e', 'This page hit an error.')}
+                        description={t(
+                          'auto.App.03a14f6b5b',
+                          'Retry the page or navigate to another Orca surface.'
+                        )}
+                      >
+                        <ActivePage layout={layout} />
+                      </RecoverableRenderErrorBoundary>
+                    </Suspense>
+                  )}
                 </div>
-                {dispatchEntry.target && layout.activeView === 'terminal' ? (
-                  <DispatchEntryPaneLayer
-                    hostId={dispatchEntry.target.hostId}
-                    repoId={dispatchEntry.target.repoId}
-                  />
-                ) : null}
                 {floatingWorkspace.showToggleButton && !capturingPluginShot ? (
                   <MemoFloatingTerminalToggleButton
                     open={floatingWorkspace.open}
@@ -268,9 +280,11 @@ export function AppWorkspaceShell(props: {
             boundaryId="right-sidebar"
             surface="right-sidebar"
             resetKey={
-              layout.rightSidebarTab === 'explorer'
-                ? `${layout.rightSidebarTab}:${layout.rightSidebarExplorerView}`
-                : layout.rightSidebarTab
+              dispatchTarget
+                ? JSON.stringify([dispatchTarget.hostId, dispatchTarget.repoId])
+                : layout.rightSidebarTab === 'explorer'
+                  ? `${layout.rightSidebarTab}:${layout.rightSidebarExplorerView}`
+                  : layout.rightSidebarTab
             }
             title={t('auto.App.ed6b168d00', 'The right sidebar hit an error.')}
             description={t(
@@ -278,7 +292,9 @@ export function AppWorkspaceShell(props: {
               'Retry the sidebar or switch tabs to reload this surface.'
             )}
           >
-            <RightSidebar />
+            <RightSidebar
+              dispatchViewportRef={dispatchTarget ? setDispatchSidebarViewport : undefined}
+            />
           </RecoverableRenderErrorBoundary>
         ) : null}
       </div>

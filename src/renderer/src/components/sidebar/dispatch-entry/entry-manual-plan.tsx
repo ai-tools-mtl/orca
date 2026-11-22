@@ -8,28 +8,17 @@ const ENTRY = 'auto.components.sidebar.RoutingEntryCard'
 export function EntryManualPlan({
   original,
   busy,
-  onSave
+  onSave,
+  onClose
 }: {
   original: string
   busy: boolean
   onSave: (actions: string[]) => Promise<void>
+  onClose: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const [draft, setDraft] = useState<string | null>(null)
+  const [draft, setDraft] = useState(original)
   const [error, setError] = useState<string | null>(null)
-  if (draft === null) {
-    return (
-      <Button
-        size="sm"
-        variant="outline"
-        className="self-start"
-        disabled={busy}
-        onClick={() => setDraft(original)}
-      >
-        {t(`${ENTRY}.manualPlan`, 'Split manually')}
-      </Button>
-    )
-  }
 
   const actions = draft
     .split('\n')
@@ -38,15 +27,12 @@ export function EntryManualPlan({
   const disabled = busy || actions.length === 0 || actions.length > 6
   return (
     <form
-      className="flex flex-col gap-2 rounded-lg border bg-card p-2.5"
+      className="mt-2 flex flex-col gap-2 border-t border-border pt-2"
       onSubmit={(event) => {
         event.preventDefault()
         if (!disabled) {
           setError(null)
-          void onSave(actions).then(
-            () => setDraft(null),
-            (cause: unknown) => setError(String(cause))
-          )
+          void onSave(actions).then(onClose, (cause: unknown) => setError(String(cause)))
         }
       }}
     >
@@ -63,16 +49,7 @@ export function EntryManualPlan({
         <Button size="sm" type="submit" disabled={disabled}>
           {t(`${ENTRY}.savePlan`, 'Save tasks')}
         </Button>
-        <Button
-          size="sm"
-          type="button"
-          variant="ghost"
-          disabled={busy}
-          onClick={() => {
-            setError(null)
-            setDraft(null)
-          }}
-        >
+        <Button size="sm" type="button" variant="ghost" disabled={busy} onClick={onClose}>
           {t('common.cancel', 'Cancel')}
         </Button>
       </div>

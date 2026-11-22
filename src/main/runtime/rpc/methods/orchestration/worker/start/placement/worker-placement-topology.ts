@@ -1,5 +1,6 @@
 import type { RuntimeTerminalCreate } from '../../../../../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import type { AgentLaunchPreferences } from '../../../../../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { narrowStructuredLaunchSeedOptions } from '../../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
@@ -97,8 +98,12 @@ export async function createStructuredWorkerSessionForWorktree(args: {
   /** `--model`/`--effort`; the session seeds them exactly as a saved selection is seeded. */
   launchPreferences?: AgentLaunchPreferences
   effects: WorkerEffect[]
+  readOnly?: boolean
 }): Promise<Awaited<ReturnType<typeof createStructuredWorkerSession>>> {
-  const options = narrowStructuredLaunchSeedOptions(args.launchPreferences)
+  const seeds = narrowStructuredLaunchSeedOptions(args.launchPreferences)
+  const options = args.readOnly
+    ? { ...seeds, [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: 'ask' }
+    : seeds
   const created = await createStructuredWorkerSession({
     runtime: args.runtime,
     worktreeId: args.worktreeId,

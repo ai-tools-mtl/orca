@@ -86,6 +86,61 @@ describe('settled assignment worker recovery', () => {
     expect(db.getTask(taskId)?.status).toBe('completed')
   })
 
+  it('arms a settled entry worker only when the dispatch entry switch is on', () => {
+    // 项目调度 worker：routing 子动作认领了该 Dispatch，自动关闭由 entryWorkerAutoReleaseEnabled 单独管。
+    const input = db.registerRoutingInput({
+      runId: 'run_legacy_local',
+      text: '只读调查仓库并出原型，写入前需批准'
+    })
+    const claim = (dispatchId: string) =>
+      db.db
+        .prepare(
+          `UPDATE routing_sub_actions SET claimed_dispatch_id = ?
+           WHERE sub_action_id = 'sa-1-1'`
+        )
+        .run(dispatchId)
+    db.db
+      .prepare(
+        `INSERT INTO routing_sub_actions
+           (sub_action_id, input_id, run_id, seq, text, constraints_json, task_id)
+         VALUES ('sa-1-1', ?, 'run_legacy_local', 1, '只读调查', '[]', NULL)`
+      )
+      .run(input.input_id)
+
+    // 默认（开关缺省/false）：入口 worker 完成后不武装自动关闭。
+    const kept = worker('term_entry_kept')
+    claim(kept.dispatchId)
+    db.settleWorkerReport({
+      taskId: kept.taskId,
+      dispatchId: kept.dispatchId,
+      outcome: 'succeeded',
+      result: '{}'
+    })
+    expect(db.getWorkerTerminalResourceByOwner(kept.dispatchId)?.auto_release_at).toBeNull()
+
+    // 显式打开：入口 worker 照常武装。
+    const opened = worker('term_entry_open')
+    claim(opened.dispatchId)
+    db.entryWorkerAutoReleaseEnabled = () => true
+    db.settleWorkerReport({
+      taskId: opened.taskId,
+      dispatchId: opened.dispatchId,
+      outcome: 'succeeded',
+      result: '{}'
+    })
+    expect(db.getWorkerTerminalResourceByOwner(opened.dispatchId)?.auto_release_at).not.toBeNull()
+
+    // 非 entry worker 不受该开关影响：全局开关照常武装。
+    const plain = worker('term_plain')
+    db.settleWorkerReport({
+      taskId: plain.taskId,
+      dispatchId: plain.dispatchId,
+      outcome: 'succeeded',
+      result: '{}'
+    })
+    expect(db.getWorkerTerminalResourceByOwner(plain.dispatchId)?.auto_release_at).not.toBeNull()
+  })
+
   it('preserves retry failure when SQL cannot be read, then recovers after the database reopens', () => {
     const { dispatchId } = worker()
     const recovery = new RuntimeLegacyWorkerTerminalRecoveryPersistence(

@@ -1,4 +1,5 @@
 import { normalizeAgentDefaultSurface } from '../../../../shared/native-chat/settings/native-chat-providers'
+import { normalizeDecisionModelSettings } from '../../../../shared/settings/decision-model-settings'
 import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import { getDefaultVoiceSettings } from '../../../../shared/orca-profiles/constants'
 import { normalizePRBotAuthorOverrides } from '../../../../shared/source-control/review-comments/pr-bot-author-overrides'
@@ -204,7 +205,8 @@ export function normalizeLoadedGlobalSettings(
       parsed.settings?.commitMessageAi ?? defaults.settings.commitMessageAi
     ),
     voice: { ...voice, sttModel: replaceRetiredSpeechModelId(voice.sttModel) },
-    voiceDictationModeDefaultedToAuto: true
+    voiceDictationModeDefaultedToAuto: true,
+    decisionModel: normalizeDecisionModelSettings(parsed.settings?.decisionModel)
   }
 }
 

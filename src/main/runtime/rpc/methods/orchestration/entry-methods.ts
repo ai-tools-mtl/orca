@@ -6,44 +6,53 @@ import {
   desktopEntryCaller,
   desktopEntryAddress
 } from '../../../orchestration/addressing/desktop-entry-identity'
-import { deliverTargetedSupplement } from '../../../orchestration/routing/targeted-supplement-delivery'
-import { recentOpenApprovalReports } from '../../../orchestration/workers/approvals/worker-approval-report'
-import { supplementReceipt } from './routing-supplements'
-import { coordinatedEntryRun, entryInputsWithResults, entryRunOfInput } from './entry-dispatch'
+import {
+  deliverRecordedSupplement,
+  deliverTargetedSupplement
+} from '../../../orchestration/routing/targeted-supplement-delivery'
+import { runLifecycleWriteTransaction } from '../../../orchestration/db/lifecycle-write-transaction-runner'
+import { resumeEntrySupplements, resumeEntrySupplementsForSubAction } from './entry-supplements'
+import { ORCHESTRATION_ENTRY_REVIEW_METHODS } from './entry-review-methods'
+import { ORCHESTRATION_ENTRY_STAGE_METHODS } from './entry-stage-methods'
+import { ORCHESTRATION_ENTRY_AUDIT_METHODS } from './entry-audit-methods'
+import { ORCHESTRATION_ENTRY_BYPASS_METHODS } from './entry-bypass-methods'
+import { pumpEntryAutomations } from './entry-automation-pump'
+import { exposeRoutingInput, supplementReceipt } from './routing-supplements'
+import { coordinatedEntryRun, entryRunOfInput } from './entry-run-scope'
+import { entryInputsWithResults } from './entry-results'
 import { ORCHESTRATION_ENTRY_ROUTING_METHODS } from './entry-routing-methods'
 import {
-  EntryApprovalsParams,
-  EntryClaimParams,
   EntryHandbackParams,
   EntryPauseParams,
-  EntryReviewParams,
   EntryShowParams,
   EntrySubmitParams,
   EntrySupplementParams,
-  EntryWorkersParams
+  EntryTransferParams
 } from '../../../../../shared/rpc-contract/orchestration/orchestration-routing-params'
-import type { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
+import { normalizeDecisionModelSettings } from '../../../../../shared/settings/decision-model-settings'
 
 // The desktop 统一任务入口 (plan §1/§9-A) is its own coordinator: one identity per project,
 // so each project's entry records requests and drives supplements without borrowing a
 // terminal's or a session's authority. These methods construct that identity server-side from
 // the project group id; the coordinated routing methods stay untouched for CLI and sessions.
 
-function entryRunOfTask(db: OrchestrationDb, group: string, taskId: string) {
-  const { run } = coordinatedEntryRun(db, group)
-  const task = db.getTask(taskId)
-  if (!task || task.run_id !== run.id) {
-    throw new OrchestrationError(
-      'lifecycle_not_found',
-      `Task ${taskId} does not belong to the entry Run of ${group}.`,
-      { taskId }
-    )
-  }
-  return run
-}
-
 export const ORCHESTRATION_ENTRY_METHODS = [
   ...ORCHESTRATION_ENTRY_ROUTING_METHODS,
+  ...ORCHESTRATION_ENTRY_REVIEW_METHODS,
+  ...ORCHESTRATION_ENTRY_STAGE_METHODS,
+  ...ORCHESTRATION_ENTRY_AUDIT_METHODS,
+  ...ORCHESTRATION_ENTRY_BYPASS_METHODS,
+  defineOrchestrationMethod({
+    name: 'orchestration.entryPeek',
+    permission: 'workspace',
+    params: EntryShowParams,
+    access: { kind: 'localOnly', targets: {} },
+    handler: ({ group }, { runtime }) => {
+      const db = runtime.getOrchestrationDb()
+      const run = db.getCurrentRunForCoordinator(desktopEntryCaller(group))
+      return run ? entryInputsWithResults(db, run.id) : { inputs: [] }
+    }
+  }),
   // The standing entry read: the project's current Run (or none), its inputs with sub-actions
   // and delivery attempts, and the watchdog pause — the four-state facts the card renders.
   defineOrchestrationMethod({
@@ -51,10 +60,14 @@ export const ORCHESTRATION_ENTRY_METHODS = [
     permission: 'workspace',
     params: EntryShowParams,
     access: { kind: 'localOnly', targets: {} },
-    handler: ({ group }, { runtime }) => {
+    handler: async ({ group }, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       const caller = desktopEntryCaller(group)
       const run = db.getCurrentRunForCoordinator(caller)
+      if (run) {
+        // The pane polls entryShow every 2s — the pump's bookkeeping advances here (§5.6/§7).
+        await pumpEntryAutomations({ runtime, run, group })
+      }
       return {
         run: run ? exposeRun(run) : null,
         ...(run ? entryInputsWithResults(db, run.id) : { inputs: [] }),
@@ -70,14 +83,27 @@ export const ORCHESTRATION_ENTRY_METHODS = [
     permission: 'workspace',
     params: EntrySubmitParams,
     access: { kind: 'writes', targets: {} },
-    handler: ({ group, text }, { runtime }) => {
+    handler: async ({ group, text, loop, decisionModel, requestId }, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       const caller = desktopEntryCaller(group)
       const run =
         db.getCurrentRunForCoordinator(caller) ??
         createBoundRun(runtime, caller, desktopEntryAddress(group), text)
-      const input = db.registerRoutingInput({ runId: run.id, text })
-      return { run: exposeRun(run), input }
+      const input = db.registerRoutingInput({
+        runId: run.id,
+        text,
+        ...(loop ? { loop: true } : {}),
+        ...(requestId ? { requestId } : {}),
+        ...(decisionModel
+          ? {
+              reviewModel:
+                // 旧 wire 形状归一化：审查模型只取 Agent 块的来源与执行者。
+                normalizeDecisionModelSettings(decisionModel)
+            }
+          : {})
+      })
+      await pumpEntryAutomations({ runtime, run, group })
+      return { run: exposeRun(run), input: exposeRoutingInput(input) }
     }
   }),
   // Deliver one sub-action's supplement exactly like routingSupplementSend, addressed by the
@@ -90,10 +116,19 @@ export const ORCHESTRATION_ENTRY_METHODS = [
     handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       const run = entryRunOfInput(db, params.group, params.input)
-      if (db.isRoutingRunPaused(run.id)) {
-        throw new OrchestrationError('paused', `The entry for ${params.group} is paused.`, {
-          runId: run.id
-        })
+      const dispatch = db.getDispatchContextById(params.dispatch)
+      const action = db.getSubAction(params.subAction)
+      if (
+        dispatch?.run_id !== run.id ||
+        action?.input_id !== params.input ||
+        (action.task_id !== null &&
+          action.task_id !== dispatch.task_id &&
+          action.claimed_dispatch_id !== dispatch.id)
+      ) {
+        throw new OrchestrationError(
+          'lifecycle_not_found',
+          'The supplement target is not part of this task entry.'
+        )
       }
       const { supplement, attempt, session } = await deliverTargetedSupplement({
         db,
@@ -104,6 +139,52 @@ export const ORCHESTRATION_ENTRY_METHODS = [
         expectedTurnId: params.expectedTurn
       })
       return { ...supplementReceipt(supplement, attempt, session), runId: run.id }
+    }
+  }),
+  defineOrchestrationMethod({
+    name: 'orchestration.entryTransfer',
+    permission: 'workspace',
+    params: EntryTransferParams,
+    access: { kind: 'writes', targets: {} },
+    handler: async (params, { runtime }) => {
+      const db = runtime.getOrchestrationDb()
+      const run = entryRunOfInput(db, params.group, params.input)
+      const supplement = runLifecycleWriteTransaction(db.db, 'entry_transfer', () => {
+        const action = db.getSubAction(params.subAction)
+        const destination = db.getDispatchContextById(params.dispatch)
+        if (action?.input_id !== params.input || destination?.run_id !== run.id) {
+          throw new OrchestrationError(
+            'lifecycle_not_found',
+            'The sub-action and destination must belong to this project entry.'
+          )
+        }
+        if (
+          action.claimed_dispatch_id !== params.fromDispatch ||
+          destination.status !== 'dispatched' ||
+          destination.id === params.fromDispatch
+        ) {
+          throw new OrchestrationError(
+            'lifecycle_conflict',
+            'The assignment changed or the selected agent can no longer accept the sub-action.'
+          )
+        }
+        if (params.fromDispatch) {
+          db.handbackSubAction({
+            subActionId: params.subAction,
+            fromDispatchId: params.fromDispatch,
+            reason: 'desktop-entry-transfer'
+          })
+        }
+        db.claimSubActionForDispatch(params.subAction, destination.id)
+        return db.recordRoutingSupplement({
+          inputId: params.input,
+          subActionId: params.subAction,
+          targetDispatchId: destination.id,
+          text: params.text
+        })
+      })
+      const { attempt, session } = await deliverRecordedSupplement(db, supplement)
+      return supplementReceipt(supplement, attempt, session)
     }
   }),
   // Release a claimed sub-action back for reassignment; the same guarded handback the
@@ -138,16 +219,25 @@ export const ORCHESTRATION_ENTRY_METHODS = [
       }
     }
   }),
-  // §5.5 as the prototype's card-level 暂停: a user-applied wait on the entry's Run. While
-  // paused, supplement deliveries refuse (deliveries stay recorded, re-driven on resume).
   defineOrchestrationMethod({
     name: 'orchestration.entryPause',
     permission: 'workspace',
     params: EntryPauseParams,
     access: { kind: 'writes', targets: {} },
-    handler: ({ group }, { runtime }) => {
+    handler: ({ group, subAction }, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       const { run } = coordinatedEntryRun(db, group)
+      if (subAction) {
+        const row = db.getSubAction(subAction)
+        if (!row || row.run_id !== run.id) {
+          throw new OrchestrationError(
+            'lifecycle_not_found',
+            `Sub-action ${subAction} does not belong to the entry Run of ${group}.`,
+            { subActionId: subAction }
+          )
+        }
+        return { subAction: db.pauseRoutingSubAction(subAction) }
+      }
       db.pauseRoutingRun(run.id)
       return { watchdog: db.routingWatchdogFacts(run.id) }
     }
@@ -157,122 +247,26 @@ export const ORCHESTRATION_ENTRY_METHODS = [
     permission: 'workspace',
     params: EntryPauseParams,
     access: { kind: 'writes', targets: {} },
-    handler: ({ group }, { runtime }) => {
+    handler: async ({ group, subAction }, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       const { run } = coordinatedEntryRun(db, group)
+      if (subAction) {
+        const row = db.getSubAction(subAction)
+        if (!row || row.run_id !== run.id) {
+          throw new OrchestrationError(
+            'lifecycle_not_found',
+            `Sub-action ${subAction} does not belong to the entry Run of ${group}.`,
+            { subActionId: subAction }
+          )
+        }
+        const resumed = db.resumeRoutingSubAction(subAction)
+        await resumeEntrySupplementsForSubAction(db, subAction)
+        return { subAction: resumed }
+      }
       db.resumeRoutingRun(run.id)
+      await resumeEntrySupplements(db, run.id)
+      await pumpEntryAutomations({ runtime, run, group })
       return { watchdog: db.routingWatchdogFacts(run.id) }
-    }
-  }),
-  // §7 review state for a delegated task of the entry's Run: the latest cycle with its
-  // opinions, plus the user's acceptance (严格首版由用户验收 closes only without blocking
-  // opinions — acceptReviewCycle enforces that).
-  defineOrchestrationMethod({
-    name: 'orchestration.entryReviewShow',
-    permission: 'workspace',
-    params: EntryReviewParams,
-    access: { kind: 'reads', targets: {} },
-    handler: ({ group, task }, { runtime }) => {
-      const db = runtime.getOrchestrationDb()
-      entryRunOfTask(db, group, task)
-      const cycle = db.getLatestReviewCycleForTask(task)
-      return {
-        cycle: cycle ?? null,
-        ...(cycle ? { opinions: db.listReviewOpinions(cycle.cycle_id) } : { opinions: [] })
-      }
-    }
-  }),
-  defineOrchestrationMethod({
-    name: 'orchestration.entryReviewAccept',
-    permission: 'workspace',
-    params: EntryReviewParams,
-    access: { kind: 'writes', targets: {} },
-    handler: ({ group, task }, { runtime }) => {
-      const db = runtime.getOrchestrationDb()
-      entryRunOfTask(db, group, task)
-      const cycle = db.getLatestReviewCycleForTask(task)
-      if (!cycle) {
-        throw new OrchestrationError('lifecycle_not_found', `Task ${task} has no review cycle.`, {
-          taskId: task
-        })
-      }
-      return { cycle: db.acceptReviewCycle(cycle.cycle_id) }
-    }
-  }),
-  // §5.2 换人: the entry Run's workers (id, handle, state) a sub-action can be re-assigned to.
-  defineOrchestrationMethod({
-    name: 'orchestration.entryWorkers',
-    permission: 'workspace',
-    params: EntryWorkersParams,
-    access: { kind: 'reads', targets: {} },
-    handler: ({ group }, { runtime }) => {
-      const db = runtime.getOrchestrationDb()
-      const { run } = coordinatedEntryRun(db, group)
-      return {
-        workers: db.listWorkerTerminalResources({ runId: run.id }).map((row) => ({
-          dispatchId: row.dispatchId,
-          handle: row.agentTerminalHandle ?? row.dispatchId,
-          workerState: row.workerState,
-          dispatchStatus: row.dispatchStatus,
-          pendingApproval: row.pendingApproval
-        }))
-      }
-    }
-  }),
-  // Claim a sub-action for one of the entry Run's workers (the claim step of 换人: handback
-  // releases, claim re-points, the supplement form re-delivers).
-  defineOrchestrationMethod({
-    name: 'orchestration.entryClaim',
-    permission: 'workspace',
-    params: EntryClaimParams,
-    access: { kind: 'writes', targets: {} },
-    handler: ({ group, subAction, dispatch }, { runtime }) => {
-      const db = runtime.getOrchestrationDb()
-      const subActionRow = db.getSubAction(subAction)
-      if (!subActionRow) {
-        throw new OrchestrationError(
-          'lifecycle_not_found',
-          `Sub-action ${subAction} was not found.`,
-          { subActionId: subAction }
-        )
-      }
-      entryRunOfInput(db, group, subActionRow.input_id)
-      if (!db.getDispatchContextById(dispatch)) {
-        throw new OrchestrationError('dispatch_not_found', `Dispatch ${dispatch} was not found.`, {
-          dispatchId: dispatch
-        })
-      }
-      const claimed = db.claimSubActionForDispatch(subAction, dispatch)
-      return { subAction: claimed, claimVersion: claimed.claim_version }
-    }
-  }),
-  // The prototype's 授权追问卡: approvals Orca reported open for this Run's workers, from the
-  // persisted escalation reports. Answering goes through orchestration.approvalAnswer, where the
-  // desktop transport already proves the person.
-  defineOrchestrationMethod({
-    name: 'orchestration.entryApprovals',
-    permission: 'workspace',
-    params: EntryApprovalsParams,
-    access: { kind: 'reads', targets: {} },
-    handler: ({ group }, { runtime }) => {
-      const db = runtime.getOrchestrationDb()
-      const run = db.getCurrentRunForCoordinator(desktopEntryCaller(group))
-      if (!run) {
-        return { approvals: [] }
-      }
-      return {
-        approvals: recentOpenApprovalReports(db)
-          .filter((report) => report.dispatch.run_id === run.id)
-          .map((report) => ({
-            approvalId: report.approval.approvalId,
-            dispatchId: report.approval.worker.dispatchId,
-            workerHandle: report.approval.worker.handle,
-            title: report.approval.summary.title,
-            detail: report.approval.summary.detail,
-            reason: report.approval.summary.reason,
-            personOnly: report.approval.personOnly === true
-          }))
-      }
     }
   })
 ]

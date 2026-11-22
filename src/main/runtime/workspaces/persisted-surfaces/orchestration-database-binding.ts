@@ -20,6 +20,8 @@ export abstract class OrcaRuntimeWithOrchestrationDatabaseBinding extends OrcaRu
     }
     db.workerAutoReleaseEnabled = () =>
       this.store?.getSettings?.()?.orchestrationWorkerAutoReleaseEnabled !== false
+    db.entryWorkerAutoReleaseEnabled = () =>
+      this.store?.getSettings?.()?.entryWorkerAutoReleaseEnabled === true
     if (this.store?.onSettingsChanged && !runtimesWatchingAutoReleaseSetting.has(this)) {
       runtimesWatchingAutoReleaseSetting.add(this)
       // Turning the setting off drops the timer; turning it on finds the deadlines still due.

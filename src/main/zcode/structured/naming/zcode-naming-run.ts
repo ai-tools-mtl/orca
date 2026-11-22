@@ -40,6 +40,7 @@ export class ZcodeNamingRuns {
   /** Fresh independent text task; null when credentials, the boot, or the turn failed. */
   async generate(input: {
     prompt: string
+    purpose?: 'routing'
     shouldExecute?: () => boolean
     signal?: AbortSignal
   }): Promise<string | null> {
@@ -76,6 +77,7 @@ export class ZcodeNamingRuns {
 
   private async run(input: {
     prompt: string
+    purpose?: 'routing'
     shouldExecute?: () => boolean
     attempt: AbortController
     home: string
@@ -152,6 +154,13 @@ export class ZcodeNamingRuns {
       const providerSessionId = readString(readRecord(readRecord(created)?.session)?.sessionId)
       if (!providerSessionId) {
         return null
+      }
+      if (input.purpose === 'routing') {
+        await connection.request(
+          'session/setMode',
+          { sessionId: providerSessionId, mode: 'plan' },
+          budget()
+        )
       }
       await connection.request(
         'session/subscribe',

@@ -9,10 +9,12 @@ import {
 } from '../../../../../../shared/worktree/host-qualified-identity'
 import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
+import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/sections/group-keys'
 import {
   getFolderWorkspaceRowGeometry,
   getWorktreeCardContentIndent,
   getWorktreeCardSurfaceInset,
+  PROJECT_CHILD_SURFACE_INDENT,
   FLUSH_CARD_CONTENT_PULLBACK,
   NEW_CARD_STYLE_STATUS_LANE_EXTRA_PULLBACK,
   FLUSH_CARD_MIN_CONTENT_INSET,
@@ -104,7 +106,12 @@ export function buildLineageRowProjection(
                   groupDepth: row.groupDepth
                 })
             }
-      frame.left = geometry.surfaceInset
+      frame.left =
+        geometry.surfaceInset +
+        (groupBy === 'repo' &&
+        (row.type === 'folder-workspace' || row.sectionKey !== PINNED_GROUP_KEY)
+          ? PROJECT_CHILD_SURFACE_INDENT
+          : 0)
       frame.contentIndent = Math.max(0, geometry.cardContentIndent)
       if (parent !== null) {
         const ancestor = frames[parent]

@@ -1,4 +1,9 @@
-import { sanitizeRendererSettingsUpdate } from './renderer-settings-update'
+import {
+  saveRendererDecisionModelPatch,
+  saveRendererRouteBypassPatch,
+  sanitizeRendererSettingsUpdate,
+  type RendererSettingsUpdate
+} from './renderer-settings-update'
 import { confirmBrowserPasswordOwner } from '../../browser-passwords/browser-password-reauth'
 import { getClaudeAgentViewService } from '../../claude/agent-view/agent-view-service'
 import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
@@ -29,9 +34,6 @@ import { normalizeAppIconId } from '../../../shared/app-lifecycle/identity/app-i
 import { normalizeUiLanguage } from '../../../shared/i18n/ui-language'
 import { applyAppIcon } from '../../window/desktop-integration/app-icon'
 import { registerCustomAppIconHandlers } from '../custom-app-icon'
-import { normalizeTerminalCustomThemes } from '../../../shared/terminal-themes/terminal-custom-themes'
-import { normalizeDesktopTerminalScrollbackRows } from '../../../shared/terminal/replay/terminal-scrollback-policy'
-import { normalizeTerminalLineHeight } from '../../../shared/terminal/appearance/terminal-line-height-settings'
 import { prepareLocalWorktreeRootsForRepos } from '../../workspaces/creation/worktree-root-preparation'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from '../worktrees/creation/worktree-base-directory-watcher'
 import { applyPRBotAuthorOverride } from '../../../shared/source-control/review-comments/pr-bot-author-overrides'
@@ -111,7 +113,13 @@ export function registerSettingsHandlers(
     event.returnValue = await readSettingsWithRuntimeEnvironmentPreference(store, registryRoot())
   })
 
-  ipcMain.handle('settings:set', async (event, args: Partial<GlobalSettings>) => {
+  ipcMain.handle('settings:set', async (event, args: RendererSettingsUpdate) => {
+    if ('decisionModelPatch' in args) {
+      return saveRendererDecisionModelPatch(store, args, event.sender.id)
+    }
+    if ('routeBypassPatch' in args) {
+      return saveRendererRouteBypassPatch(store, args, event.sender.id)
+    }
     const sanitizedArgs = sanitizeRendererSettingsUpdate(args)
     // Generic settings writers cannot change the server preference owned by Advanced controls.
     delete sanitizedArgs.activeRuntimeEnvironmentId
@@ -145,17 +153,6 @@ export function registerSettingsHandlers(
     }
     if ('aiVaultSearch' in args) {
       sanitizedArgs.aiVaultSearch = resolveAiVaultSearchSettings(args)
-    }
-    if ('terminalCustomThemes' in args) {
-      sanitizedArgs.terminalCustomThemes = normalizeTerminalCustomThemes(args.terminalCustomThemes)
-    }
-    if ('terminalScrollbackRows' in args) {
-      sanitizedArgs.terminalScrollbackRows = normalizeDesktopTerminalScrollbackRows(
-        args.terminalScrollbackRows
-      )
-    }
-    if ('terminalLineHeight' in args) {
-      sanitizedArgs.terminalLineHeight = normalizeTerminalLineHeight(args.terminalLineHeight)
     }
     if ('uiLanguage' in args) {
       sanitizedArgs.uiLanguage = normalizeUiLanguage(args.uiLanguage)

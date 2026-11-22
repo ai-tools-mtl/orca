@@ -51,7 +51,7 @@ export function chatApprovalCloseOutcome(
 }
 
 export type ChatWorkerApprovalAnswer =
-  | { ok: true; prompt: ChatWorkerPrompt; optionLabel: string }
+  | { ok: true; prompt: ChatWorkerPrompt; optionLabel: string; stoppedTurn?: boolean }
   | {
       ok: false
       code:
@@ -75,6 +75,7 @@ export async function answerChatWorkerApproval(input: {
   decision: WorkerApprovalDecision
   /** An agent answers for the coordinator: the agent's person-only prompts stay with the person. */
   byAgent?: boolean
+  stopOnDeny?: boolean
   readPrompt?: ChatWorkerPromptReader
 }): Promise<ChatWorkerApprovalAnswer> {
   const { sessionId, approvalId, decision } = input
@@ -100,7 +101,15 @@ export async function answerChatWorkerApproval(input: {
   if (open && decision === 'allow' && input.byAgent && prompt.body.personOnly) {
     return { ok: false, code: 'approval_requires_person', message: personOnlyMessage(approvalId) }
   }
-  const option = workerApprovalOption(prompt.body.options, decision)
+  const denyByStopping =
+    decision === 'deny' && input.stopOnDeny
+      ? prompt.body.options.find((option) => option.id === 'cancel' && option.intent === undefined)
+      : undefined
+  const option = workerApprovalOption(prompt.body.options, decision) ?? denyByStopping
+  const stoppedTurn = option !== undefined && option === denyByStopping
+  if (!open && prompt.body.resolution.state !== 'resolved') {
+    return notOpen
+  }
   if (!option) {
     return {
       ok: false,
@@ -119,7 +128,7 @@ export async function answerChatWorkerApproval(input: {
     resolution.resolvedBy === callerKey &&
     resolution.selectedOptionId === option.id
   ) {
-    return { ok: true, prompt, optionLabel: option.label }
+    return { ok: true, prompt, optionLabel: option.label, stoppedTurn }
   }
   const host = getStructuredAgentSessionHost()
   const fence = host?.deps.store.getConversation(sessionId)?.currentFence
@@ -159,5 +168,5 @@ export async function answerChatWorkerApproval(input: {
   if (result.value.resolution.resolvedBy !== callerKey) {
     return notOpen
   }
-  return { ok: true, prompt, optionLabel: option.label }
+  return { ok: true, prompt, optionLabel: option.label, stoppedTurn }
 }

@@ -2,19 +2,14 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { PanelRight } from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { cn } from '@/lib/class-names'
-import { useSidebarResize } from '@/hooks/useSidebarResize'
+import { RightSidebarToggle } from '@/app-shell/chrome/TitlebarMainStrip'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { getTopActivityBarLayout } from './activity-bar/activity-bar-overflow'
 import { ActivityBarButton } from './activity-bar/activity-bar-buttons'
 import { getActiveChecksStatus } from './checks-panel/status/active-checks-status'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
-import {
-  RIGHT_SIDEBAR_MIN_WIDTH,
-  clampRightSidebarPanelWidth,
-  computeMaxRightSidebarPanelWidth,
-  RIGHT_SIDEBAR_SIDE_ACTIVITY_BAR_WIDTH as ACTIVITY_BAR_SIDE_WIDTH
-} from './layout/right-sidebar-width'
+import { RIGHT_SIDEBAR_SIDE_ACTIVITY_BAR_WIDTH as ACTIVITY_BAR_SIDE_WIDTH } from './layout/right-sidebar-width'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { RightSidebarPanelContent } from './right-sidebar-panel-content'
@@ -31,11 +26,10 @@ import {
 import { RightSidebarTopActivityBar } from './activity-bar/right-sidebar-top-activity-bar'
 import { useRightSidebarActivityItems } from './activity-bar/use-right-sidebar-activity-items'
 import { useRightSidebarTabRouting } from './activity-bar/use-right-sidebar-tab-routing'
-import { useWindowWidth } from './layout/use-window-width'
-import { usePluginViewCaptureStore } from '@/store/plugins/capture/plugin-view-capture'
+import { RightSidebarResizeHandle, useRightSidebarResize } from './layout/right-sidebar-resize'
 import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/worktree-creation-surface'
 
-function RightSidebarInner(): React.JSX.Element {
+function WorkspaceRightSidebar(): React.JSX.Element {
   const t = useTranslate()
   const contextPlugin = useActivityBarContextPlugin()
   useUiLanguageRevision()
@@ -50,11 +44,6 @@ function RightSidebarInner(): React.JSX.Element {
   const settingsFocusRequested = useAppStore((s) => s.aiVaultSearchFocusRequested)
   const lastRouteRequestId = useRef(routeRequestId)
   const [focusVaultSearch, setFocusVaultSearch] = useState(false)
-  const userRightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
-  // `orca plugin shot --width` sizes the panel for one capture without touching the saved width.
-  const captureWidth = usePluginViewCaptureStore((s) => s.panelWidth)
-  const rightSidebarWidth = captureWidth ?? userRightSidebarWidth
-  const setRightSidebarWidth = useAppStore((s) => s.setRightSidebarWidth)
   const toggleRightSidebar = useAppStore((s) => s.toggleRightSidebar)
   // Creation keeps the prior worktree active until handoff, so its panels would show that worktree.
   const creatingWorktree = useAppStore(selectWorktreeCreationSurfaceShown)
@@ -117,22 +106,10 @@ function RightSidebarInner(): React.JSX.Element {
   }, [focusVaultSearch])
 
   const activityBarSideWidth = activityBarPosition === 'side' ? ACTIVITY_BAR_SIDE_WIDTH : 0
-  const windowWidth = useWindowWidth()
-  const maxWidth = computeMaxRightSidebarPanelWidth(windowWidth, activityBarSideWidth)
-  const renderedRightSidebarWidth = clampRightSidebarPanelWidth(
-    rightSidebarWidth,
-    windowWidth,
+  const { containerRef, onResizeStart } = useRightSidebarResize(
+    rightSidebarOpen,
     activityBarSideWidth
   )
-  const { containerRef, onResizeStart } = useSidebarResize<HTMLDivElement>({
-    isOpen: rightSidebarOpen,
-    width: renderedRightSidebarWidth,
-    minWidth: RIGHT_SIDEBAR_MIN_WIDTH,
-    maxWidth,
-    deltaSign: -1,
-    renderedExtraWidth: activityBarSideWidth,
-    setWidth: setRightSidebarWidth
-  })
   const topActivityStripRef = useMeasuredWidth(setTopActivityStripWidth)
 
   const panelContent = rightSidebarOpen ? (
@@ -233,10 +210,7 @@ function RightSidebarInner(): React.JSX.Element {
 
         {panelContent}
 
-        <div
-          className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-ring/20 active:bg-ring/30 transition-colors z-10"
-          onMouseDown={onResizeStart}
-        />
+        <RightSidebarResizeHandle onResizeStart={onResizeStart} />
       </div>
 
       {activityBarPosition === 'side' && (
@@ -261,5 +235,43 @@ function RightSidebarInner(): React.JSX.Element {
   )
 }
 
-const RightSidebar = React.memo(RightSidebarInner)
+function DispatchRightSidebar({
+  viewportRef
+}: {
+  viewportRef: React.Ref<HTMLDivElement>
+}): React.JSX.Element {
+  const open = useAppStore((state) => state.rightSidebarOpen)
+  const { containerRef, onResizeStart } = useRightSidebarResize(open)
+  return (
+    <div
+      ref={containerRef}
+      className={cn(
+        'relative flex shrink-0 flex-col bg-sidebar',
+        open ? 'border-s border-sidebar-border' : 'overflow-hidden'
+      )}
+    >
+      {open ? (
+        <>
+          <div className="right-sidebar-header-inset right-sidebar-header-drag flex h-9 min-h-9 justify-end border-b border-border">
+            <RightSidebarToggle />
+          </div>
+          <div ref={viewportRef} className="flex min-h-0 flex-1 flex-col overflow-hidden" />
+          <RightSidebarResizeHandle onResizeStart={onResizeStart} />
+        </>
+      ) : null}
+    </div>
+  )
+}
+
+const RightSidebar = React.memo(function RightSidebar({
+  dispatchViewportRef
+}: {
+  dispatchViewportRef?: React.Ref<HTMLDivElement>
+}): React.JSX.Element {
+  return dispatchViewportRef ? (
+    <DispatchRightSidebar viewportRef={dispatchViewportRef} />
+  ) : (
+    <WorkspaceRightSidebar />
+  )
+})
 export default RightSidebar

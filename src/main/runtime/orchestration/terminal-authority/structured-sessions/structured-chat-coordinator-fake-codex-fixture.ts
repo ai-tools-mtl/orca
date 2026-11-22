@@ -143,7 +143,11 @@ export function operationId(): string {
   return `${Date.now()}-${operations.toString(16).padStart(32, '0')}`
 }
 
-export function attachParams(sessionId: string, fixtureRoot: string) {
+export function attachParams(
+  sessionId: string,
+  fixtureRoot: string,
+  options?: Readonly<Record<string, string>>
+) {
   const params = {
     location: {
       executionHostId: 'local' as const,
@@ -154,7 +158,8 @@ export function attachParams(sessionId: string, fixtureRoot: string) {
     provider: 'codex' as const,
     agent: 'codex' as const,
     accountHome: { variable: 'CODEX_HOME' as const, path: join(fixtureRoot, 'codex-home') },
-    runtimeKind: 'native' as const
+    runtimeKind: 'native' as const,
+    ...(options ? { options } : {})
   }
   const envelope = {
     sessionId,

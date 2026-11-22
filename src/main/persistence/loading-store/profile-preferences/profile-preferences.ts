@@ -95,13 +95,17 @@ export class ProfilePreferences {
   }
 
   async updateSettingsAndFlush(
-    updates: Partial<GlobalSettings>,
+    update: Partial<GlobalSettings> | ((current: GlobalSettings) => Partial<GlobalSettings> | null),
     options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
   ): Promise<GlobalSettings> {
     const { runtime } = this[profilePreferencesContext]
     let changedUpdates: Partial<GlobalSettings> = {}
-    await runtime.runDurableMutation(() => {
+    const applied = await runtime.runDurableMutation(() => {
       const previous = runtime.state.settings
+      const updates = typeof update === 'function' ? update(previous) : update
+      if (!updates) {
+        return { value: false, persist: false }
+      }
       const next = this.updateSettings(updates)
       const previousEntries = new Map(Object.entries(previous))
       const updateKeys = new Set(Object.keys(updates))
@@ -111,7 +115,7 @@ export class ProfilePreferences {
         )
       )
       return {
-        value: undefined,
+        value: true,
         rollback: () => {
           const currentEntries = new Map(Object.entries(runtime.state.settings))
           const nextEntries = new Map(Object.entries(next))
@@ -140,6 +144,9 @@ export class ProfilePreferences {
         }
       }
     })
+    if (!applied) {
+      throw new Error('The settings update is incompatible with the current configuration.')
+    }
     if (options.notifyListeners && Object.keys(changedUpdates).length > 0) {
       notifySettingsChanged(this, changedUpdates, options.originWebContentsId)
     }

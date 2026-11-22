@@ -1,5 +1,7 @@
 import type { NativeChatProviderChoices } from './native-chat-providers'
 
+export type NativeChatWidth = 'comfortable' | 'wide' | 'full'
+
 export type NativeChatAppearanceSettings = {
   /** Absent: the system UI font while the IDE font is the default, else the IDE font. */
   fontFamily?: string
@@ -8,7 +10,7 @@ export type NativeChatAppearanceSettings = {
   /** Code text size in px, 10–18; absent = 12. */
   codeFontSize?: number
   /** Transcript and composer width; absent = comfortable (46rem). */
-  width?: 'comfortable' | 'wide' | 'full'
+  width?: NativeChatWidth
   /** Chat contrast, 50–150; absent = 100. */
   contrast?: number
   /** Follow the terminal interface font and theme; absent = false. */

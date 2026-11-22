@@ -12,13 +12,15 @@ export function KeyedSummary({
   roots,
   hostFiltered,
   expanded,
-  onToggle
+  onToggle,
+  inline
 }: {
   worktreeId: string
   roots: readonly string[]
   hostFiltered: boolean
   expanded: boolean
   onToggle: () => void
+  inline: boolean
 }) {
   const t = useTranslate()
   const groups = useAgentPresentation(
@@ -61,6 +63,7 @@ export function KeyedSummary({
       })}
       expanded={expanded}
       onToggle={onToggle}
+      inline={inline}
     />
   )
 }

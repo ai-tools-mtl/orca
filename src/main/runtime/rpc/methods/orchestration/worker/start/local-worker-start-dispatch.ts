@@ -19,6 +19,8 @@ export function createLocalWorkerStartDispatch(
     callerSession,
     existingTask,
     entrySubActionId,
+    entryReviewIntentId,
+    readOnly,
     orchestrationMutation,
     helperCreator,
     followUp
@@ -48,10 +50,12 @@ export function createLocalWorkerStartDispatch(
   const startOptions = {
     worktree: requestedWorktree,
     mode,
+    ...(readOnly ? { readOnly } : {}),
     resolvedWorktreeId: resolvedWorktreeId ?? null,
     name: params.name ?? null,
     repo: repoSelector ?? params.repo ?? null,
     baseBranch: params.baseBranch ?? null,
+    bootstrapIfUnborn: params.bootstrapIfUnborn === true,
     terminal: params.terminal ?? null,
     agent: agent ?? null,
     // Mail from a reuse start that never binds still names the agent already running there.
@@ -76,6 +80,7 @@ export function createLocalWorkerStartDispatch(
     requiredCreatorDispatchId: helperCreator?.id,
     taskId: existingTask?.id,
     entrySubActionId,
+    entryReviewIntentId,
     taskSpec: params.spec,
     adoptTaskId: params.adoptTaskId,
     taskTitle: params.taskTitle,

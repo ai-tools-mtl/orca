@@ -19,6 +19,7 @@ import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from '../source-control/listing/so
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../terminal/replay/terminal-scrollback-policy'
 import { NESTED_WORKER_MAX_DEPTH_DEFAULT } from '../orchestration/workers/nested-worker-depth'
 import { getDefaultWorkspaceCleanupRules } from '../workspace-cleanup/workspace-cleanup-policy'
+import { buildDefaultSkipConfirmations } from './skip-confirmation-defaults'
 
 export function buildDefaultSettings(args: {
   workspaceDir: string
@@ -186,6 +187,7 @@ export function buildDefaultSettings(args: {
     nestedWorkerMaxDepth: NESTED_WORKER_MAX_DEPTH_DEFAULT,
     nestedWorkerMaxDepthDefaultedToFour: true,
     orchestrationWorkerAutoReleaseEnabled: true,
+    entryWorkerAutoReleaseEnabled: false,
     orchestrationCoordinatorApprovalsEnabled: false,
     showArtifactsButton: false,
     showSkillsButton: false,
@@ -234,13 +236,7 @@ export function buildDefaultSettings(args: {
     devPluginPaths: [],
     claudeAgentTeamsDefaultDisabledMigrated: true,
     sshRemoteCliControlExistingHostsMigrated: true,
-    skipDeleteWorktreeConfirm: false,
-    alwaysForceDeleteWorktrees: false,
-    alwaysForceDeletePreservedBranches: false,
-    skipCloseTerminalWithRunningProcessConfirm: false,
-    skipDeleteAutomationConfirm: false,
-    skipDeleteArtifactConfirm: false,
-    skipCodexRateLimitResetConfirm: false,
+    ...buildDefaultSkipConfirmations(),
     defaultTaskViewPreset: 'all',
     defaultTaskSource: 'github',
     visibleTaskProviders: [...TASK_PROVIDERS],

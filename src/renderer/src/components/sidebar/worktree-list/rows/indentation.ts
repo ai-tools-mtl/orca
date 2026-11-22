@@ -8,6 +8,7 @@ export const NEW_CARD_STYLE_STATUS_LANE_EXTRA_PULLBACK = 8
 // Why: keeps a zero-indent flush card off the sidebar edge.
 export const FLUSH_CARD_MIN_CONTENT_INSET = 2
 export const WORKTREE_CARD_SURFACE_MARGIN = 4
+export const PROJECT_CHILD_SURFACE_INDENT = 16
 // Why: level-1 lineage keeps the grouped-card anchor; deeper levels advance evenly, not cumulatively.
 export const LINEAGE_IMMEDIATE_PARENT_STEP =
   SIDEBAR_TREE_INDENT + PROJECT_WORKTREE_CARD_EXTRA_INDENT

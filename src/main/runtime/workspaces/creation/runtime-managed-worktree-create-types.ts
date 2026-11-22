@@ -30,6 +30,9 @@ export type RuntimeManagedWorktreeCreateArgs = {
   nameWasGenerated?: boolean
   navigation?: RuntimeNavigationTarget
   baseBranch?: string
+  /** Opt-in from the entry dispatch: seed an initial empty commit when HEAD is unborn so the
+   *  base ref exists. UI/manual creates stay refused. */
+  bootstrapIfUnborn?: boolean
   compareBaseRef?: string
   branchNameOverride?: string
   branchIntent?: CreateWorktreeArgs['branchIntent']

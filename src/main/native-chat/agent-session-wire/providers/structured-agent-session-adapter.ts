@@ -322,6 +322,8 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     accountHome: AgentSessionAccountHome
     prompt: string
     shouldExecute?: () => boolean
+    signal?: AbortSignal
+    purpose?: 'routing'
   }): Promise<string | null>
   /** Copy the provider conversation without changing the chat’s ID; omit for CLI-based forks. */
   copyConversation?(

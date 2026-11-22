@@ -5,6 +5,7 @@ import type { RuntimeTerminalCreate } from '../../../../../../../../shared/termi
 
 import type { AgentLaunchPreferences } from '../../../../../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent'
+import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
 import { executeAgentLaunch } from '../../../../../../../agent-launch/agent-launch-executor'
 import type { AgentLaunchSurfaceFactory } from '../../../../../../../agent-launch/agent-launch-surface-factories'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
@@ -52,6 +53,7 @@ type WorkerAgentPlacementArgs = {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
   dispatchId: string
+  readOnly?: boolean
   taskId: string
   params: WorkerStartInput
   requestedWorktree: string
@@ -147,7 +149,8 @@ async function launchWorkerAgent(
         target: existing
           ? { kind: 'existing', worktree: existing.id }
           : { kind: 'create-worktree', create: {} },
-        launchSource: 'orchestration'
+        launchSource: 'orchestration',
+        ...(args.readOnly ? { surface: 'chat' as const } : {})
       },
       decidedMode: args.mode,
       vocabulary: WORKER_START_VOCABULARY,
@@ -258,7 +261,8 @@ function workerSurfaceFactory(
         agent,
         dispatchId: args.dispatchId,
         ...(args.launch.preferences ? { launchPreferences: args.launch.preferences } : {}),
-        effects: args.effects
+        effects: args.effects,
+        readOnly: args.readOnly
       })
       onStructuredSession(session)
       return {
@@ -268,6 +272,12 @@ function workerSurfaceFactory(
       }
     },
     createTerminalAgent: async ({ worktreeId }) => {
+      if (args.readOnly) {
+        throw new OrchestrationError(
+          'agent_unconfigured',
+          'This worker cannot enforce read-only access in a terminal.'
+        )
+      }
       recordSurfaceStage(worktreeId)
       const terminal = await createExistingWorktreeWorkerTerminal({
         runtime: args.runtime,

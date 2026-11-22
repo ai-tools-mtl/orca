@@ -257,5 +257,26 @@
     "text": "Switch back to",
     "dynamic": false,
     "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/sidebar/dispatch-entry/entry-composer.tsx",
+    "kind": "jsx-text",
+    "text": "Enter",
+    "dynamic": false,
+    "count": 2
+  },
+  {
+    "filePath": "src/renderer/src/components/sidebar/dispatch-entry/entry-composer.tsx",
+    "kind": "jsx-text",
+    "text": "Shift",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/sidebar/dispatch-entry/entry-task-card.tsx",
+    "kind": "jsx-text",
+    "text": "Dispatch",
+    "dynamic": false,
+    "count": 1
   }
 ]

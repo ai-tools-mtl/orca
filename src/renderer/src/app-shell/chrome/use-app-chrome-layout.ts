@@ -16,7 +16,7 @@ import {
 export type AppChromeLayout = ReturnType<typeof useAppChromeLayout>
 
 /** Derive titlebar, tab-strip ownership and surface mount decisions from store state. */
-export function useAppChromeLayout() {
+export function useAppChromeLayout(dispatchEntryOpen: boolean) {
   const activeView = useAppStore((s) => s.activeView)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
@@ -60,9 +60,12 @@ export function useAppChromeLayout() {
   // Lazy-mount for tabs, then retain hidden panes through temporary null selection during sleep/shutdown.
   const shouldMountTerminalWorkbench = canMountTerminalWorkbenchNow || hasMountedTerminalWorkbench
   // Creation owns faux chrome throughout; retain the previous workspace without its real chrome.
-  const creationLayoutActive = useAppStore(selectWorktreeCreationSurfaceShown)
+  const dispatchEntryVisible = activeView === 'terminal' && dispatchEntryOpen
+  const creationLayoutActive =
+    useAppStore(selectWorktreeCreationSurfaceShown) && !dispatchEntryVisible
   const workspaceChromeActive =
-    activeView === 'terminal' && hasActiveWorktree && !creationLayoutActive
+    activeView === 'terminal' &&
+    (dispatchEntryVisible || (hasActiveWorktree && !creationLayoutActive))
   // Activity/Space own full pages and hide the workspace sidebar.
   const showSidebar =
     activeView !== 'settings' && activeView !== 'activity' && activeView !== 'space'
@@ -80,7 +83,7 @@ export function useAppChromeLayout() {
   // Fit terminals before paint in the width-change frame to avoid transient wrong sizes.
   useLayoutEffect(() => {
     window.dispatchEvent(new CustomEvent(SYNC_FIT_PANES_EVENT))
-  }, [sidebarOpen, rightSidebarOpen])
+  }, [sidebarOpen, rightSidebarOpen, dispatchEntryVisible])
 
   const titlebarLeftControlsRef = useRef<HTMLDivElement | null>(null)
   const [collapsedSidebarHeaderWidth, setCollapsedSidebarHeaderWidth] = useState(0)
@@ -114,6 +117,7 @@ export function useAppChromeLayout() {
     activeTabCanExpand,
     collapsedSidebarHeaderWidth,
     creationLayoutActive,
+    dispatchEntryVisible,
     hasActiveWorktree,
     isFullScreen,
     leftSidebarStyle,
@@ -126,11 +130,12 @@ export function useAppChromeLayout() {
     // Keep the pending composer in the same viewport as the workspace it hands off to.
     showRightSidebarControls: canShowRightSidebarForView(activeView),
     showTitlebarAppName: settings?.showTitlebarAppName !== false,
-    showTitlebarExpandButton: workspaceChromeActive && !hasTabBar && effectiveActiveTabExpanded,
+    showTitlebarExpandButton:
+      workspaceChromeActive && !dispatchEntryVisible && !hasTabBar && effectiveActiveTabExpanded,
     sidebarOpen,
     stackedSidebarOpen,
     // Retained workbench panes need a separate visibility condition.
-    terminalWorkbenchVisible: workspaceChromeActive,
+    terminalWorkbenchVisible: workspaceChromeActive && !dispatchEntryVisible,
     titlebarLeftControlsRef,
     workspaceChromeActive
   }

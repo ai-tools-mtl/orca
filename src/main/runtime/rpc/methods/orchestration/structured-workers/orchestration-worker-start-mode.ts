@@ -38,10 +38,12 @@ type WorkerStartModePlacement = {
 export function decideWorkerStartMode(args: {
   params: WorkerStartModePlacement
   settings: AgentLaunchModeSettings | null | undefined
+  readOnly?: boolean
 }): WorkerStartModeReceipt {
   return decideAgentLaunchMode({
     placement: args.params,
     settings: args.settings,
+    ...(args.readOnly ? { surface: 'chat' as const } : {}),
     vocabulary: WORKER_START_VOCABULARY
   })
 }

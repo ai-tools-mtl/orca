@@ -33,6 +33,7 @@ type CompactAgentSummaryButtonProps = {
   subjectLabel: string
   expanded: boolean
   onToggle: () => void
+  inline?: boolean
   unreadByPaneKey?: Readonly<Record<string, boolean>>
 }
 
@@ -88,7 +89,8 @@ export function CompactAgentSummaryButton({
   subjectLabel,
   expanded,
   onToggle,
-  unreadByPaneKey
+  unreadByPaneKey,
+  inline = false
 }: CompactAgentSummaryButtonProps): React.JSX.Element {
   const t = useTranslate()
   const isUnread = unreadByPaneKey
@@ -154,15 +156,18 @@ export function CompactAgentSummaryButton({
       type="button"
       draggable={false}
       className={cn(
-        'compact-agent-summary-button group/agent-summary ms-0.5 flex h-6 w-[calc(100%-0.125rem)] min-w-0 items-center gap-1 rounded-sm',
+        'compact-agent-summary-button group/agent-summary flex min-w-0 items-center gap-1 rounded-sm',
+        inline ? 'h-5 max-w-full' : 'ms-0.5 h-6 w-[calc(100%-0.125rem)]',
         'px-1 text-left text-[11px] leading-none text-muted-foreground',
         'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring',
         // The sidebar accent reverses brightness across themes; use the matching hover token mix.
         'hover:bg-worktree-sidebar-accent/55 dark:hover:bg-worktree-sidebar-foreground/[0.035]',
         // Only the collapsed pill needs a resting surface; expanded summaries are tree headers.
-        expanded
-          ? 'compact-agent-summary-button-expanded'
-          : 'translate-y-0.5 border border-worktree-sidebar-border/70 bg-worktree-sidebar-accent/35'
+        inline
+          ? 'border border-worktree-sidebar-border/70 bg-worktree-sidebar-accent/35'
+          : expanded
+            ? 'compact-agent-summary-button-expanded'
+            : 'translate-y-0.5 border border-worktree-sidebar-border/70 bg-worktree-sidebar-accent/35'
       )}
       aria-label={
         expanded
@@ -187,7 +192,7 @@ export function CompactAgentSummaryButton({
       onPointerDown={stopPointerPropagation}
       onDragStart={stopPointerPropagation}
     >
-      {expanded ? (
+      {expanded && !inline ? (
         <span className="min-w-0 flex-1 truncate px-1 font-medium text-muted-foreground">
           {subjectLabel}
         </span>

@@ -1,3 +1,4 @@
+import { workerStartOptionsReadOnly } from '../../../../orchestration/workers/launch/worker-launch-observation'
 import { stopHelperAfterStart } from './worker-stop'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { z } from 'zod'
@@ -201,6 +202,15 @@ export async function prepareWorkerStart(
     throw new OrchestrationError(
       'task_not_found',
       `Task ${params.task} was not found in Run ${bindRun().run.id}.`
+    )
+  }
+  if (
+    helperCreator &&
+    workerStartOptionsReadOnly(db.getWorkerDispatch(helperCreator.id)?.start_options)
+  ) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      'A read-only investigation cannot start another worker.'
     )
   }
   if (helperCreator && !followUp) {

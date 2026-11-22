@@ -144,6 +144,8 @@ export class ZcodeStructuredSessionAdapter implements StructuredAgentSessionAdap
       ? (input) =>
           runs.generate({
             prompt: input.prompt,
+            purpose: input.purpose,
+            signal: input.signal,
             ...(input.shouldExecute ? { shouldExecute: input.shouldExecute } : {})
           })
       : undefined

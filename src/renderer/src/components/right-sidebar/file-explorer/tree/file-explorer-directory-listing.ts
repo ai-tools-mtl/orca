@@ -145,6 +145,8 @@ export async function readFileExplorerDirectory(
   worktreePath: string | null,
   dirPath: string,
   options: {
+    operationOwner?: FileExplorerOperationOwner
+    followSymlinks?: boolean
     wakeWslDistro?: boolean
     paged?: boolean
     after?: DirEntryCursor
@@ -152,7 +154,7 @@ export async function readFileExplorerDirectory(
     followProjectFolderLink?: boolean
   } = {}
 ): Promise<FileExplorerDirectoryListing> {
-  const operationOwner = getFileExplorerOperationOwner(activeWorktreeId)
+  const operationOwner = options.operationOwner ?? getFileExplorerOperationOwner(activeWorktreeId)
   const route = getFileExplorerOperationRoute(operationOwner)
   if (!route) {
     throw new Error(getFileExplorerOwnerUnresolvedMessage())
@@ -164,7 +166,7 @@ export async function readFileExplorerDirectory(
     connectionId: route.connectionId
   }
   const readOptions = {
-    ...(useAppStore.getState().settings?.followSymlinkedDirectories
+    ...((options.followSymlinks ?? useAppStore.getState().settings?.followSymlinkedDirectories)
       ? { followSymlinks: true }
       : {}),
     ...(options.wakeWslDistro === undefined ? {} : { wakeWslDistro: options.wakeWslDistro })

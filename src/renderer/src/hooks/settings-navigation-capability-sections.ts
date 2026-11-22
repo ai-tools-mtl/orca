@@ -80,10 +80,10 @@ export function buildCapabilitySettingsSections(
     },
     {
       id: 'task-entry',
-      title: t('auto.hooks.useSettingsNavigationMetadata.taskEntryTitle', 'Task entry'),
+      title: t('auto.hooks.useSettingsNavigationMetadata.taskEntryTitle', 'Project dispatch'),
       description: t(
         'auto.hooks.useSettingsNavigationMetadata.taskEntryDescription',
-        'The per-project entry where requests are recorded, routed, and tracked.'
+        'Configure intent recognition and request routing for projects.'
       ),
       icon: MessagesSquare,
       searchEntries: getTaskEntryPaneSearchEntries(t),

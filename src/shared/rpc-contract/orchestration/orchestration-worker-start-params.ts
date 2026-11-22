@@ -22,6 +22,9 @@ export const WorkerStartParams = z
     name: OptionalString,
     repo: OptionalString,
     baseBranch: OptionalString,
+    /** Opt-in 空仓引导: seed one authored empty commit on an unborn default branch so the new
+     *  worktree has a base ref. Only the entry dispatch passes this; UI keeps the refusal. */
+    bootstrapIfUnborn: z.boolean().optional(),
     displayName: OptionalString,
     comment: OptionalString,
     setup: z.enum(['run', 'skip', 'inherit']).optional(),

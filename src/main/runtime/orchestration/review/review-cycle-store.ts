@@ -14,6 +14,14 @@ export type ReviewCycleRow = {
   reviewer_dispatch_id: string
   current_revision: number
   state: 'reviewing' | 'rework' | 'accepted'
+  /** The loop driver's live dispatches: rework turns on the writer's thread and re-reviews
+   *  on the reviewer's thread swap these while writer_dispatch_id/reviewer_dispatch_id keep
+   *  the original pairing (§7 identity). */
+  active_writer_dispatch_id: string | null
+  active_reviewer_dispatch_id: string | null
+  /** The reviewer Dispatch whose report has already been recorded as opinions. */
+  reviewed_dispatch_id: string | null
+  reviewed_workspace_revision: string | null
   created_at: string
 }
 
@@ -56,10 +64,20 @@ export function startReviewCycle(
   const id = generateId('rcyc')
   this.db
     .prepare(
-      `INSERT INTO review_cycles (cycle_id, task_id, writer_dispatch_id, reviewer_dispatch_id, current_revision, state)
-       VALUES (?, ?, ?, ?, 1, 'reviewing')`
+      `INSERT INTO review_cycles (
+         cycle_id, task_id, writer_dispatch_id, reviewer_dispatch_id,
+         active_writer_dispatch_id, active_reviewer_dispatch_id, current_revision, state
+       )
+       VALUES (?, ?, ?, ?, ?, ?, 1, 'reviewing')`
     )
-    .run(id, input.taskId, input.writerDispatchId, input.reviewerDispatchId)
+    .run(
+      id,
+      input.taskId,
+      input.writerDispatchId,
+      input.reviewerDispatchId,
+      input.writerDispatchId,
+      input.reviewerDispatchId
+    )
   return cycleOf.call(this, id)
 }
 
@@ -94,7 +112,9 @@ export function submitReviewRevision(this: OrchestrationDb, cycleId: string): Re
   }
   const next = cycle.current_revision + (cycle.state === 'rework' ? 1 : 0)
   this.db
-    .prepare('UPDATE review_cycles SET current_revision = ?, state = ? WHERE cycle_id = ?')
+    .prepare(
+      'UPDATE review_cycles SET current_revision = ?, state = ?, reviewed_dispatch_id = NULL, reviewed_workspace_revision = NULL WHERE cycle_id = ?'
+    )
     .run(cycle.state === 'rework' ? next : cycle.current_revision, 'reviewing', cycleId)
   return cycleOf.call(this, cycleId)
 }
@@ -171,12 +191,104 @@ export function resolveReviewOpinion(
     .get(opinionId) as ReviewOpinionRow
 }
 
+/** The loop driver's bookkeeping: swap the active dispatches after a rework/re-review spawn
+ *  and mark a reviewer report as recorded so the pump never parses it twice. */
+export function setReviewCycleAutomation(
+  this: OrchestrationDb,
+  input: {
+    cycleId: string
+    activeWriterDispatchId?: string | null
+    activeReviewerDispatchId?: string | null
+    reviewedDispatchId?: string
+    reviewedWorkspaceRevision?: string
+  }
+): ReviewCycleRow {
+  cycleOf.call(this, input.cycleId)
+  this.db
+    .prepare(
+      `UPDATE review_cycles SET
+         active_writer_dispatch_id = COALESCE(?, active_writer_dispatch_id),
+         active_reviewer_dispatch_id = COALESCE(?, active_reviewer_dispatch_id),
+         reviewed_dispatch_id = COALESCE(?, reviewed_dispatch_id),
+         reviewed_workspace_revision = COALESCE(?, reviewed_workspace_revision)
+       WHERE cycle_id = ?`
+    )
+    .run(
+      input.activeWriterDispatchId ?? null,
+      input.activeReviewerDispatchId ?? null,
+      input.reviewedDispatchId ?? null,
+      input.reviewedWorkspaceRevision ?? null,
+      input.cycleId
+    )
+  return cycleOf.call(this, input.cycleId)
+}
+
+export function advanceEntryReviewRevision(
+  this: OrchestrationDb,
+  cycleId: string,
+  expectedRevision: number,
+  reviewer: string
+): void {
+  this.db
+    .prepare(
+      `UPDATE review_cycles
+       SET current_revision = current_revision + 1, state = 'reviewing',
+           active_reviewer_dispatch_id = ?, reviewed_dispatch_id = NULL,
+           reviewed_workspace_revision = NULL
+       WHERE cycle_id = ? AND current_revision = ? AND state <> 'accepted'`
+    )
+    .run(reviewer, cycleId, expectedRevision)
+}
+
+export function canAcceptEntryReview(cycle: ReviewCycleRow): boolean {
+  return (
+    cycle.state === 'reviewing' &&
+    cycle.active_reviewer_dispatch_id !== null &&
+    cycle.reviewed_dispatch_id === cycle.active_reviewer_dispatch_id &&
+    cycle.reviewed_workspace_revision !== null
+  )
+}
+
 /** User acceptance (§7: 严格写审首版由用户验收) closes the cycle only when the current
  *  revision has no blocking opinions left. */
-export function acceptReviewCycle(this: OrchestrationDb, cycleId: string): ReviewCycleRow {
+export function acceptReviewCycle(
+  this: OrchestrationDb,
+  cycleId: string,
+  evidence?: { revision: number; reviewer: string | null; workspaceRevision: string }
+): ReviewCycleRow {
   const cycle = cycleOf.call(this, cycleId)
   if (cycle.state === 'accepted') {
     return cycle
+  }
+  const action = this.getRoutingSubActionByTask(cycle.task_id)
+  if (action || evidence) {
+    const reviewer = cycle.active_reviewer_dispatch_id
+      ? this.getDispatchContextById(cycle.active_reviewer_dispatch_id)
+      : undefined
+    if (
+      !evidence ||
+      !canAcceptEntryReview(cycle) ||
+      evidence.revision !== cycle.current_revision ||
+      evidence.reviewer !== cycle.active_reviewer_dispatch_id ||
+      evidence.workspaceRevision !== cycle.reviewed_workspace_revision ||
+      reviewer?.run_id !== action?.run_id ||
+      reviewer === undefined ||
+      this.getTask(reviewer.task_id)?.status !== 'completed'
+    ) {
+      throw new OrchestrationError(
+        'lifecycle_conflict',
+        'The current revision has no verified review.'
+      )
+    }
+    if (
+      this.isRoutingRunPaused(reviewer.run_id) ||
+      (action && this.isRoutingSubActionPaused(action.sub_action_id))
+    ) {
+      throw new OrchestrationError(
+        'paused',
+        'Resume the project task entry and card before accepting.'
+      )
+    }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the COUNT projection is exactly { blocked: number }.
   const blocked = this.db
@@ -204,6 +316,8 @@ export type ReviewCycleMethods = {
   listReviewOpinions: typeof listReviewOpinions
   resolveReviewOpinion: typeof resolveReviewOpinion
   acceptReviewCycle: typeof acceptReviewCycle
+  setReviewCycleAutomation: typeof setReviewCycleAutomation
+  advanceEntryReviewRevision: typeof advanceEntryReviewRevision
 }
 
 export function attachReviewCycleStore(ctor: { prototype: object }): void {
@@ -215,6 +329,8 @@ export function attachReviewCycleStore(ctor: { prototype: object }): void {
     recordReviewOpinion,
     listReviewOpinions,
     resolveReviewOpinion,
-    acceptReviewCycle
+    acceptReviewCycle,
+    setReviewCycleAutomation,
+    advanceEntryReviewRevision
   })
 }

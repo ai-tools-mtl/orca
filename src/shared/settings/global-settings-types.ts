@@ -26,7 +26,6 @@ import type {
   CodexManagedAccountRuntimeSelection
 } from '../agent-accounts/managed-account-types'
 import type { NotificationSettings } from '../notifications/notification-settings-types'
-import type { DecisionModelSettings } from './decision-model-settings'
 import type { CtrlTabOrderMode } from '../workspace-layout/tab-groups/tab-types'
 import type { TerminalQuickCommand } from '../terminal/quick-commands/terminal-quick-command-types'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
@@ -256,6 +255,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   /** Escalate native-chat worker turn errors to the dispatching Run; absent means on. Renderer-only so workers cannot silence failures via CLI. */
   /** Close a finished worker's terminal or chat after a grace period; absent means on. The coordinator's runtime decides. */
   orchestrationWorkerAutoReleaseEnabled?: boolean
+  /** 项目调度派发的 worker 是否跟随自动关闭；absent means off——入口 worker 默认保持打开。 */
+  entryWorkerAutoReleaseEnabled?: boolean
   /** Coordinator agents may allow workers' permission prompts on this machine; absent means off. Not in any agent-writable settings RPC. */
   orchestrationCoordinatorApprovalsEnabled?: boolean
   /** Only toggles the sidebar shortcut; Artifacts stay reachable from Settings. */
@@ -489,9 +490,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   commitMessageAi?: CommitMessageAiSettings
   /** Source-control AI generation settings for commit messages and hosted-review drafts. */
   sourceControlAi?: SourceControlAiSettings
-  /** The model the 任务入口's routing step (§5.1) uses to propose sub-actions for auto-routing. */
-  decisionModel?: DecisionModelSettings
-  dispatchEntryAutoRoute?: Record<string, boolean>
   /** GitLab project preferences (pinned + recent paths). Optional for pre-GitLab profiles; persistence merge fills the default. */
   gitlabProjects?: GitLabProjectSettings
   /** Anonymous telemetry consent, identity, frozen experiments, and daily usage limits; optional before migration. */

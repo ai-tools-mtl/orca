@@ -36,6 +36,8 @@ class OrchestrationDbCore {
   workerTerminalAutoReleaseListener: (() => void) | undefined
   /** The user's auto-close switch; this runtime's choice also governs the remote workers it coordinates. */
   workerAutoReleaseEnabled: (() => boolean) | undefined
+  /** 项目调度 worker 的单独自动关闭开关；absent/off = 入口 worker 完成后保持打开。 */
+  entryWorkerAutoReleaseEnabled: (() => boolean) | undefined
 
   constructor(dbPath: (string & {}) | ':memory:') {
     this.db = new Database(dbPath)

@@ -18,6 +18,7 @@ import { ActivityThreadCollapseContext } from '@/components/activity/thread-list
 import { useSidebarProjectDrop } from './project-admission/drop/useSidebarProjectDrop'
 import { useWorkspaceBoardPanel } from './workspace-board/surface/useWorkspaceBoardPanel'
 import { useDispatchEntryPanel } from './dispatch-entry/use-dispatch-entry-panel'
+import { closeDispatchEntry } from './worktree-list/rows/project-routing-entry-line'
 import { useWorkspaceRevealBodyRedirect } from './worktree-list/navigation/use-workspace-reveal-body-redirect'
 import { resolveLeftSidebarStyleVariables } from '@/app-shell/appearance/left-sidebar-appearance'
 import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
@@ -229,7 +230,10 @@ function Sidebar({
                     scrollOffsetRef={worktreeScrollOffsetRef}
                     scrollAnchorRef={worktreeScrollAnchorRef}
                     workspaceBoardOpen={workspaceBoardOpen}
-                    onWorktreeCardClick={closeWorkspaceBoard}
+                    onWorktreeCardClick={() => {
+                      closeWorkspaceBoard()
+                      closeDispatchEntry()
+                    }}
                     onWorkspaceBoardDragPreviewStart={previewWorkspaceBoardFromDrag}
                     onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
                     onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}

@@ -1,3 +1,4 @@
+import { OrchestrationError } from '../../../../../orchestration/orchestration-error'
 import { createLocalWorkerStartDispatch } from './local-worker-start-dispatch'
 import { refuseClaimedWorkerTerminal } from '../../../../../orchestration/db/worker-dispatch/worker-terminal-claim'
 import { probeWorkerOpenCodeModelLaunchSupport } from './launch/worker-opencode-model-preflight'
@@ -54,6 +55,8 @@ export async function startLocalWorker(args: {
   callerSession?: OrchestrationEntryCaller
   existingTask?: TaskRow
   entrySubActionId?: string
+  entryReviewIntentId?: string
+  readOnly?: boolean
   orchestrationMutation?: WorkerStartMutation
   /** Settings-driven; the executing host still gets to refuse below. */
   mode: WorkerStartModeReceipt
@@ -127,6 +130,12 @@ export async function startLocalWorker(args: {
   }
   const hostMode = resolveWorkerStartModeOnHost(runtime, args.mode, resolvedWorktree?.id, agent)
   let mode = chatWorkerMode(await hostMode, chat)
+  if (args.readOnly && mode.mode !== 'structured') {
+    throw new OrchestrationError(
+      'agent_unconfigured',
+      'This worker cannot enforce read-only access on this host.'
+    )
+  }
 
   // Synchronous through the Dispatch insert, so nothing else claims the terminal in between.
   refuseClaimedWorkerTerminal(db, params.terminal, runtime, args.followUp?.of)
@@ -173,7 +182,8 @@ export async function startLocalWorker(args: {
       launch,
       effects,
       onStage,
-      followUp: args.followUp
+      followUp: args.followUp,
+      readOnly: args.readOnly
     })
     // New worktrees resolve host support after creation, so the final mode receipt may differ from preflight.
     mode = placed.mode

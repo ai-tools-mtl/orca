@@ -1,49 +1,25 @@
 import { z } from 'zod'
-import {
-  routeRoutingInput,
-  type RoutingDecisionProposal,
-  type RoutingDecisionProvider
-} from './routing-router'
-import type { OrchestrationDb } from '../db/orchestration-db'
-import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 
-/** The credential a decision provider routes with — the ok shape plus any unavailable reason. */
-export type ModelCredential =
-  | { status: 'ok'; apiKey: string; baseUrl: string; modelId: string; protocol?: 'openai' }
-  | { status: 'absent' | 'error' | 'unavailable' }
-
-// Plan §5.1's model-backed decision provider: the desktop's own coding-plan credential calls the
-// plan site's chat completions endpoint, proposing sub-actions over the received input. The
-// Router still validates (candidate task refs, sub-action presence) and registers atomically —
-// the model proposes, Orca decides.
+// One completion round trip against a decision endpoint. Consumers: the 循环开发 reviewer
+// pick (plain content) and the 专用决策模型旁路对照 (detailed: token usage for the
+// per-request cost metrics).
 
 export type ModelDecisionProviderConfig = {
   apiKey: string
   baseUrl: string
   modelId: string
-  protocol?: 'openai'
+  protocol?: 'openai' | 'anthropic'
   /** Injectable for tests; defaults to the global fetch. */
   fetchImpl?: typeof fetch
 }
 
-const DECISION_SYSTEM_PROMPT = `You are the routing step of a work dispatcher (plan §5.1). Split the user's request into independent sub-actions. Reply with ONLY a JSON object:
-{"subActions":[{"text":"...","taskId":"<candidate id if the request names that existing task>","agent":"<agent id if explicitly assigned>"}],"reason":"..."}
-Use the optional agent only when the user explicitly names the worker for this sub-action, normalized to its lowercase Orca agent id (e.g. Codex → codex, ZCode → zcode). Omit agent for unassigned work.
-Rules: each sub-action text is a self-contained instruction in the user's language; preserve every applicable user constraint in each instruction; requests that name several targets split into one sub-action per target; dependent steps stay in ONE sub-action with the order stated; reference a candidate taskId only when the request clearly names that task; reply {"subActions":[],"reason":"..."} when nothing needs doing. At most six sub-actions.`
-
-const decisionReplySchema = z.object({
-  subActions: z
-    .array(
-      z.object({
-        text: z.string().trim().min(1),
-        taskId: z.string().trim().min(1).optional(),
-        agent: z.custom<TuiAgent>(isTuiAgent).optional()
-      })
-    )
-    .max(6),
-  reason: z.string().trim().optional()
-})
+export type DecisionCompletion = {
+  content: string
+  /** Prompt tokens from the endpoint's usage block, when it reports one. */
+  inputTokens?: number
+  /** Completion tokens from the endpoint's usage block, when it reports one. */
+  outputTokens?: number
+}
 
 const completionEnvelopeSchema = z.object({
   choices: z
@@ -51,113 +27,115 @@ const completionEnvelopeSchema = z.object({
     .min(1)
 })
 
-/** Models fence JSON even when told not to; the outermost object is the reply. */
-function parseDecisionContent(content: string): RoutingDecisionProposal {
-  const start = content.indexOf('{')
-  const end = content.lastIndexOf('}')
-  if (start === -1 || end === -1 || end <= start) {
-    throw new Error('decision model replied without a JSON object')
+const anthropicEnvelopeSchema = z.object({
+  content: z
+    .array(z.object({ type: z.string(), text: z.string().optional() }).catchall(z.unknown()))
+    .min(1)
+})
+
+const usageSchema = z
+  .object({
+    prompt_tokens: z.number().optional(),
+    completion_tokens: z.number().optional(),
+    input_tokens: z.number().optional(),
+    output_tokens: z.number().optional()
+  })
+  .catchall(z.unknown())
+
+function usageOf(payload: unknown): { inputTokens?: number; outputTokens?: number } {
+  // Both protocols report the usage block at the payload's top-level `usage` field.
+  const usage = usageSchema.safeParse(
+    payload !== null && typeof payload === 'object' && 'usage' in payload
+      ? (payload as { usage: unknown }).usage
+      : payload
+  ).data
+  if (!usage) {
+    return {}
   }
-  const reply = decisionReplySchema.parse(JSON.parse(content.slice(start, end + 1)))
   return {
-    subActions: reply.subActions,
-    ...(reply.reason !== undefined ? { reason: reply.reason } : {})
+    // openai names prompt/completion; anthropic names input/output.
+    ...(usage.prompt_tokens !== undefined ? { inputTokens: usage.prompt_tokens } : {}),
+    ...(usage.input_tokens !== undefined ? { inputTokens: usage.input_tokens } : {}),
+    ...(usage.completion_tokens !== undefined ? { outputTokens: usage.completion_tokens } : {}),
+    ...(usage.output_tokens !== undefined ? { outputTokens: usage.output_tokens } : {})
   }
 }
 
-export function createModelDecisionProvider(
-  config: ModelDecisionProviderConfig
-): RoutingDecisionProvider {
+/** Protocols: openai chat-completions and the Anthropic messages API. */
+export async function fetchDecisionCompletionDetailed(
+  config: ModelDecisionProviderConfig,
+  systemPrompt: string,
+  userContent: string
+): Promise<DecisionCompletion> {
   const fetchImpl = config.fetchImpl ?? fetch
-  return async (context) => {
-    const path =
-      config.protocol === 'openai' ? '/chat/completions' : '/api/paas/v4/chat/completions'
-    const response = await fetchImpl(`${config.baseUrl.replace(/\/+$/, '')}${path}`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: config.modelId,
-        temperature: 0,
-        messages: [
-          { role: 'system', content: DECISION_SYSTEM_PROMPT },
+  const response =
+    config.protocol === 'anthropic'
+      ? await fetchImpl(`${config.baseUrl.replace(/\/+$/, '')}/v1/messages`, {
+          method: 'POST',
+          headers: {
+            'x-api-key': config.apiKey,
+            'anthropic-version': '2023-06-01',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: config.modelId,
+            max_tokens: 2048,
+            temperature: 0,
+            system: systemPrompt,
+            messages: [{ role: 'user', content: userContent }]
+          })
+        })
+      : await fetchImpl(
+          `${config.baseUrl.replace(/\/+$/, '')}${
+            config.protocol === 'openai' ? '/chat/completions' : '/api/paas/v4/chat/completions'
+          }`,
           {
-            role: 'user',
-            content: [
-              `请求：${context.text}`,
-              context.candidateTasks.length > 0
-                ? `候选任务：${context.candidateTasks
-                    .map((task) => `${task.taskId}（${task.spec}，${task.status}）`)
-                    .join('；')}`
-                : '候选任务：无',
-              `执行者能力：${context.executorCapabilities.join('、') || '未声明'}`
-            ].join('\n')
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${config.apiKey}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              model: config.modelId,
+              temperature: 0,
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userContent }
+              ]
+            })
           }
-        ]
-      })
-    })
-    if (!response.ok) {
-      throw new Error(`decision model returned ${response.status}`)
-    }
-    const envelope = completionEnvelopeSchema.safeParse(await response.json())
-    const content = envelope.success ? envelope.data.choices[0]?.message.content : undefined
-    if (content === undefined) {
+        )
+  if (!response.ok) {
+    throw new Error(`decision model returned ${response.status}`)
+  }
+  const payload: unknown = await response.json()
+  const usage = usageOf(payload)
+  if (config.protocol === 'anthropic') {
+    const envelope = anthropicEnvelopeSchema.safeParse(payload)
+    const content = envelope.success
+      ? envelope.data.content
+          .filter((block) => block.type === 'text' && typeof block.text === 'string')
+          .map((block) => block.text)
+          .join('')
+      : undefined
+    if (!content) {
       throw new Error('decision model returned no content')
     }
-    return parseDecisionContent(content)
+    return { content, ...usage }
   }
+  const envelope = completionEnvelopeSchema.safeParse(payload)
+  const content = envelope.success ? envelope.data.choices[0]?.message.content : undefined
+  if (content === undefined) {
+    throw new Error('decision model returned no content')
+  }
+  return { content, ...usage }
 }
 
-export type ModelDecisionResolution =
-  | { status: 'unavailable'; reason: string }
-  | { status: 'ok'; provider: RoutingDecisionProvider }
-
-/** Resolve the desktop's own coding-plan credential into a decision provider; the model is the
- *  user's v2 selection. Unavailable reads resolve to the manual reason, never an error. */
-export async function resolveModelDecisionProvider(
-  credential: ModelCredential
-): Promise<ModelDecisionResolution> {
-  if (credential.status === 'error') {
-    return { status: 'unavailable', reason: 'The active ZCode plan credential could not be read.' }
-  }
-  if (
-    credential.status !== 'ok' ||
-    !credential.apiKey ||
-    !credential.baseUrl ||
-    !credential.modelId
-  ) {
-    return {
-      status: 'unavailable',
-      reason: 'no decision provider configured; the input awaits manual assignment'
-    }
-  }
-  return {
-    status: 'ok',
-    provider: createModelDecisionProvider({
-      apiKey: credential.apiKey,
-      baseUrl: credential.baseUrl,
-      modelId: credential.modelId,
-      protocol: credential.protocol
-    })
-  }
-}
-
-/** Auto-route one entry input through the model decision provider when a credential serves. */
-export async function autoRouteWithModelProvider(
-  db: OrchestrationDb,
-  input: { inputId: string },
-  credential: ModelCredential,
-  executorCapabilities?: readonly string[]
-): Promise<Awaited<ReturnType<typeof routeRoutingInput>>> {
-  const resolution = await resolveModelDecisionProvider(credential)
-  const result = await routeRoutingInput(db, {
-    inputId: input.inputId,
-    executorCapabilities,
-    ...(resolution.status === 'ok' ? { provider: resolution.provider } : {})
-  })
-  return !result.routed && resolution.status === 'unavailable'
-    ? { ...result, reason: resolution.reason }
-    : result
+/** Plain-content variant kept for the 循环开发 reviewer pick. */
+export async function fetchDecisionCompletion(
+  config: ModelDecisionProviderConfig,
+  systemPrompt: string,
+  userContent: string
+): Promise<string> {
+  return (await fetchDecisionCompletionDetailed(config, systemPrompt, userContent)).content
 }

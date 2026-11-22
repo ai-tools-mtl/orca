@@ -14,6 +14,7 @@ import { getPtyExecutionHost } from '../../../../../../shared/terminal/pty/lifec
 import { dismissStaleAgentRowByKey } from '../../../terminal-pane/agent-status/stale-agent-row'
 import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
 import { isExecutionHostForWorktree } from '@/lib/workspace/ownership/qualified-worktree-execution-owner'
+import { closeDispatchEntry } from '../../worktree-list/rows/project-routing-entry-line'
 
 export function useWorktreeAgentActivation(worktreeId: string, executionHostId?: ExecutionHostId) {
   return useCallback(
@@ -30,6 +31,7 @@ export function activateWorktreeAgentPane(
   paneKey: string,
   executionHostId?: ExecutionHostId
 ): void {
+  closeDispatchEntry()
   const state = useAppStore.getState()
   const nativeTab = getStructuredAgentSessionTabsByPaneKey(state.unifiedTabsByWorktree).get(paneKey)
   if (nativeTab?.worktreeId === worktreeId && nativeTab.id === tabId) {

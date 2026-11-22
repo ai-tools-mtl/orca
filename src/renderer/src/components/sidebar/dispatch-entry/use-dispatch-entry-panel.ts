@@ -3,7 +3,11 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
-import { OPEN_DISPATCH_ENTRY_EVENT } from '../worktree-list/rows/project-routing-entry-line'
+import {
+  CLOSE_DISPATCH_ENTRY_EVENT,
+  OPEN_DISPATCH_ENTRY_EVENT
+} from '../worktree-list/rows/project-routing-entry-line'
+import { useEntryAutoCloseOnWorkspaceSwitch } from './use-entry-auto-close-on-workspace-switch'
 
 // The per-project 统一任务入口 sheet. Component-local state like the workspace board panel;
 // `repoId` names the project whose entry the sheet drives, `hostId` the runtime holding it.
@@ -21,6 +25,13 @@ export function useDispatchEntryPanel(): DispatchEntryPanelState {
   const close = useCallback((): void => {
     setState(null)
   }, [])
+
+  useEntryAutoCloseOnWorkspaceSwitch(state !== null, close)
+
+  useEffect(() => {
+    window.addEventListener(CLOSE_DISPATCH_ENTRY_EVENT, close)
+    return () => window.removeEventListener(CLOSE_DISPATCH_ENTRY_EVENT, close)
+  }, [close])
 
   const open = useCallback((repoId: string, hostId: ExecutionHostId): void => {
     setState({ repoId, hostId })

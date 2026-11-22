@@ -75,6 +75,71 @@ export function getQuestionRaw(this: OrchestrationDb, messageId: string): Questi
     | undefined
 }
 
+/** The Run's open questions, oldest first — the entry surfaces these on the asking stage's card
+ *  (§2: worker 用 ask 提结论/确认请求，入口呈现并回答；回答邮件唤醒等待中的 worker）。 */
+export function listPendingQuestions(
+  this: OrchestrationDb,
+  runId: string
+): {
+  messageId: string
+  dispatchId: string
+  taskId: string
+  question: string
+  createdAt: string
+}[] {
+  return this.db
+    .prepare(
+      `SELECT q.message_id AS messageId, q.dispatch_id AS dispatchId, d.task_id AS taskId,
+              q.created_at AS createdAt, m.body AS question
+       FROM question_threads q JOIN messages m ON m.id = q.message_id
+       JOIN dispatch_contexts d ON d.id = q.dispatch_id AND d.run_id = q.run_id
+       WHERE q.run_id = ? AND q.status = 'pending'
+       ORDER BY m.sequence`
+    )
+    .all(runId) as {
+    messageId: string
+    dispatchId: string
+    taskId: string
+    question: string
+    createdAt: string
+  }[]
+}
+
+/** 已回答的澄清问答（最新在前）：回答不能只让黄色卡片凭空消失——问与答作为 settled
+ *  记录留在提问阶段的卡片上，时间线上随卡可查。 */
+export function listAnsweredQuestions(
+  this: OrchestrationDb,
+  runId: string
+): {
+  messageId: string
+  dispatchId: string
+  taskId: string
+  question: string
+  answer: string
+  createdAt: string
+  answeredAt: string
+}[] {
+  return this.db
+    .prepare(
+      `SELECT q.message_id AS messageId, q.dispatch_id AS dispatchId, d.task_id AS taskId,
+              q.created_at AS createdAt, q.answered_at AS answeredAt, q.answer_body AS answer, asked.body AS question
+       FROM question_threads q
+       JOIN messages asked ON asked.id = q.message_id
+       JOIN dispatch_contexts d ON d.id = q.dispatch_id AND d.run_id = q.run_id
+       WHERE q.run_id = ? AND q.status = 'answered' AND q.answer_body IS NOT NULL
+       ORDER BY q.answered_at DESC, q.rowid DESC`
+    )
+    .all(runId) as {
+    messageId: string
+    dispatchId: string
+    taskId: string
+    question: string
+    answer: string
+    createdAt: string
+    answeredAt: string
+  }[]
+}
+
 export function answerQuestion(
   this: OrchestrationDb,
   params: {
@@ -223,6 +288,8 @@ export type QuestionThreadsMethods = {
   answerQuestion: typeof answerQuestion
   awaitsAnswerToLatestQuestion: typeof awaitsAnswerToLatestQuestion
   closeQuestionsForDispatch: typeof closeQuestionsForDispatch
+  listPendingQuestions: typeof listPendingQuestions
+  listAnsweredQuestions: typeof listAnsweredQuestions
 }
 
 export function attachQuestionThreads(ctor: { prototype: object }): void {
@@ -232,6 +299,8 @@ export function attachQuestionThreads(ctor: { prototype: object }): void {
     getQuestionRaw,
     answerQuestion,
     awaitsAnswerToLatestQuestion,
-    closeQuestionsForDispatch
+    closeQuestionsForDispatch,
+    listPendingQuestions,
+    listAnsweredQuestions
   })
 }

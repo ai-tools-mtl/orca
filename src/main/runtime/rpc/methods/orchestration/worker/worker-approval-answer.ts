@@ -1,5 +1,17 @@
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { ApprovalAnswerParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-approval-answer-params'
+import {
+  actOnInterruptedEntryApproval,
+  isEntryWriteApproval,
+  notifyEntryWriteDenied
+} from '../../../../orchestration/workers/approvals/entry-write-approval'
+import {
+  entryWriteHandoffAgent,
+  entryWriteHandoffReason,
+  mintEntryWriteHandoff,
+  notifyEntryWriteHandoff
+} from '../../../../orchestration/workers/approvals/entry-write-handoff'
+import { detectAgentsOnHost } from '../../../../../preflight/workspace-agent-detection'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { structuredMailboxCustody } from '../../../../orchestration/mailbox/routing/structured-session-mail-target'
 import {
@@ -66,6 +78,45 @@ export async function answerWorkerApproval(
   }
   const notify = (handle: string, type: string): void => runtime.notifyMessageArrived(handle, type)
   const custody = structuredMailboxCustody(`dispatch:${dispatch.id}`, db)
+  const entryApproval =
+    access.answeredBy === 'person' &&
+    typeof custody === 'object' &&
+    isEntryWriteApproval(db, dispatch, params.prompt)
+  const interrupted = {
+    db,
+    dispatch,
+    approvalId: params.prompt,
+    notify
+  }
+  if (params.renew) {
+    if (
+      !entryApproval ||
+      params.decision !== 'allow' ||
+      !actOnInterruptedEntryApproval({ ...interrupted, action: 'renew' })
+    ) {
+      throw new OrchestrationError('approval_refused', 'This approval cannot be renewed.')
+    }
+    return {
+      approvalId: params.prompt,
+      dispatchId: dispatch.id,
+      decision: 'allow',
+      option: 'Renewal requested',
+      reasonMessageId: null
+    }
+  }
+  if (
+    entryApproval &&
+    params.decision === 'deny' &&
+    actOnInterruptedEntryApproval({ ...interrupted, action: 'deny' })
+  ) {
+    return {
+      approvalId: params.prompt,
+      dispatchId: dispatch.id,
+      decision: 'deny',
+      option: 'Deny',
+      reasonMessageId: null
+    }
+  }
   // Orca can't tell whether this is a chat worker: answering or closing either way could be wrong.
   if (custody === 'unverifiable' && !runtime.terminalWorkerApprovals.isHeld(params.prompt)) {
     throw new OrchestrationError(
@@ -121,12 +172,38 @@ export async function answerWorkerApproval(
       reasonMessageId: null
     }
   }
+  // Allow is split by intent (方向 2): when the investigating worker already is the intended
+  // agent the write stays in-session (任务接续); only when the read-only classification forced
+  // codex in over the hinted/default agent does the prompt get declined and a write-granted
+  // implement stage chain a fresh worker on the same worktree. A missing investigation card
+  // falls back to the legacy in-session allow rather than dead-ending.
+  const handoffInvestigation =
+    entryApproval && params.decision === 'allow'
+      ? db.getRoutingSubActionByTask(dispatch.task_id)
+      : undefined
+  const settings = runtime.requireStore().getSettings()
+  const handoffAgent = handoffInvestigation
+    ? entryWriteHandoffAgent(
+        db,
+        dispatch,
+        handoffInvestigation,
+        settings,
+        await detectAgentsOnHost(
+          { kind: 'local' },
+          {
+            disabledTuiAgents: settings.disabledTuiAgents,
+            agentCmdOverrides: settings.agentCmdOverrides
+          }
+        )
+      )
+    : null
   const answered = await answerChatWorkerApproval({
     sessionId: custody.sessionId,
     approvalId: params.prompt,
     dispatchId: dispatch.id,
-    decision: params.decision,
-    byAgent: access.answeredBy === 'coordinator'
+    decision: handoffAgent ? 'deny' : params.decision,
+    byAgent: access.answeredBy === 'coordinator',
+    stopOnDeny: entryApproval && !handoffAgent
   })
   if (!answered.ok) {
     // Answered in the worker's own chat, or gone: say so now, not at the worker's next turn edge.
@@ -138,6 +215,21 @@ export async function answerWorkerApproval(
       const outcome = prompt === undefined ? null : chatApprovalCloseOutcome(prompt)
       if (outcome) {
         closeReportedApproval(db, dispatch, params.prompt, outcome, { notify })
+      }
+      if (
+        entryApproval &&
+        actOnInterruptedEntryApproval({
+          ...interrupted,
+          action: params.decision === 'deny' ? 'deny' : 'renew'
+        })
+      ) {
+        return {
+          approvalId: params.prompt,
+          dispatchId: dispatch.id,
+          decision: params.decision,
+          option: params.decision === 'deny' ? 'Deny' : 'Renewal requested',
+          reasonMessageId: null
+        }
       }
     }
     throw new OrchestrationError(answered.code, answered.message, { effectsApplied: false })
@@ -164,6 +256,15 @@ export async function answerWorkerApproval(
   if (reasonMessage) {
     notify(reasonMessage.to_handle, reasonMessage.type)
   }
+  if (handoffInvestigation && handoffAgent) {
+    mintEntryWriteHandoff(db, {
+      approvalId: params.prompt,
+      investigation: handoffInvestigation,
+      targetAgent: handoffAgent,
+      writeDetail: answered.prompt.body.detail ?? answered.prompt.body.title
+    })
+    notifyEntryWriteHandoff({ db, dispatch, approvalId: params.prompt, notify })
+  }
   reportWorkerApprovalClosed(
     db,
     dispatch,
@@ -177,16 +278,27 @@ export async function answerWorkerApproval(
           dispatchId: dispatch.id,
           taskId: dispatch.task_id
         },
-        outcome: chatAnswerOutcome({
-          by: access.answeredBy,
-          decision: params.decision,
-          reason: access.reason,
-          reasonMailed: reasonMessage !== null
-        })
+        outcome:
+          handoffAgent && handoffInvestigation
+            ? {
+                by: access.answeredBy,
+                decision: 'allow',
+                reason: entryWriteHandoffReason(handoffAgent),
+                reasonDelivered: false
+              }
+            : chatAnswerOutcome({
+                by: access.answeredBy,
+                decision: params.decision,
+                reason: access.reason,
+                reasonMailed: reasonMessage !== null
+              })
       })
     },
     { notify }
   )
+  if (entryApproval && answered.stoppedTurn) {
+    notifyEntryWriteDenied(interrupted)
+  }
   return {
     approvalId: params.prompt,
     dispatchId: dispatch.id,

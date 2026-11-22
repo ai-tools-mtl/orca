@@ -25,6 +25,7 @@ import {
   hasCustomTitleBar
 } from './app-shell/chrome/app-window-chrome'
 import { useAppChromeLayout } from './app-shell/chrome/use-app-chrome-layout'
+import { useDispatchEntryPaneListener } from './components/sidebar/dispatch-entry/use-dispatch-entry-pane-listener'
 import { useAppSessionPersistence } from './app-shell/storage/use-app-session-persistence'
 import { useAppShellServices } from './app-shell/use-app-shell-services'
 import { useAppStartupHydration } from './app-shell/startup/use-app-startup-hydration'
@@ -45,7 +46,8 @@ import { AddToChatPointMenuHost } from './components/native-chat/selection-quote
 import { installActiveWorktreeRemovalSuccessor } from './lib/workspace/activation/active-worktree-removal-successor'
 
 function App(): React.JSX.Element {
-  const layout = useAppChromeLayout()
+  const dispatchEntry = useDispatchEntryPaneListener()
+  const layout = useAppChromeLayout(dispatchEntry.target !== null)
   const floatingWorkspace = useFloatingWorkspacePanel()
   const onboardingGate = useOnboardingAndFeatureTips()
   const clearUnreadDockBadge = useUnreadDockBadge(floatingWorkspace.open)
@@ -110,7 +112,11 @@ function App(): React.JSX.Element {
           <LinkRoutingPreferenceDialogProvider>
             <AppBackgroundServices />
             <SpaceWindowStatePublisher />
-            <AppWorkspaceShell layout={layout} floatingWorkspace={floatingWorkspace} />
+            <AppWorkspaceShell
+              layout={layout}
+              floatingWorkspace={floatingWorkspace}
+              dispatchEntry={dispatchEntry}
+            />
             <AppRootSurfaces
               floatingWorkspace={floatingWorkspace}
               onboardingGate={onboardingGate}

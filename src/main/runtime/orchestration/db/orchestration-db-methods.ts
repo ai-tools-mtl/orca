@@ -11,6 +11,8 @@ import type { LegacyRemoteDbMethods } from '../legacy-remote/legacy-remote-db-me
 import type { LegacyRemoteHomeDbMethods } from '../legacy-remote-home/legacy-remote-home-db-methods'
 import type { PeerMailStoreMethods } from './federation/peer-mail-store'
 import type { PeerRunStoreMethods } from './peer-runs/peer-run-store'
+import type { DispatchAuthorizationMethods } from '../routing/dispatch-authorization-attach'
+import type { RouteBypassLabelMethods } from '../routing/route-bypass-labels'
 import type { RoutingLedgerMethods } from '../routing/routing-ledger'
 import type { ReviewCycleMethods } from '../review/review-cycle-store'
 import type { LegacyAskOperationMethods } from './legacy/legacy-ask-operation'
@@ -122,6 +124,8 @@ export type OrchestrationDbMethods = AttemptObservationStoreMethods &
   WorkerReportSettlementMethods &
   DecisionGateStoreMethods &
   RoutingLedgerMethods &
+  DispatchAuthorizationMethods &
+  RouteBypassLabelMethods &
   ReviewCycleMethods &
   CoordinatorRunStoreMethods &
   OrchestrationResetMethods

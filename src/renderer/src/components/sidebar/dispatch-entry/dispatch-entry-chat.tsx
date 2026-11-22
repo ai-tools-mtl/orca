@@ -1,31 +1,61 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
-import { EntryManualPlan } from './entry-manual-plan'
-import { Check, SendHorizonal, Sparkles, TriangleAlert } from 'lucide-react'
+import React, { useMemo, useRef, useState } from 'react'
+import { cn } from '@/lib/class-names'
+import { DispatchWorktreesPortal } from '@/components/right-sidebar/dispatch-worktrees/dispatch-worktrees-portal'
+import {
+  NATIVE_CHAT_APPEARANCE_ROOT_CLASS,
+  NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS,
+  nativeChatTranscriptOuterClass
+} from '@/components/native-chat/appearance/native-chat-appearance-style'
+import { Sparkles } from 'lucide-react'
+import { toast } from 'sonner'
+import { EntryToolbar, type EntryView } from './entry-toolbar'
+import { EntryWorkerApproval } from './entry-worker-approval'
+import { DispatchEntryComposer } from './dispatch-entry-composer'
+import { EntryInputRow } from './entry-input-row'
+import { EntryBoardView } from './entry-board-view'
+import { entryTaskFactsOf, type EntryTaskFact } from './entry-task-facts'
+import { EntryTimelineDays } from './entry-timeline-days'
+import { EntryTimelineViewport } from './entry-timeline-viewport'
+import { useEntryTimeline } from './use-entry-timeline'
+import { entryResultId, entryTimelineEventsOf, hasEntryResult } from './entry-timeline-events'
+import { EntryTimelineActivity } from './entry-timeline-activity'
+import { EntryTimelinePending } from './entry-timeline-pending'
+import { locateEntryTimelineCard } from './entry-task-view'
+import { useEntryResultReadState } from './use-entry-result-read-state'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
+import { openEntrySession } from './open-entry-session'
+import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-worktree-activation'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
+import type { EntryDeleteRequest } from '../../../../../shared/rpc-contract/orchestration/orchestration-routing-params'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
-import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import RoutingRequestCard from '../workspace-card/activity/RoutingEntryCard'
+import type {
+  RoutingEntryApproval,
+  RoutingEntrySubAction
+} from '../workspace-card/activity/routing-entry-model'
 import { useRoutingEntryFacts } from '../workspace-card/activity/use-routing-entry-facts'
-
-// The 统一任务入口 as the prototype's conversation (原型 .input-row): the request is a
-// right-aligned bubble with its receipt meta (id + 已收到 + routing state), and the answer —
-// the sub-action facts card — sits left beneath it. Composer pinned at the pane bottom.
+import { useEntryAskMode } from './use-entry-ask-mode'
+import { useEntryGateMode } from './use-entry-gate-mode'
+import { useEntryAgents } from './use-entry-agents'
 
 const ENTRY = 'auto.components.sidebar.RoutingEntryCard'
 
 export default function DispatchEntryChat({
   repoId,
   hostId,
-  repoDisplayName
+  repoDisplayName,
+  sidebarViewport,
+  onWorkspaceOpened,
+  reserveCollapsedSidebarHeaderSpace,
+  headerAction
 }: {
   repoId: string
   hostId: ExecutionHostId
   repoDisplayName: string
+  sidebarViewport?: HTMLDivElement | null
+  onWorkspaceOpened: () => void
+  reserveCollapsedSidebarHeaderSpace: boolean
+  headerAction?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const target = useMemo(() => ipcOrRuntimeTargetForHostId(hostId), [hostId])
@@ -34,38 +64,94 @@ export default function DispatchEntryChat({
   const automatic = useAppStore(
     (state) => state.settings?.dispatchEntryAutoRoute?.[projectKey] ?? true
   )
+  const [view, setView] = useState<EntryView>('timeline')
   const [savingMode, setSavingMode] = useState(false)
-  const [draft, setDraft] = useState('')
   const [actionError, setActionError] = useState<string | null>(null)
   const [routingHints, setRoutingHints] = useState<Record<string, string>>({})
-  const [agents, setAgents] = useState<TuiAgent[]>()
-  const streamRef = useRef<HTMLDivElement | null>(null)
-
-  const { fetchAgents } = facts
-  const needsAgents = facts.inputs.some((input) =>
-    input.subActions.some((action) => !action.taskId)
+  const [loopPending, setLoopPending] = useState(false)
+  const { askCount, latestAsk, askMode, toggle: toggleAskMode } = useEntryAskMode(facts.inputs)
+  const { gateCount, latestGate, gateMode, toggle: toggleGateMode } = useEntryGateMode(facts.inputs)
+  const decisionModel = useAppStore((state) => state.settings?.decisionModel)
+  const worktrees = useAppStore((state) => state.worktreesByRepo[repoId])
+  const events = useMemo(
+    () => entryTimelineEventsOf(facts.inputs, facts.approvals),
+    [facts.inputs, facts.approvals]
   )
-  useEffect(() => {
-    if (!needsAgents || facts.busy) {
-      return
-    }
-    let current = true
-    void fetchAgents().then(
-      (next) => {
-        if (current) {
-          setAgents(next)
-        }
-      },
-      (error: unknown) => {
-        if (current) {
-          setActionError(String(error))
-        }
+  const { days, hasEvents, latestResultId, scroll, width, appearance } = useEntryTimeline(
+    events,
+    view === 'timeline'
+  )
+  const openingSession = useRef(false)
+  const { isUnread, markSeen } = useEntryResultReadState(projectKey, setActionError)
+
+  function locateEvent(id: string, read?: RoutingEntrySubAction): void {
+    window.requestAnimationFrame(() => {
+      if (locateEntryTimelineCard(scroll.streamRef.current, id) && read) {
+        markSeen(read)
       }
-    )
-    return () => {
-      current = false
+    })
+  }
+
+  function cardActionsOf(action: RoutingEntrySubAction) {
+    const execution = action.execution
+    const { claimedBy } = action
+    const transferred = claimedBy && claimedBy !== execution?.dispatchId
+    const session = transferred ? { dispatchId: claimedBy } : execution
+    const hasResult = hasEntryResult(execution)
+    return {
+      unread: hasResult && isUnread(action),
+      onOpenResult: hasResult ? () => locateEvent(entryResultId(action), action) : undefined,
+      onTogglePause:
+        action.taskId || action.execution
+          ? (paused: boolean) => {
+              void facts
+                .setPaused(paused, action.subActionId)
+                .catch((error: unknown) => setActionError(String(error)))
+            }
+          : undefined,
+      onOpenSession:
+        target && session && (transferred || execution?.terminalHandle || execution?.sessionId)
+          ? () => {
+              if (openingSession.current) {
+                return
+              }
+              openingSession.current = true
+              void openEntrySession(target, session)
+                .then((opened) => {
+                  if (opened) {
+                    if (hasResult) {
+                      markSeen(action)
+                    }
+                    onWorkspaceOpened()
+                  }
+                })
+                .catch((error: unknown) => toast.error(String(error)))
+                .finally(() => {
+                  openingSession.current = false
+                })
+            }
+          : undefined,
+      onOpenDiff: action.execution?.worktreeId
+        ? () => {
+            const worktree = worktrees?.find((row) => row.id === action.execution?.worktreeId)
+            if (!worktree) {
+              return
+            }
+            void activateWorktreeFromSidebar(worktree.id, hostId)
+              .then(() => {
+                onWorkspaceOpened()
+                const store = useAppStore.getState()
+                store.openAllDiffs(worktree.id, worktree.path)
+                store.setRightSidebarTab('source-control')
+                store.setRightSidebarOpen(true)
+              })
+              .catch((error: unknown) => setActionError(String(error)))
+          }
+        : undefined
     }
-  }, [needsAgents, fetchAgents, facts.busy])
+  }
+
+  const agents = useEntryAgents(facts, (message) => setActionError(message))
 
   async function routeInput(inputId: string, dispatch: boolean) {
     setRoutingHints((current) => ({ ...current, [inputId]: '' }))
@@ -80,307 +166,229 @@ export default function DispatchEntryChat({
     }
   }
 
-  const inputCount = facts.inputs.length
-  useEffect(() => {
-    const stream = streamRef.current
-    if (stream) {
-      stream.scrollTop = stream.scrollHeight
-    }
-  }, [inputCount])
+  function deleteInstructions(request: EntryDeleteRequest): void {
+    setActionError(null)
+    void facts.deleteInstructions(request).catch((cause: unknown) => {
+      setActionError(cause instanceof Error ? cause.message : String(cause))
+    })
+  }
+
+  const canDeleteFailed = facts.inputs.some((input) => input.canDeleteFailed)
+  const approvalByDispatch = new Map(
+    facts.approvals.toReversed().map((approval) => [approval.dispatchId, approval])
+  )
+  const worktreeNameOf = (worktreeId: string | null | undefined): string | undefined =>
+    worktreeId ? worktrees?.find((worktree) => worktree.id === worktreeId)?.displayName : undefined
+  const taskFacts = entryTaskFactsOf(
+    facts.inputs,
+    approvalByDispatch,
+    facts.reviews,
+    worktreeNameOf
+  )
+
+  function answerApproval(approval: RoutingEntryApproval, decision: 'allow' | 'deny'): void {
+    void facts
+      .answerApproval(
+        approval.dispatchId,
+        approval.approvalId,
+        decision,
+        approval.interrupted && decision === 'allow' ? true : undefined
+      )
+      .catch((error: unknown) => setActionError(String(error)))
+  }
+
+  function renderApproval(
+    approval: RoutingEntryApproval,
+    context?: React.ReactNode
+  ): React.JSX.Element {
+    return (
+      <EntryWorkerApproval
+        approval={approval}
+        context={context}
+        busy={facts.busy}
+        paused={facts.paused}
+        onAnswer={(decision) => answerApproval(approval, decision)}
+      />
+    )
+  }
+
+  function onTaskSelect({ subActionId }: Pick<EntryTaskFact, 'subActionId'>): void {
+    setView('timeline')
+    locateEvent(`entry-task-${subActionId}`)
+  }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-chat-pane" data-dispatch-entry-chat="">
-      <div className="flex items-center gap-2 border-b border-black/10 px-5 py-2.5 dark:border-white/10">
-        <div className="mx-auto flex min-w-0 w-full max-w-[760px] items-center gap-2">
-          <span className="truncate text-sm font-medium">
-            {t(`${ENTRY}.paneTitle`, 'Task entry')} · {repoDisplayName}
-          </span>
-          {facts.paused ? (
-            <Badge variant="destructive">{t(`${ENTRY}.paused`, 'Paused')}</Badge>
-          ) : null}
-          <span className="flex-1" />
-          <label className="flex items-center gap-2 text-xs">
-            <Switch
-              size="compact"
-              checked={automatic}
-              disabled={facts.busy || savingMode}
-              onCheckedChange={(checked) => {
-                const state = useAppStore.getState()
-                setSavingMode(true)
-                setActionError(null)
-                void state
-                  .updateSettingsOrThrow({
-                    dispatchEntryAutoRoute: {
-                      ...state.settings?.dispatchEntryAutoRoute,
-                      [projectKey]: checked
-                    }
-                  })
-                  .catch((error: unknown) => setActionError(String(error)))
-                  .finally(() => setSavingMode(false))
-              }}
-            />
-            {t(`${ENTRY}.autoRoute`, 'Auto-route')}
-          </label>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={facts.busy || inputCount === 0}
-            onClick={() => {
-              void facts
-                .setPaused(!facts.paused)
-                .catch((error: unknown) => setActionError(String(error)))
-            }}
-          >
-            {facts.paused ? t(`${ENTRY}.resume`, 'Resume') : t(`${ENTRY}.pause`, 'Pause')}
-          </Button>
-        </div>
-      </div>
-      <div
-        ref={streamRef}
-        className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek [scrollbar-gutter:stable_both-edges]"
-      >
-        <div className="mx-auto flex w-full max-w-[760px] flex-col gap-3 px-5 py-4">
-          {facts.error ? <p className="text-destructive text-xs">{facts.error}</p> : null}
-          {actionError ? (
-            <p className="text-destructive text-xs" role="alert">
-              {actionError}
-            </p>
-          ) : null}
-          {facts.approvals.map((approval) => (
-            <div
-              key={approval.approvalId}
-              className="flex flex-col gap-1.5 rounded-lg border border-status-warning/30 bg-status-warning/5 p-2.5"
-            >
-              <div className="flex items-center gap-1.5 text-xs font-medium text-status-warning">
-                <TriangleAlert className="size-3.5" />
-                {t(`${ENTRY}.approvalTitle`, 'The worker asks for approval')}
-              </div>
-              <p className="text-sm">{approval.title}</p>
-              {approval.detail ? (
-                <p className="text-muted-foreground text-xs whitespace-pre-wrap">
-                  {approval.detail}
-                </p>
-              ) : null}
-              {approval.reason ? (
-                <p className="text-muted-foreground text-xs">{approval.reason}</p>
-              ) : null}
-              <p className="font-mono text-[10px] text-muted-foreground opacity-70">
-                {t(`${ENTRY}.executionTarget`, 'Execution target')} {approval.workerHandle}
-              </p>
-              <div className="flex items-center gap-1.5">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={facts.busy}
-                  onClick={() =>
-                    void facts.answerApproval(approval.dispatchId, approval.approvalId, 'allow')
-                  }
-                >
-                  {t(`${ENTRY}.allow`, 'Allow')}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={facts.busy}
-                  onClick={() =>
-                    void facts.answerApproval(approval.dispatchId, approval.approvalId, 'deny')
-                  }
-                >
-                  {t(`${ENTRY}.deny`, 'Deny')}
-                </Button>
-              </div>
-            </div>
-          ))}
-          {inputCount === 0 ? (
-            <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
-              <div className="grid size-11 place-items-center rounded-xl border bg-secondary text-muted-foreground">
-                <Sparkles className="size-5" />
-              </div>
-              <h2 className="text-sm font-medium">
-                {t(`${ENTRY}.emptyTitle`, 'Start work on this project')}
-              </h2>
-              <p className="text-muted-foreground max-w-sm text-xs">
-                {t(
-                  `${ENTRY}.emptyHint`,
-                  'One message may contain several requests. It is saved first and shown as Received; routing splits the independent requests, dependent steps stay with one worker.'
-                )}
-              </p>
-            </div>
-          ) : (
-            facts.inputs.map((input) => (
-              <div key={input.inputId} className="flex flex-col gap-1.5">
-                <div className="max-w-[82%] self-end rounded-[14px] border bg-secondary px-3 py-2 text-[13px] whitespace-pre-wrap break-words">
-                  {input.text}
-                </div>
-                <div className="flex items-center gap-2 self-end pr-0.5 text-[11px] text-muted-foreground">
-                  <span className="flex items-center gap-1 font-medium text-status-success">
-                    <span className="grid size-3.5 place-items-center rounded-full bg-status-success-background">
-                      <Check className="size-2.5" />
-                    </span>
-                    {t(`${ENTRY}.registered`, 'Received')}
-                  </span>
-                  <span>
-                    ·{' '}
-                    {input.decisionStatus === 'decided'
-                      ? t(`${ENTRY}.decided`, 'Decided')
-                      : t(`${ENTRY}.awaitingRouting`, 'Awaiting routing')}
-                  </span>
-                  <span className="font-mono text-[10px] opacity-60">{input.inputId}</span>
-                  {input.decisionStatus !== 'decided' ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="ms-1"
-                      disabled={facts.busy}
-                      onClick={() => void routeInput(input.inputId, automatic && !facts.paused)}
-                    >
-                      {t(`${ENTRY}.retryRouting`, 'Retry routing')}
-                    </Button>
-                  ) : null}
-                </div>
-                {routingHints[input.inputId] ? (
-                  <div className="flex flex-col items-start gap-1" role="status">
-                    <p className="whitespace-pre-wrap text-muted-foreground text-xs">
-                      {routingHints[input.inputId]}
-                    </p>
-                    {input.decisionStatus === 'received' ? (
-                      <Button
-                        variant="link"
-                        size="sm"
-                        className="h-auto px-0"
-                        onClick={() => {
-                          const state = useAppStore.getState()
-                          state.openSettingsTarget({
-                            pane: 'task-entry',
-                            repoId: null,
-                            sectionId: 'dispatch-decision-model'
-                          })
-                          state.openSettingsPage()
-                        }}
-                      >
-                        {t(`${ENTRY}.goConfigure`, 'Configure the decision model')}
-                      </Button>
-                    ) : null}
-                  </div>
-                ) : null}
-                {input.decisionStatus === 'received' ? (
-                  <EntryManualPlan
-                    original={input.text}
-                    busy={facts.busy}
-                    onSave={(actions) => facts.savePlan(input.inputId, actions)}
-                  />
-                ) : null}
-                {input.subActions.length > 0 ? (
-                  <RoutingRequestCard
-                    input={input}
-                    busy={facts.busy}
-                    agents={agents}
-                    onAssign={
-                      facts.paused
-                        ? undefined
-                        : (subActionId, agent) => {
-                            setRoutingHints((current) => ({ ...current, [input.inputId]: '' }))
-                            void facts
-                              .assign(input.inputId, subActionId, agent)
-                              .catch((error: unknown) => {
-                                setRoutingHints((current) => ({
-                                  ...current,
-                                  [input.inputId]: String(error)
-                                }))
-                              })
-                          }
-                    }
-                    reviews={facts.reviews}
-                    onAcceptReview={(taskId) => void facts.acceptReview(taskId)}
-                    onFetchWorkers={() => facts.fetchWorkers()}
-                    onReassign={(subActionId, targetDispatchId) => {
-                      void facts.claim(subActionId, targetDispatchId).then(() => {
-                        const subAction = input.subActions.find(
-                          (candidate) => candidate.subActionId === subActionId
-                        )
-                        const text = subAction?.lastSupplementText ?? input.text
-                        if (text) {
-                          void facts.sendSupplement(
-                            input.inputId,
-                            subActionId,
-                            targetDispatchId,
-                            text
-                          )
-                        }
-                      })
-                    }}
-                    onHandback={(subActionId, dispatchId) =>
-                      void facts.handback(subActionId, dispatchId)
-                    }
-                    onSendSupplement={(subActionId, text) => {
-                      const subAction = input.subActions.find(
-                        (candidate) => candidate.subActionId === subActionId
-                      )
-                      const dispatch = subAction?.claimedBy ?? subAction?.lastTargetDispatchId
-                      if (dispatch) {
-                        void facts.sendSupplement(input.inputId, subActionId, dispatch, text)
-                      }
-                    }}
-                  />
-                ) : null}
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-      <div className="px-5 pb-4 pt-2">
-        <form
-          className="mx-auto w-full max-w-[760px] rounded-xl border border-input bg-card p-2 pb-1 shadow-xs"
-          onSubmit={(event) => {
-            event.preventDefault()
-            const raw = new FormData(event.currentTarget).get('request')
-            const text = typeof raw === 'string' ? raw.trim() : ''
-            if (!text || facts.busy || savingMode) {
-              return
-            }
-            setActionError(null)
-            void facts.submit(text).then(
-              (inputId) => {
-                if (inputId) {
-                  setDraft((current) => (current.trim() === text ? '' : current))
-                  void routeInput(inputId, automatic && !facts.paused)
-                }
-              },
-              (error: unknown) => setActionError(String(error))
-            )
-          }}
-        >
-          <textarea
-            name="request"
-            rows={2}
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-                event.preventDefault()
-                event.currentTarget.form?.requestSubmit()
+    <div
+      className={cn(NATIVE_CHAT_APPEARANCE_ROOT_CLASS, 'flex min-h-0 min-w-0 flex-1 flex-col')}
+      style={appearance}
+      data-native-chat-scheme={appearance.colorScheme}
+      data-dispatch-entry-chat=""
+    >
+      <DispatchWorktreesPortal
+        viewport={sidebarViewport}
+        repoId={repoId}
+        hostId={hostId}
+        facts={facts}
+        onSelectTask={(subActionId) => onTaskSelect({ subActionId })}
+      />
+      <EntryToolbar
+        repoDisplayName={repoDisplayName}
+        reserveCollapsedSidebarHeaderSpace={reserveCollapsedSidebarHeaderSpace}
+        headerAction={headerAction}
+        view={view}
+        width={width}
+        onViewChange={setView}
+        taskFacts={taskFacts}
+        onTaskSelect={onTaskSelect}
+        busy={facts.busy}
+        automatic={automatic}
+        savingMode={savingMode}
+        onAutomaticChange={(checked) => {
+          const state = useAppStore.getState()
+          setSavingMode(true)
+          setActionError(null)
+          void state
+            .updateSettingsOrThrow({
+              dispatchEntryAutoRoute: {
+                ...state.settings?.dispatchEntryAutoRoute,
+                [projectKey]: checked
               }
-            }}
-            placeholder={t(`${ENTRY}.composerPlaceholder`, 'Describe a request for this project')}
-            aria-label={t(`${ENTRY}.composerAria`, 'Task input')}
-            className="max-h-32 min-h-0 min-w-0 flex-1 resize-none border-none bg-transparent px-2 pt-1 text-sm outline-none placeholder:text-muted-foreground"
+            })
+            .catch((error: unknown) => setActionError(String(error)))
+            .finally(() => setSavingMode(false))
+        }}
+        onDeleteFailed={
+          canDeleteFailed ? () => deleteInstructions({ group: repoId, scope: 'failed' }) : undefined
+        }
+        // 清空请求常驻：'all' 是 best-effort 清扫，无可清理时后端空结果不算错误。
+        onClearAll={() => deleteInstructions({ group: repoId, scope: 'all' })}
+      />
+      {view === 'board' ? (
+        <EntryBoardView facts={taskFacts} onSelect={onTaskSelect} />
+      ) : (
+        <>
+          <EntryTimelinePending
+            events={events}
+            reviews={facts.reviews}
+            isUnread={isUnread}
+            onSelect={locateEvent}
           />
-          <div className="flex items-center gap-2 px-1.5 pb-0.5">
-            <span className="text-muted-foreground text-[11px]">
-              {t(`${ENTRY}.sendHint`, 'Enter to send · Shift+Enter for a newline')}
-            </span>
-            <span className="flex-1" />
-            <Button
-              type="submit"
-              size="icon"
-              disabled={facts.busy || savingMode || !draft.trim()}
-              aria-label={t(`${ENTRY}.send`, 'Send')}
-            >
-              <SendHorizonal className="size-4" />
-            </Button>
-          </div>
-        </form>
-      </div>
+          <EntryTimelineViewport scroll={scroll}>
+            <div className={cn(nativeChatTranscriptOuterClass(false), 'pt-5')}>
+              <div className={cn(NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS, 'gap-0')}>
+                {facts.error ? (
+                  <p className="mb-3 text-destructive text-xs">{facts.error}</p>
+                ) : null}
+                {actionError ? (
+                  <p className="mb-3 text-destructive text-xs" role="alert">
+                    {actionError}
+                  </p>
+                ) : null}
+                {!hasEvents ? (
+                  <div className="flex flex-col items-center gap-3.5 px-6 pt-20 pb-10 text-center text-muted-foreground">
+                    <div className="grid size-11 place-items-center rounded-xl border bg-secondary">
+                      <Sparkles className="size-5 text-ai-action-accent" />
+                    </div>
+                    <h2 className="text-sm font-semibold text-foreground">
+                      {t(`${ENTRY}.emptyTitle`, 'Start work on this project')}
+                    </h2>
+                    <p className="max-w-[400px] text-xs leading-relaxed">
+                      {t(
+                        `${ENTRY}.emptyHint`,
+                        'One message may contain several requests. It is saved first and shown as Received; routing splits the independent requests, dependent steps stay with one worker.'
+                      )}
+                    </p>
+                  </div>
+                ) : (
+                  <EntryTimelineDays
+                    days={days}
+                    renderRow={(event, lastOfDay) => {
+                      if (event.kind !== 'request') {
+                        return (
+                          <EntryTimelineActivity
+                            key={event.id}
+                            event={event}
+                            showFullResult={event.id === latestResultId}
+                            lastOfDay={lastOfDay}
+                            busy={facts.busy}
+                            isUnread={isUnread}
+                            locate={locateEvent}
+                            markSeen={markSeen}
+                            answerAsk={facts.answerAsk}
+                            grantGate={facts.gateGrant}
+                            rejectGate={facts.gateReject}
+                            renderApproval={renderApproval}
+                            onActionError={setActionError}
+                          />
+                        )
+                      }
+                      const { input } = event
+                      return (
+                        <EntryInputRow
+                          key={event.id}
+                          input={input}
+                          receivedAt={event.at}
+                          lastOfDay={lastOfDay}
+                          repoId={repoId}
+                          facts={facts}
+                          automatic={automatic}
+                          agents={agents}
+                          approvalByDispatch={approvalByDispatch}
+                          routing={facts.routingInputs.has(input.inputId)}
+                          hint={routingHints[input.inputId]}
+                          onHint={(inputId, message) =>
+                            setRoutingHints((current) => ({ ...current, [inputId]: message ?? '' }))
+                          }
+                          onRouteInput={(inputId, dispatch) => void routeInput(inputId, dispatch)}
+                          onDelete={(subAction) =>
+                            deleteInstructions(
+                              subAction
+                                ? {
+                                    group: repoId,
+                                    scope: 'sub-action',
+                                    input: input.inputId,
+                                    subAction
+                                  }
+                                : { group: repoId, scope: 'request', input: input.inputId }
+                            )
+                          }
+                          onActionError={setActionError}
+                          cardActions={cardActionsOf}
+                        />
+                      )
+                    }}
+                  />
+                )}
+              </div>
+            </div>
+          </EntryTimelineViewport>
+          <DispatchEntryComposer
+            busy={facts.busy || savingMode}
+            mode={
+              askMode && latestAsk
+                ? { kind: 'ask', messageId: latestAsk.messageId }
+                : gateMode && latestGate
+                  ? { kind: 'gate', subActionId: latestGate.subActionId }
+                  : { kind: 'new' }
+            }
+            askCount={askCount}
+            askMode={askMode}
+            toggleAskMode={toggleAskMode}
+            gateCount={gateCount}
+            gateMode={gateMode}
+            toggleGateMode={toggleGateMode}
+            loopPending={loopPending}
+            setLoopPending={setLoopPending}
+            answerAsk={facts.answerAsk}
+            gateReject={facts.gateReject}
+            submit={facts.submit}
+            decisionModel={decisionModel}
+            routeInput={routeInput}
+            automatic={automatic}
+            onActionError={setActionError}
+          />
+        </>
+      )}
     </div>
   )
 }

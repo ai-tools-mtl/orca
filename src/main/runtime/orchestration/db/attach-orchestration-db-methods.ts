@@ -12,6 +12,8 @@ import { attachLegacyRemoteDbMethods } from '../legacy-remote/legacy-remote-db-m
 import { attachLegacyRemoteHomeDbMethods } from '../legacy-remote-home/legacy-remote-home-db-methods'
 import { attachPeerMailStore } from './federation/peer-mail-store'
 import { attachPeerRunStore } from './peer-runs/peer-run-store'
+import { attachDispatchAuthorization } from '../routing/dispatch-authorization-attach'
+import { attachRouteBypassLabels } from '../routing/route-bypass-label-attach'
 import { attachRoutingLedger } from '../routing/routing-ledger'
 import { attachReviewCycleStore } from '../review/review-cycle-store'
 import { attachLegacyAskOperation } from './legacy/legacy-ask-operation'
@@ -124,6 +126,8 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachWorkerReportSettlement(ctor)
   attachDecisionGateStore(ctor)
   attachRoutingLedger(ctor)
+  attachRouteBypassLabels(ctor)
+  attachDispatchAuthorization(ctor)
   attachReviewCycleStore(ctor)
   attachCoordinatorRunStore(ctor)
   attachOrchestrationReset(ctor)

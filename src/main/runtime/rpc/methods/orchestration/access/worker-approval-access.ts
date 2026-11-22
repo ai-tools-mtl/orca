@@ -1,3 +1,4 @@
+import { workerStartOptionsReadOnly } from '../../../../orchestration/workers/launch/worker-launch-observation'
 import type { z } from 'zod'
 import type { ApprovalAnswerParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-approval-answer-params'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
@@ -13,8 +14,30 @@ export function workerApprovalAccess({
   params,
   ctx
 }: OrchestrationAccessRuleInput<z.infer<typeof ApprovalAnswerParams>>): WorkerApprovalAccess {
-  const person = ctx.caller?.kind === 'desktop'
+  const person = ctx.caller?.kind === 'desktop' && !ctx.plugin
   const reason = params.reason?.trim() || null
+  if (params.decision === 'allow') {
+    const db = ctx.runtime.getOrchestrationDb()
+    const worker = db.getWorkerDispatch(params.dispatch)
+    if (workerStartOptionsReadOnly(worker?.start_options)) {
+      const dispatch = db.getDispatchContextById(params.dispatch)
+      if (dispatch && db.isRoutingRunPaused(dispatch.run_id)) {
+        throw new OrchestrationError('paused', 'Resume the entry before allowing this write.')
+      }
+      const card =
+        dispatch === undefined ? undefined : db.getRoutingSubActionByTask(dispatch.task_id)
+      if (card && db.isRoutingSubActionPaused(card.sub_action_id)) {
+        throw new OrchestrationError('paused', 'Resume the task card before allowing this write.')
+      }
+      if (!person) {
+        throw new OrchestrationError(
+          'approval_requires_person',
+          'Only the user can allow writes for this investigation.'
+        )
+      }
+    }
+  }
+
   // Without a reason it is not a coordinator's approve: a person on a remote-connected desktop
   // sends none, and keeps the refusal they always got.
   if (

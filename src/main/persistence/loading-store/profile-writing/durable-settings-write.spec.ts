@@ -1,4 +1,5 @@
 import { expect, it, vi } from 'vitest'
+import { normalizeDecisionModelSettings } from '../../../../shared/settings/decision-model-settings'
 import {
   createWorkerMaintenanceFixture,
   maintenanceBarrier
@@ -37,5 +38,24 @@ export function registerDurableSettingsWriteTests(): void {
       expect.objectContaining({ alwaysForceDeleteWorktrees: true }),
       7
     )
+  })
+
+  it('merges queued decision saves against the latest persisted state; legacy shapes collapse to the agent-only mode', async () => {
+    const { store, readState } = await createWorkerMaintenanceFixture()
+    function save(patch: { source: 'agent'; agent?: string }) {
+      return store.updateSettingsAndFlush(() => ({
+        decisionModel: normalizeDecisionModelSettings(patch)
+      }))
+    }
+
+    await Promise.all([
+      save({ source: 'agent', agent: 'codex' }),
+      save({ source: 'agent', agent: 'claude' })
+    ])
+
+    expect(readState().settings.decisionModel).toEqual({
+      source: 'agent',
+      agent: 'claude'
+    })
   })
 }

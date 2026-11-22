@@ -5,6 +5,10 @@ import type {
 } from '../../../shared/terminal-themes/terminal-custom-themes'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type {
+  DecisionModelSettings,
+  RouteBypassSettings
+} from '../../../shared/settings/decision-model-settings'
+import type {
   TerminalConfigImportPreview,
   TerminalConfigImportSource
 } from '../../../shared/terminal/appearance/terminal-config-import-preview'
@@ -13,7 +17,12 @@ export type SettingsApi = {
   get: () => Promise<GlobalSettings>
   /** Blocking IPC for startup decisions that cannot wait for hydration; call sparingly. */
   getSync: () => GlobalSettings | null
-  set: (args: Partial<GlobalSettings>) => Promise<GlobalSettings>
+  set: (
+    args: Partial<GlobalSettings> & {
+      decisionModelPatch?: DecisionModelSettings
+      routeBypassPatch?: RouteBypassSettings
+    }
+  ) => Promise<GlobalSettings>
   setActiveRuntimeEnvironmentPreference: (args: {
     environmentId: string | null
   }) => Promise<GlobalSettings>

@@ -10,6 +10,7 @@ export const WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP = 0
 const SECONDARY_GROUP_HEADER_TOP_MARGIN = 4
 const IMPORTED_WORKTREES_LINE_ROW_HEIGHT = 36
 const PENDING_CREATION_ROW_HEIGHT = 56
+const PROJECT_ROUTING_ENTRY_ROW_HEIGHT = 40
 const FOLDER_WORKSPACE_ROW_HEIGHT = 64
 
 export function shouldUseHeaderTopSpacing(args: {
@@ -61,6 +62,9 @@ export function estimateRenderRowSize(
   }
   if (row?.type === 'pending-creation') {
     return PENDING_CREATION_ROW_HEIGHT + 6
+  }
+  if (row?.type === 'project-routing-entry') {
+    return PROJECT_ROUTING_ENTRY_ROW_HEIGHT
   }
   if (row?.type === 'folder-workspace') {
     return FOLDER_WORKSPACE_ROW_HEIGHT

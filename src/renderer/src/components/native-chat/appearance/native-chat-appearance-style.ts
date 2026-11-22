@@ -4,7 +4,8 @@ import type { CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
   DEFAULT_NATIVE_CHAT_FONT_SIZE,
-  resolveNativeChatAppearanceSettings
+  resolveNativeChatAppearanceSettings,
+  type NativeChatWidth
 } from '../../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../../shared/app-lifecycle/appearance/app-font-family'
 import { resolveConfiguredTerminalColors } from '../../../../../shared/terminal-themes/terminal-theme-selection'
@@ -25,6 +26,10 @@ export function nativeChatTranscriptOuterClass(railVisible: boolean): string {
 }
 export const NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS =
   'mx-auto flex w-full max-w-(--chat-content-max-width) flex-col gap-5 px-[5px]'
+
+export function nativeChatContentMaxWidth(width: NativeChatWidth): string {
+  return width === 'full' ? 'none' : width === 'wide' ? '60rem' : '46rem'
+}
 
 export type NativeChatAppearanceStyle = CSSProperties &
   Record<`--${string}`, string | number> & {
@@ -204,7 +209,7 @@ export function nativeChatAppearanceStyle(
     '--chat-ui-font-size': `${uiFontSize}px`,
     '--chat-line-height': `${nativeChatLineHeightPx(fontSize)}px`,
     '--chat-code-font-size': `${codeFontSize}px`,
-    '--chat-content-max-width': width === 'full' ? 'none' : width === 'wide' ? '60rem' : '46rem',
+    '--chat-content-max-width': nativeChatContentMaxWidth(width),
     '--chat-inline-code-ratio': `${codeFontSize / fontSize}em`,
     '--chat-estimated-line-height': (22 * fontSize) / DEFAULT_NATIVE_CHAT_FONT_SIZE,
     '--chat-estimated-chars-per-line': Math.max(
