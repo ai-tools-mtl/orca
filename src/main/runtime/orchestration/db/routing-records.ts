@@ -76,8 +76,15 @@ export type RoutingSubActionRow = {
   merge_receipt_json: string | null
   /** 该行写入已获写前审批放行（方向 2 转派行）：只豁免本行只读，不影响同输入其它行。 */
   write_granted_at: string | null
+  /** §执行失败兜底：本行已消费的兜底重派 agent（null = 尚未兜底）；落行即消费，二次失败
+   *  不再自动重派（升级人工照旧）。 */
+  fallback_agent: string | null
+  /** 控制行（§直接操作会话）：'interrupt' = 派发时中断目标任务会话而不是投递补充；null = 普通行。 */
+  control_kind: 'interrupt' | null
   created_at: string
 }
+
+export type RoutingSupplementOrigin = 'route' | 'user'
 
 export type RoutingSupplementRow = {
   supplement_id: string
@@ -86,6 +93,9 @@ export type RoutingSupplementRow = {
   run_id: string
   target_dispatch_id: string
   raw_text: string
+  /** 来源身份（§按动作核对受理）：'route' = 路由续接路径登记的专属补充；'user' = 用户主动
+   *  补充/转派。同一子动作两者并存，用户补充不替代续接的受理记录。 */
+  origin: RoutingSupplementOrigin
   created_at: string
 }
 

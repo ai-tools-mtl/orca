@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { cn } from '@/lib/class-names'
 import { DispatchWorktreesPortal } from '@/components/right-sidebar/dispatch-worktrees/dispatch-worktrees-portal'
 import {
@@ -7,8 +7,8 @@ import {
   nativeChatTranscriptOuterClass
 } from '@/components/native-chat/appearance/native-chat-appearance-style'
 import { Sparkles } from 'lucide-react'
-import { toast } from 'sonner'
 import { EntryToolbar, type EntryView } from './entry-toolbar'
+import { EntryWorktreePreview } from './entry-worktree-preview'
 import { EntryWorkerApproval } from './entry-worker-approval'
 import { DispatchEntryComposer } from './dispatch-entry-composer'
 import { EntryInputRow } from './entry-input-row'
@@ -17,15 +17,14 @@ import { entryTaskFactsOf, type EntryTaskFact } from './entry-task-facts'
 import { EntryTimelineDays } from './entry-timeline-days'
 import { EntryTimelineViewport } from './entry-timeline-viewport'
 import { useEntryTimeline } from './use-entry-timeline'
-import { entryResultId, entryTimelineEventsOf, hasEntryResult } from './entry-timeline-events'
+import { entryTimelineEventsOf } from './entry-timeline-events'
 import { EntryTimelineActivity } from './entry-timeline-activity'
 import { EntryTimelinePending } from './entry-timeline-pending'
 import { locateEntryTimelineCard } from './entry-task-view'
+import { useEntryCardActions } from './use-entry-card-actions'
 import { useEntryResultReadState } from './use-entry-result-read-state'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import { openEntrySession } from './open-entry-session'
-import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-worktree-activation'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { EntryDeleteRequest } from '../../../../../shared/rpc-contract/orchestration/orchestration-routing-params'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
@@ -65,6 +64,7 @@ export default function DispatchEntryChat({
     (state) => state.settings?.dispatchEntryAutoRoute?.[projectKey] ?? true
   )
   const [view, setView] = useState<EntryView>('timeline')
+  const [preview, setPreview] = useState<{ worktreeId: string; filePath: string } | null>(null)
   const [savingMode, setSavingMode] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [routingHints, setRoutingHints] = useState<Record<string, string>>({})
@@ -81,7 +81,6 @@ export default function DispatchEntryChat({
     events,
     view === 'timeline'
   )
-  const openingSession = useRef(false)
   const { isUnread, markSeen } = useEntryResultReadState(projectKey, setActionError)
 
   function locateEvent(id: string, read?: RoutingEntrySubAction): void {
@@ -92,64 +91,17 @@ export default function DispatchEntryChat({
     })
   }
 
-  function cardActionsOf(action: RoutingEntrySubAction) {
-    const execution = action.execution
-    const { claimedBy } = action
-    const transferred = claimedBy && claimedBy !== execution?.dispatchId
-    const session = transferred ? { dispatchId: claimedBy } : execution
-    const hasResult = hasEntryResult(execution)
-    return {
-      unread: hasResult && isUnread(action),
-      onOpenResult: hasResult ? () => locateEvent(entryResultId(action), action) : undefined,
-      onTogglePause:
-        action.taskId || action.execution
-          ? (paused: boolean) => {
-              void facts
-                .setPaused(paused, action.subActionId)
-                .catch((error: unknown) => setActionError(String(error)))
-            }
-          : undefined,
-      onOpenSession:
-        target && session && (transferred || execution?.terminalHandle || execution?.sessionId)
-          ? () => {
-              if (openingSession.current) {
-                return
-              }
-              openingSession.current = true
-              void openEntrySession(target, session)
-                .then((opened) => {
-                  if (opened) {
-                    if (hasResult) {
-                      markSeen(action)
-                    }
-                    onWorkspaceOpened()
-                  }
-                })
-                .catch((error: unknown) => toast.error(String(error)))
-                .finally(() => {
-                  openingSession.current = false
-                })
-            }
-          : undefined,
-      onOpenDiff: action.execution?.worktreeId
-        ? () => {
-            const worktree = worktrees?.find((row) => row.id === action.execution?.worktreeId)
-            if (!worktree) {
-              return
-            }
-            void activateWorktreeFromSidebar(worktree.id, hostId)
-              .then(() => {
-                onWorkspaceOpened()
-                const store = useAppStore.getState()
-                store.openAllDiffs(worktree.id, worktree.path)
-                store.setRightSidebarTab('source-control')
-                store.setRightSidebarOpen(true)
-              })
-              .catch((error: unknown) => setActionError(String(error)))
-          }
-        : undefined
-    }
-  }
+  const cardActionsOf = useEntryCardActions({
+    facts,
+    target,
+    worktrees,
+    hostId,
+    isUnread,
+    markSeen,
+    locateEvent,
+    onWorkspaceOpened,
+    onActionError: setActionError
+  })
 
   const agents = useEntryAgents(facts, (message) => setActionError(message))
 
@@ -230,6 +182,10 @@ export default function DispatchEntryChat({
         hostId={hostId}
         facts={facts}
         onSelectTask={(subActionId) => onTaskSelect({ subActionId })}
+        onPreviewFile={(worktreeId, filePath) => {
+          setPreview({ worktreeId, filePath })
+          setView('preview')
+        }}
       />
       <EntryToolbar
         repoDisplayName={repoDisplayName}
@@ -238,6 +194,7 @@ export default function DispatchEntryChat({
         view={view}
         width={width}
         onViewChange={setView}
+        previewAvailable={preview !== null}
         taskFacts={taskFacts}
         onTaskSelect={onTaskSelect}
         busy={facts.busy}
@@ -265,6 +222,16 @@ export default function DispatchEntryChat({
       />
       {view === 'board' ? (
         <EntryBoardView facts={taskFacts} onSelect={onTaskSelect} />
+      ) : view === 'preview' && preview ? (
+        <EntryWorktreePreview
+          key={`${preview.worktreeId}:${preview.filePath}`}
+          worktreeId={preview.worktreeId}
+          filePath={preview.filePath}
+          onClose={() => {
+            setPreview(null)
+            setView('timeline')
+          }}
+        />
       ) : (
         <>
           <EntryTimelinePending
@@ -318,6 +285,13 @@ export default function DispatchEntryChat({
                             grantGate={facts.gateGrant}
                             rejectGate={facts.gateReject}
                             renderApproval={renderApproval}
+                            assignAgents={agents}
+                            onAssignAgent={(inputId, subActionId, agent) => {
+                              setActionError(null)
+                              void facts
+                                .assign(inputId, subActionId, agent)
+                                .catch((error: unknown) => setActionError(String(error)))
+                            }}
                             onActionError={setActionError}
                           />
                         )

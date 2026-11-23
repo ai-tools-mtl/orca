@@ -5,6 +5,7 @@ import type { RunRow } from '../../../orchestration/db/orchestration-records'
 import type { RoutingSubActionRow } from '../../../orchestration/db/routing-records'
 import { routingInputDispatchAuthorized } from '../../../orchestration/routing/dispatch-authorization'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
+import { pumpFailedStages, pumpZombieSettlements } from './entry-failed-stage-fallback'
 import { splitWorktreeIdForFilesystem } from '../../../../../shared/worktree/id'
 import { desktopEntryCaller } from '../../../orchestration/addressing/desktop-entry-identity'
 import { parseOrcaPlan, savedOrcaPlanStages } from '../../../orchestration/routing/orca-plan-parse'
@@ -54,6 +55,11 @@ export async function pumpEntryAutomations(
   await pumpAuthorizedDispatches(args, dispatchSubAction)
   // Review rounds first: an acceptance in this pass can unblock the next stage below.
   await pumpReviewLoops(args, spawnLoopWorker ?? defaultLoopSpawn(args))
+  // 僵尸结算最先跑：限流终局的 dispatch 不结算就永远占住链工作树（folderWorkerOccupied），
+  // 后续所有重派/派发都会被静默挡在门外。
+  await pumpZombieSettlements(args)
+  // 失败兜底先于阶段门：重绑过的行（agent_hint 已钉成兜底 agent）在同一轮就能被重新受理。
+  await pumpFailedStages(args, dispatchSubAction)
   await pumpStageGates(args, dispatchSubAction)
 }
 

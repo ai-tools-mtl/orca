@@ -9,7 +9,9 @@ import type {
   RoutingEntryWorker,
   RoutingReviewState
 } from '../workspace-card/activity/routing-entry-model'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { EntryDeleteButton } from './entry-delete-button'
+import { EntryAgentPickList } from './entry-assign-card'
 import { EntryTaskBadges } from './entry-task-badges'
 import { EntryCardActions } from './entry-card-actions'
 import { SupplementBar } from './entry-supplement-bar'
@@ -65,6 +67,9 @@ export type EntryTaskCardProps = {
   approval?: RoutingEntryApproval
   renderApproval?: (approval: RoutingEntryApproval) => React.JSX.Element
   review?: RoutingReviewState
+  /** 失败卡的人工位（§执行失败兜底）：可选 agent 列表 + 重指派回调，出现即渲染指派区。 */
+  assignAgents?: TuiAgent[]
+  onAssignAgent?: (subActionId: string, agent: TuiAgent) => void
   onAcceptReview?: (taskId: string, cycleId: string, revision: number) => void
   onHandback?: (subActionId: string, dispatchId: string) => Promise<void>
   onReassign?: (fromDispatch: string | null, targetDispatchId: string) => Promise<void>
@@ -92,6 +97,8 @@ export function EntryTaskCard({
   approval,
   renderApproval,
   review,
+  assignAgents,
+  onAssignAgent,
   onAcceptReview,
   onHandback,
   onReassign,
@@ -275,6 +282,18 @@ export function EntryTaskCard({
           />
         ))}
         {approval && renderApproval ? renderApproval(approval) : null}
+        {cardState === 'failed' && onAssignAgent ? (
+          <div className="border-t px-3 pb-2.5 pt-2">
+            <p className="px-0.5 pb-1 text-2xs text-muted-foreground">
+              {t(`${ENTRY}.reassignTitle`, 'Reassign another worker to continue the chain')}
+            </p>
+            <EntryAgentPickList
+              agents={assignAgents}
+              busy={busy}
+              onPick={(agent) => onAssignAgent(action.subActionId, agent)}
+            />
+          </div>
+        ) : null}
       </div>
       <div className="px-3 pb-2">{taskIdentifiers}</div>
       <EntryCardActions

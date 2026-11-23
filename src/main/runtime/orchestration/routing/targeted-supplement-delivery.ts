@@ -55,12 +55,60 @@ export async function deliverRecordedSupplement(
   expectedTurn?: string
 ): Promise<TargetedSupplementResult> {
   const lastAttempt = db.listSupplementAttempts(supplement.supplement_id).at(-1)
-  if (lastAttempt && (lastAttempt.outcome !== 'refused' || lastAttempt.refusal_kind !== 'paused')) {
+  // 重指目标后的补充允许重投：lastAttempt 属于旧 dispatch，目标已换新（兜底跟随）。
+  const retargeted = lastAttempt?.target_dispatch_id !== supplement.target_dispatch_id
+  if (
+    lastAttempt &&
+    !retargeted &&
+    (lastAttempt.outcome !== 'refused' || lastAttempt.refusal_kind !== 'paused')
+  ) {
     return { supplement, attempt: lastAttempt }
+  }
+  // 兜底重派跟随（§执行失败兜底）：只对不可 steer 的目标生效（dispatch 已终局，或 usage-
+  // limit 僵尸）——健康在跑的会话（含转派 handback）照常 steer。目标任务的原始行已被换人
+  // 时，旧 dispatch 永远收不到 steer——续接改绑新任务并重投新 dispatch；新任务未落账时记
+  // paused 拒收保持可重投（恢复推进在原行派发后跟随改指新 worker）。
+  const targetTaskId = db.getSubAction(supplement.sub_action_id)?.task_id
+  if (targetTaskId) {
+    const steerable =
+      db.getDispatchContext(targetTaskId)?.status === 'dispatched' &&
+      !db.redispatchDirectiveApplies(targetTaskId)
+    if (!steerable) {
+      const followedTask = db.fallbackRedispatchTargetOfTask(targetTaskId)
+      const followedDispatch = followedTask ? db.getDispatchContext(followedTask) : undefined
+      if (followedTask && followedDispatch && followedDispatch.status === 'dispatched') {
+        db.rebindRoutingTaskBindings(targetTaskId, followedTask)
+        db.retargetRoutingSupplement(supplement.supplement_id, followedDispatch.id)
+        return deliverRecordedSupplement(
+          db,
+          { ...supplement, target_dispatch_id: followedDispatch.id },
+          expectedTurn
+        )
+      }
+      if (db.hasRedispatchHandbackOfTask(targetTaskId)) {
+        // 换人已裁决（新任务未落账）：保持 paused 可重投，绝不落入对终局会话的终结性拒收。
+        if (lastAttempt?.refusal_kind === 'paused' && !retargeted) {
+          return { supplement, attempt: lastAttempt }
+        }
+        return {
+          supplement,
+          attempt: db.recordSupplementAttempt({
+            supplementId: supplement.supplement_id,
+            requestId: lastAttempt?.request_id ?? generateId('rtsend'),
+            targetDispatchId: supplement.target_dispatch_id,
+            expectedTurnId: null,
+            outcome: 'refused',
+            refusalKind: 'paused',
+            detail: 'Redispatch directive pending: awaiting the re-dispatched task.'
+          })
+        }
+      }
+    }
   }
   const dispatch = db.getDispatchContextById(supplement.target_dispatch_id)
   const requestId = lastAttempt?.request_id ?? generateId('rtsend')
-  let expectedTurnId = lastAttempt?.expected_turn_id ?? expectedTurn
+  // 重指目标后不复用旧会话的 expected turn——旧 turn 属于已终局的 dispatch。
+  let expectedTurnId = retargeted ? undefined : (lastAttempt?.expected_turn_id ?? expectedTurn)
   const newerAttempt = (): RoutingSupplementAttemptRow | undefined => {
     const latest = db.listSupplementAttempts(supplement.supplement_id).at(-1)
     return latest?.attempt_id === lastAttempt?.attempt_id ? undefined : latest

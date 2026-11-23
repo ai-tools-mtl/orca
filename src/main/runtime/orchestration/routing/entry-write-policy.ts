@@ -23,6 +23,11 @@ export function entrySubActionRequiresWriteApproval(
   if (action.write_granted_at !== null) {
     return false
   }
+  if (action.stage_kind) {
+    // 阶段行的写入权威是门链（计划门/写前审批/输入级显式标记）——计划 worker 写的 spec 是
+    // 正常产物文本，可能合法包含"只读"（如库存 UI 的只读空状态），不参与只读模式扫描。
+    return entryInputRequiresWriteApproval(db.getRoutingInput(action.input_id))
+  }
   return (
     entryInputRequiresWriteApproval(db.getRoutingInput(action.input_id)) ||
     requiresEntryWriteApproval(action.text) ||

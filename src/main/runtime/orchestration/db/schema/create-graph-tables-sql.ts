@@ -279,6 +279,9 @@ CREATE TABLE IF NOT EXISTS routing_supplements (
   run_id             TEXT NOT NULL,
   target_dispatch_id TEXT NOT NULL,
   raw_text           TEXT NOT NULL,
+  -- 补充来源（§按动作核对受理）：'route' = 路由续接路径登记的专属补充；'user' = 用户主动
+  -- 补充/转派。同一子动作两者并存，用户补充不替代续接的受理记录。
+  origin             TEXT NOT NULL DEFAULT 'user',
   created_at         TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

@@ -407,9 +407,18 @@ describe('entry dispatch authorization persistence', () => {
     await pumpOnce()
     expect(boundActionIds(holdInput)).toHaveLength(1)
     expect(boundActionIds(orphanInput)).toHaveLength(1)
+    // 执行失败兜底（§能力分工）：夹具里并发 spawn 会同步失败一次——泵按兜底链重派一次，
+    // fallback_agent 落行即消费；二次失败不再自动重派（升级人工照旧），故恰好多一笔 dispatch。
     expect(db.db.prepare('SELECT COUNT(*) AS count FROM worker_dispatches').get()).toEqual({
-      count: 2
+      count: 3
     })
+    expect(
+      db.db
+        .prepare(
+          'SELECT COUNT(*) AS count FROM routing_sub_actions WHERE fallback_agent IS NOT NULL'
+        )
+        .get()
+    ).toEqual({ count: 1 })
   })
 
   it('keeps a genuinely admitted legacy decision bound and never re-dispatches it', async () => {
@@ -493,13 +502,14 @@ describe('entry dispatch authorization persistence', () => {
     }))
     const input = await submit('给修登录那项补回归测试')
     await routeOnce(input, false)
-    // 模拟旧版本中断：授权落库前已登记补充（零尝试）。
+    // 模拟旧版本中断：授权落库前路由路径已登记补充（零尝试）。
     const dispatch = db.getDispatchContext(taskId)!
     db.recordRoutingSupplement({
       inputId: input,
       subActionId: db.listSubActions(input)[0]!.sub_action_id,
       targetDispatchId: dispatch.id,
-      text: '补回归测试'
+      text: '补回归测试',
+      origin: 'route'
     })
     const supplements = () =>
       db.db
@@ -630,14 +640,15 @@ describe('entry dispatch authorization persistence', () => {
     const input = await submit('给修登录那项补并发场景回归测试')
     // dispatch:false 登记决定（授权未写入）。
     await routeOnce(input, false)
-    // 模拟：补充已登记且有 paused 拒收尝试。
+    // 模拟：路由路径的补充已登记且有 paused 拒收尝试。
     const dispatch = db.getDispatchContext(taskId)!
     const subActionId = db.listSubActions(input)[0]!.sub_action_id
     const supplement = db.recordRoutingSupplement({
       inputId: input,
       subActionId,
       targetDispatchId: dispatch.id,
-      text: '补并发场景回归测试'
+      text: '补并发场景回归测试',
+      origin: 'route'
     })
     db.recordSupplementAttempt({
       supplementId: supplement.supplement_id,

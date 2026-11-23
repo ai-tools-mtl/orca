@@ -45,12 +45,14 @@ export default function DispatchWorktreesPanel({
   repoId,
   hostId,
   facts,
-  onSelectTask
+  onSelectTask,
+  onPreviewFile
 }: {
   repoId: string
   hostId: ExecutionHostId
   facts: DispatchFacts
   onSelectTask: (subActionId: string) => void
+  onPreviewFile: (worktreeId: string, filePath: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const repo = useAppStore((state) => findRepoForHost(state.repos, repoId, { hostId }))
@@ -146,6 +148,7 @@ export default function DispatchWorktreesPanel({
               tasksLoading={!facts.hasSnapshot}
               refreshTasks={() => void facts.refresh()}
               onSelectTask={onSelectTask}
+              onPreviewFile={onPreviewFile}
             />
           ))
         )}
@@ -163,7 +166,8 @@ function WorktreeGroup({
   tasksError,
   tasksLoading,
   refreshTasks,
-  onSelectTask
+  onSelectTask,
+  onPreviewFile
 }: {
   worktree: Worktree
   hostId: ExecutionHostId
@@ -174,6 +178,7 @@ function WorktreeGroup({
   tasksLoading: boolean
   refreshTasks: () => void
   onSelectTask: (subActionId: string) => void
+  onPreviewFile: (worktreeId: string, filePath: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const [tab, setTab] = useState('files')
@@ -251,6 +256,7 @@ function WorktreeGroup({
                 hostId={hostId}
                 folder={folder}
                 view="files"
+                onPreviewFile={onPreviewFile}
               />
             </TabsContent>
             <TabsContent value="changes">
@@ -259,6 +265,7 @@ function WorktreeGroup({
                 hostId={hostId}
                 folder={folder}
                 view="changes"
+                onPreviewFile={onPreviewFile}
               />
             </TabsContent>
             <TabsContent value="tasks">
@@ -329,12 +336,14 @@ function WorktreeFilesOrChanges({
   worktree,
   hostId,
   folder,
-  view
+  view,
+  onPreviewFile
 }: {
   worktree: Worktree
   hostId: ExecutionHostId
   folder: boolean
   view: 'files' | 'changes'
+  onPreviewFile: (worktreeId: string, filePath: string) => void
 }): React.JSX.Element {
   const { id, path } = worktree
   const owner = useAppStore(
@@ -345,7 +354,12 @@ function WorktreeFilesOrChanges({
     return route ? { ...route, worktreeId: id, worktreePath: path } : null
   }, [id, owner, path])
   return view === 'files' ? (
-    <DispatchWorktreeFiles worktreeId={id} root={path} owner={owner} />
+    <DispatchWorktreeFiles
+      worktreeId={id}
+      root={path}
+      owner={owner}
+      onPreviewFile={onPreviewFile}
+    />
   ) : (
     <DispatchWorktreeChanges context={context} folder={folder} />
   )

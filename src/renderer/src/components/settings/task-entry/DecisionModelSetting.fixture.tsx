@@ -30,6 +30,34 @@ const configured: GlobalSettings = {
   }
 }
 
+export const shadowEvaluation = defineFixture({
+  width: 760,
+  render: () => (
+    <div className="settings-view-shell bg-background p-5">
+      <TaskEntryPreview />
+    </div>
+  ),
+  store: { settings: configured, localDetectedAgentIdsByContext: { host: ['codex'] } },
+  setup: () => {
+    let persisted = configured
+    window.api.settings.set = async ({ routeBypassPatch, decisionModelPatch, ...updates }) => {
+      persisted = {
+        ...persisted,
+        ...updates,
+        ...(routeBypassPatch ? { routeBypass: routeBypassPatch } : {}),
+        ...(decisionModelPatch ? { decisionModel: decisionModelPatch } : {})
+      }
+      return persisted
+    }
+    window.api.runtime.call = async ({ method }) => ({
+      id: 'fixture',
+      ok: true,
+      _meta: { runtimeId: 'fixture' },
+      result: method === 'orchestration.entryRoutingTest' ? { ok: true } : []
+    })
+  }
+})
+
 export const configuredChinese = defineFixture({
   width: 720,
   store: { settings: configured, localDetectedAgentIdsByContext: { host: ['codex', 'claude'] } },

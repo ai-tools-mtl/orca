@@ -166,6 +166,7 @@ export function registerRoutingDecision(
       /** Upstream edges: 1-based seqs within this batch, or existing sub_action_ids. */
       dependsOn?: (number | string)[]
       agentHint?: string | null
+      controlKind?: 'interrupt'
     }[]
     decision?: unknown
     /** 决定落库即带授权语义（§派发授权，与决定同一 SAVEPOINT 原子写入）：
@@ -232,8 +233,8 @@ export function registerRoutingDecision(
         .prepare(
           `INSERT INTO routing_sub_actions
              (sub_action_id, input_id, run_id, seq, text, constraints_json, task_id,
-              stage_kind, depends_on_json, gate, agent_hint)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+              stage_kind, depends_on_json, gate, agent_hint, control_kind)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           id,
@@ -246,7 +247,8 @@ export function registerRoutingDecision(
           subAction.stageKind ?? null,
           dependsOn.length > 0 ? JSON.stringify(dependsOn) : null,
           subAction.gate ?? null,
-          subAction.agentHint ?? null
+          subAction.agentHint ?? null,
+          subAction.controlKind ?? null
         )
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fetch reads back exactly the row just inserted.
       return this.getSubAction(id) as RoutingSubActionRow

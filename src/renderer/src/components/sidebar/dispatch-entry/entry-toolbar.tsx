@@ -29,7 +29,7 @@ import type { NativeChatWidth } from '../../../../../shared/native-chat/settings
 
 const ENTRY = 'auto.components.sidebar.RoutingEntryCard'
 
-export type EntryView = 'timeline' | 'board'
+export type EntryView = 'timeline' | 'board' | 'preview'
 
 export function EntryToolbar({
   repoDisplayName,
@@ -38,6 +38,7 @@ export function EntryToolbar({
   view,
   width,
   onViewChange,
+  previewAvailable,
   taskFacts,
   onTaskSelect,
   busy,
@@ -53,6 +54,7 @@ export function EntryToolbar({
   view: EntryView
   width: NativeChatWidth
   onViewChange: (value: EntryView) => void
+  previewAvailable: boolean
   taskFacts: EntryTaskFact[]
   onTaskSelect: (fact: EntryTaskFact) => void
   busy: boolean
@@ -93,12 +95,17 @@ export function EntryToolbar({
         </div>
         <Tabs
           value={view}
-          onValueChange={(value) => onViewChange(value === 'board' ? 'board' : 'timeline')}
+          onValueChange={(value) =>
+            onViewChange(value === 'board' ? 'board' : value === 'preview' ? 'preview' : 'timeline')
+          }
           className="shrink-0"
         >
           <TabsList aria-label={t(`${ENTRY}.viewSegmentLabel`, 'Entry views')} size="sm">
             <TabsTrigger value="timeline">{t(`${ENTRY}.viewTimeline`, 'Timeline')}</TabsTrigger>
             <TabsTrigger value="board">{t(`${ENTRY}.viewBoard`, 'Board')}</TabsTrigger>
+            {previewAvailable ? (
+              <TabsTrigger value="preview">{t(`${ENTRY}.viewPreview`, 'Preview')}</TabsTrigger>
+            ) : null}
           </TabsList>
         </Tabs>
       </div>

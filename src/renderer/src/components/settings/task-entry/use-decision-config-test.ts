@@ -62,6 +62,7 @@ export function useDecisionConfigTest(draftVersion: string, savedVersion: string
     currentResult: onHost.find((entry) => entry.version === draftVersion)?.result,
     savedResult: onHost.find((entry) => entry.version === savedVersion)?.result,
     isTesting: pending !== null,
+    isTestingCurrent: pending?.version === draftVersion,
     testingVersion:
       pending?.version === savedVersion
         ? 'saved'

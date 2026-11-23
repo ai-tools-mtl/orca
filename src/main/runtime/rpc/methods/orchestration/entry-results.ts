@@ -174,11 +174,21 @@ function entryStatusLines(db: OrchestrationDb, runId: string): string[] {
     for (const entry of input.subActions) {
       const label = entryStatusLabel(entry.subAction, entry.execution)
       if (label) {
-        lines.push(`${entry.subAction.text}：${label}`)
+        lines.push(`${entryStatusTaskText(entry.subAction.text)}：${label}`)
       }
     }
   }
   return lines
+}
+
+/** 状态行里的任务文本只留首行摘要（阶段行 spec 动辄整段需求原文——摘要与回复气泡都要可读）。 */
+const ENTRY_STATUS_TASK_TEXT_MAX = 80
+
+function entryStatusTaskText(text: string): string {
+  const firstLine = text.split('\n', 1)[0]?.trim() ?? text
+  return firstLine.length > ENTRY_STATUS_TASK_TEXT_MAX
+    ? `${firstLine.slice(0, ENTRY_STATUS_TASK_TEXT_MAX)}…`
+    : firstLine
 }
 
 /** 单任务的账本状态行（混合策略直通分支）：意图分类点名候选任务时，答案从这份运行时事实
@@ -195,7 +205,7 @@ export function entryTaskStatusAnswer(
     return undefined
   }
   const label = entryStatusLabel(entry.subAction, entry.execution)
-  return label ? `${entry.subAction.text}：${label}` : undefined
+  return label ? `${entryStatusTaskText(entry.subAction.text)}：${label}` : undefined
 }
 
 function entryStatusLabel(

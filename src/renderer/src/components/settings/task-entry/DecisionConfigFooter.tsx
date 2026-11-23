@@ -3,6 +3,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { DecisionConfigTest } from './use-decision-config-test'
 
 export function DecisionConfigFooter({
+  compact = false,
   dirty,
   defaultConfig,
   saving,
@@ -15,6 +16,7 @@ export function DecisionConfigFooter({
   testDisabled,
   onTest
 }: {
+  compact?: boolean
   dirty: boolean
   defaultConfig: boolean
   saving: boolean
@@ -50,44 +52,88 @@ export function DecisionConfigFooter({
             'Earlier version'
           )
 
+  const saveStatus = dirty
+    ? t('auto.components.settings.TaskEntryPane.decisionModel.unsaved', 'Unsaved changes')
+    : defaultConfig
+      ? defaultLabel
+      : t('auto.components.settings.TaskEntryPane.decisionModel.configSaved', 'Saved')
+  const testingLabel = t('auto.components.settings.TaskEntryPane.decisionModel.testing', 'Testing…')
+  const notTested = t(
+    'auto.components.settings.TaskEntryPane.decisionModel.notTested',
+    'Not tested'
+  )
+  const actions = (
+    <>
+      <Button type="button" size="sm" disabled={!dirty || saveDisabled} onClick={onSave}>
+        {saving
+          ? t('auto.components.settings.TaskEntryPane.decisionModel.savingConfig', 'Saving…')
+          : t('auto.components.settings.TaskEntryPane.decisionModel.save', 'Save')}
+      </Button>
+      {onTest ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={testDisabled || test.isTesting}
+          onClick={onTest}
+        >
+          {(compact ? test.isTestingCurrent : test.isTesting) ? testingLabel : testLabel}
+        </Button>
+      ) : null}
+    </>
+  )
+  const saveError = saveFailed ? (
+    <p role="alert" className="text-xs text-destructive">
+      {t(
+        'auto.components.settings.TaskEntryPane.decisionModel.configSaveFailed',
+        'Save failed. The previous configuration is still in use. Try saving again.'
+      )}
+    </p>
+  ) : null
+
+  if (compact) {
+    return (
+      <div data-settings-row="" className="flex flex-col gap-2 py-3">
+        {validation ? <p className="text-xs text-destructive">{validation}</p> : null}
+        {saveError}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div role="status" className="min-w-0 space-y-1 text-xs text-muted-foreground">
+            <p>
+              {saveStatus} · {test.hostLabel}
+            </p>
+            <p
+              className={
+                tested?.ok ? 'text-status-success' : tested ? 'text-destructive' : undefined
+              }
+            >
+              {test.isTestingCurrent
+                ? testingLabel
+                : tested
+                  ? tested.ok
+                    ? passed
+                    : failed
+                  : notTested}
+            </p>
+            {!test.isTestingCurrent && tested?.ok === false && tested.detail ? (
+              <p className="text-destructive wrap-anywhere">{tested.detail}</p>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">{actions}</div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div data-settings-row="" className="flex flex-col gap-2 py-3">
       {validation ? <p className="text-xs text-destructive">{validation}</p> : null}
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" size="sm" disabled={!dirty || saveDisabled} onClick={onSave}>
-          {saving
-            ? t('auto.components.settings.TaskEntryPane.decisionModel.savingConfig', 'Saving…')
-            : t('auto.components.settings.TaskEntryPane.decisionModel.save', 'Save')}
-        </Button>
-        {onTest ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={testDisabled || test.isTesting}
-            onClick={onTest}
-          >
-            {test.isTesting
-              ? t('auto.components.settings.TaskEntryPane.decisionModel.testing', 'Testing…')
-              : testLabel}
-          </Button>
-        ) : null}
+        {actions}
         <span role="status" className="text-xs text-muted-foreground">
-          {dirty
-            ? t('auto.components.settings.TaskEntryPane.decisionModel.unsaved', 'Unsaved changes')
-            : defaultConfig
-              ? defaultLabel
-              : t('auto.components.settings.TaskEntryPane.decisionModel.configSaved', 'Saved')}
+          {saveStatus}
         </span>
       </div>
-      {saveFailed ? (
-        <p role="alert" className="text-xs text-destructive">
-          {t(
-            'auto.components.settings.TaskEntryPane.decisionModel.configSaveFailed',
-            'Save failed. The previous configuration is still in use. Try saving again.'
-          )}
-        </p>
-      ) : null}
+      {saveError}
       {onTest || test.isTesting || tested ? (
         <div role="status" className="space-y-1 text-xs text-muted-foreground">
           <p
@@ -116,14 +162,7 @@ export function DecisionConfigFooter({
                   {
                     version,
                     host: test.hostLabel,
-                    status: tested
-                      ? tested.ok
-                        ? passed
-                        : failed
-                      : t(
-                          'auto.components.settings.TaskEntryPane.decisionModel.notTested',
-                          'Not tested'
-                        )
+                    status: tested ? (tested.ok ? passed : failed) : notTested
                   }
                 )}
             {!test.isTesting && tested?.agent ? ` · ${tested.agent}` : null}

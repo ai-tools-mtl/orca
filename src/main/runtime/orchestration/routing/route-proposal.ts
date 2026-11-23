@@ -18,13 +18,6 @@ const queryStatusActionSchema = z.object({
   target: z.string().trim().min(1)
 })
 
-const continueTaskActionSchema = z.object({
-  key: actionKeySchema,
-  type: z.literal('continue_task'),
-  taskId: z.string().trim().min(1),
-  instruction: z.string().trim().min(1)
-})
-
 /** Models copy templates literally and invent agent names; unknown ids drop so the action stays
  *  unassigned instead of the whole proposal failing validation. */
 const normalizeAgentSuggestion = z.preprocess(
@@ -35,6 +28,15 @@ const normalizeAgentSuggestion = z.preprocess(
   z.custom<TuiAgent>(isTuiAgent).optional()
 )
 
+const continueTaskActionSchema = z.object({
+  key: actionKeySchema,
+  type: z.literal('continue_task'),
+  taskId: z.string().trim().min(1),
+  instruction: z.string().trim().min(1),
+  /** 用户点名换 agent 时可带（§执行失败兜底）：裁决层把它转成对原行的重派。 */
+  agent: normalizeAgentSuggestion
+})
+
 const createTaskActionSchema = z.object({
   key: actionKeySchema,
   type: z.literal('create_task'),
@@ -44,6 +46,15 @@ const createTaskActionSchema = z.object({
   planning: z.boolean().optional(),
   prototype: z.boolean().optional(),
   clarification: z.boolean().optional()
+})
+
+/** 控制动作：对该任务正在进行的执行做直接会话操作（中断），不向会话投递任何文本。 */
+const controlTaskActionSchema = z.object({
+  key: actionKeySchema,
+  type: z.literal('control_task'),
+  taskId: z.string().trim().min(1),
+  operation: z.literal('interrupt'),
+  reason: z.string().trim().min(1).optional()
 })
 
 const clarifyActionSchema = z.object({
@@ -60,12 +71,20 @@ const noActionSchema = z.object({
   reason: z.string().trim().min(1)
 })
 
+const replyActionSchema = z.object({
+  key: actionKeySchema,
+  type: z.literal('reply'),
+  text: z.string().trim().min(1)
+})
+
 const routeActionSchema = z.discriminatedUnion('type', [
   queryStatusActionSchema,
   continueTaskActionSchema,
   createTaskActionSchema,
+  controlTaskActionSchema,
   clarifyActionSchema,
-  noActionSchema
+  noActionSchema,
+  replyActionSchema
 ])
 
 export const routeProposalSchema = z.object({
@@ -92,6 +111,9 @@ export function parseRouteProposal(raw: unknown): RouteProposalV1 {
   const { actions } = parsed.data
   if (actions.some((action) => action.type === 'no_action') && actions.length > 1) {
     throw new RouteProposalFormatError('no_action must be the only action in a proposal')
+  }
+  if (actions.filter((action) => action.type === 'reply').length > 1) {
+    throw new RouteProposalFormatError('at most one reply action is allowed in a proposal')
   }
   if (new Set(actions.map((action) => action.key)).size !== actions.length) {
     throw new RouteProposalFormatError('action keys must be unique within a proposal')

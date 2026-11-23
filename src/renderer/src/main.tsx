@@ -9,6 +9,7 @@ import App from './App'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
 import { installRendererCrashDiagnostics } from './diagnostics/crash-reporting/crash-diagnostics'
 import { recordRendererCrashBreadcrumb } from './diagnostics/crash-reporting/crash-breadcrumb-recorder'
+import './dev/dev-probe-bridge'
 import { installAutomationHostDiagnostic } from './components/automations/hosts/automation-host-diagnostics'
 import {
   applyCachedPluginAppTheme,

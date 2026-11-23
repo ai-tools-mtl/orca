@@ -6,7 +6,7 @@ import {
   entryReviewResultSchema,
   entryShowResultSchema,
   toEntryInputs
-} from './routing-entry-model'
+} from './entry-show-projection'
 import type { RoutingReviewState } from './routing-entry-model'
 
 export async function entryReview(

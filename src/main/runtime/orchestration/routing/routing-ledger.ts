@@ -2,6 +2,7 @@ import type {
   RoutingInputRow,
   RoutingSubActionRow,
   RoutingSupplementAttemptRow,
+  RoutingSupplementOrigin,
   RoutingSupplementOutcome,
   RoutingSupplementRow
 } from '../db/routing-records'
@@ -57,6 +58,9 @@ export function recordRoutingSupplement(
     subActionId: string
     targetDispatchId: string
     text: string
+    /** 来源身份（§按动作核对受理）：'route' = 路由续接路径（显式派发/恢复推进登记）；
+     *  'user'（默认）= 用户主动补充/转派。 */
+    origin?: RoutingSupplementOrigin
   }
 ): RoutingSupplementRow {
   const subAction = this.getSubAction(supplement.subActionId)
@@ -80,8 +84,8 @@ export function recordRoutingSupplement(
     const id = generateId('supp')
     this.db
       .prepare(
-        `INSERT INTO routing_supplements (supplement_id, input_id, sub_action_id, run_id, target_dispatch_id, raw_text)
-         VALUES (?, ?, ?, ?, ?, ?)`
+        `INSERT INTO routing_supplements (supplement_id, input_id, sub_action_id, run_id, target_dispatch_id, raw_text, origin)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         id,
@@ -89,7 +93,8 @@ export function recordRoutingSupplement(
         supplement.subActionId,
         subAction.run_id,
         supplement.targetDispatchId,
-        supplement.text
+        supplement.text,
+        supplement.origin ?? 'user'
       )
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fetch reads back exactly the row just inserted.
     const row = this.getSupplement(id) as RoutingSupplementRow

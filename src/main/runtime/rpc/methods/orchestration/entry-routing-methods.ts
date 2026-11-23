@@ -18,9 +18,67 @@ import {
 } from '../../../../../shared/rpc-contract/orchestration/orchestration-routing-params'
 import { defineOrchestrationMethod } from './access/orchestration-method-access'
 import { dispatchEntrySubAction } from './entry-dispatch'
+import { usageLimitZombieAgent } from './entry-failed-stage-fallback'
+import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { entryPlacement } from './entry-placement'
 import { coordinatedEntryRun, entryRunOfInput } from './entry-run-scope'
 import { entryStatusDigest } from './entry-results'
+import type { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
+
+/** 会话连续性上下文：当前输入之前最近 ≤4 条输入及其裁决（软删除已由读取端过滤）。
+ *  只供 reply/指代消解参考——工作路由仍以当前消息为准。字段显式限幅。 */
+const ENTRY_RECENT_TURNS = 4
+const ENTRY_RECENT_TURN_TEXT_MAX = 120
+
+export function entryRecentTurns(
+  db: OrchestrationDb,
+  runId: string,
+  currentInputId: string
+): { text: string; outcome: string }[] {
+  const prior = db
+    .listRunRoutingInputs(runId)
+    .filter((row) => row.input_id !== currentInputId)
+    .slice(-ENTRY_RECENT_TURNS)
+  return prior.map((row) => {
+    const text = row.raw_text.replace(/\s+/g, ' ').trim().slice(0, ENTRY_RECENT_TURN_TEXT_MAX)
+    if (row.decision_status !== 'decided') {
+      return { text, outcome: '待路由' }
+    }
+    const decision = parseEntryDecisionSummary(row.decision_json)
+    if ((decision?.workCount ?? 0) > 0) {
+      return { text, outcome: `已派发 ${decision?.workCount} 项工作` }
+    }
+    return {
+      text,
+      outcome: decision?.reason?.slice(0, ENTRY_RECENT_TURN_TEXT_MAX) || '无需派发'
+    }
+  })
+}
+
+function parseEntryDecisionSummary(rawDecision: string | null): {
+  workCount: number
+  reason?: string
+} | null {
+  if (!rawDecision) {
+    return null
+  }
+  try {
+    const parsed: unknown = JSON.parse(rawDecision)
+    if (!parsed || typeof parsed !== 'object') {
+      return null
+    }
+    const record = parsed as Record<string, unknown>
+    const references = Array.isArray(record.taskReferences) ? record.taskReferences : []
+    const reason = typeof record.reason === 'string' ? record.reason.trim() : ''
+    // taskReferences 与子动作一一对应（无任务引用的行占位 null），长度即子动作数。
+    return {
+      workCount: references.length,
+      ...(reason ? { reason } : {})
+    }
+  } catch {
+    return null
+  }
+}
 
 function requireEntryOperator(ctx: RpcContext): void {
   if (!ctx.caller || ctx.plugin || ctx.orchestrationCaller || isAgentRpcCaller(ctx.caller)) {
@@ -78,8 +136,49 @@ export const ORCHESTRATION_ENTRY_ROUTING_METHODS = [
     handler: async ({ group, input, subAction, agent }, ctx) => {
       requireEntryOperator(ctx)
       const { runtime } = ctx
+      const db = runtime.getOrchestrationDb()
       const run = entryRunOfInput(runtime.getOrchestrationDb(), group, input)
       try {
+        // 手动重指派（§执行失败兜底的人工位）：行仍绑着失败/僵尸任务时先解绑再派——用户
+        // 所选 agent 钉进 agent_hint，续接行随迁到新任务；不消费自动兜底标记（手动指派再
+        // 失败时自动兜底仍可按链接管一次）。
+        const action = db.getSubAction(subAction)
+        const taskId = action?.task_id
+        if (action && taskId) {
+          const failed = db.getTask(taskId)?.status === 'failed'
+          const zombie = failed ? undefined : await usageLimitZombieAgent(db, taskId)
+          if (failed || zombie) {
+            if (!isTuiAgent(agent)) {
+              throw new OrchestrationError(
+                'agent_unconfigured',
+                `Worker「${agent}」不是已接入的 agent。`
+              )
+            }
+            if (action.claimed_dispatch_id) {
+              db.handbackSubAction({
+                subActionId: action.sub_action_id,
+                fromDispatchId: action.claimed_dispatch_id,
+                reason: `manual reassign to ${agent} after ${zombie ? `usage limit (${zombie})` : 'failure'}`
+              })
+            }
+            if (!db.reassignRoutingSubAction(action.sub_action_id, agent)) {
+              return
+            }
+            // 僵尸目标先结算再派：不结算的 dispatch 一直占住链工作树（folderWorkerOccupied），
+            // 重派会静默排队等一个永远不会结束的占位。
+            if (zombie) {
+              const zombieDispatch = db.getDispatchContext(taskId)
+              if (zombieDispatch) {
+                db.settleWorkerReport({
+                  taskId,
+                  dispatchId: zombieDispatch.id,
+                  outcome: 'failed',
+                  result: `${zombie} hit its usage limit; the attempt is settled for the manual re-dispatch.`
+                })
+              }
+            }
+          }
+        }
         await dispatchEntrySubAction({
           runtime,
           run,
@@ -89,6 +188,10 @@ export const ORCHESTRATION_ENTRY_ROUTING_METHODS = [
           agent,
           placement: await entryPlacement(runtime, group)
         })
+        const reboundTaskId = db.getSubAction(subAction)?.task_id
+        if (taskId && reboundTaskId && reboundTaskId !== taskId) {
+          db.rebindRoutingTaskBindings(taskId, reboundTaskId)
+        }
       } catch (error) {
         recordEntryAssignmentError(runtime.getOrchestrationDb(), input, subAction, error)
         throw error
@@ -183,6 +286,8 @@ async function runEntryRoute(
     .catch(() => [])
   // 状态查询的"回答"（§5.1 确定性模板）：进展摘要由运行时生成，随上下文给 provider。
   const statusDigest = entryStatusDigest(db, run.id)
+  // 会话连续性：近期输入及裁决随上下文给 provider（reply/指代消解参考）。
+  const recentTurns = entryRecentTurns(db, run.id, params.input)
   // Agent 单次路由（统一动作协议 v1）：一次 Agent 调用产出动作批，Orca 裁决登记。
   // 决定落库即未授权（与决定同一 SAVEPOINT）：中断只会留下「已登记且未授权」的自洽状态。
   const decision = await autoRouteUnifiedAgentFromEntry(
@@ -191,7 +296,7 @@ async function runEntryRoute(
     { input: params.input, decisionModel },
     run,
     executorCapabilities,
-    statusDigest
+    { statusDigest, recentTurns }
   )
   if (!decision.routed && decision.reason) {
     recordEntryRoutingError(db, params.input, decision.reason)

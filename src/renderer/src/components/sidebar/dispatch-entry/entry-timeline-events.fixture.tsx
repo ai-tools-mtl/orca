@@ -65,6 +65,19 @@ const tasks: RoutingEntrySubAction[] = [
     }
   },
   {
+    subActionId: 'vue-page',
+    text: 'Vue 页面与交互实现',
+    state: 'delivered',
+    deliveries: [],
+    execution: {
+      dispatchId: 'vue-page',
+      agent: 'codex',
+      status: 'failed',
+      result: null,
+      failure: 'Codex hit its usage limit.'
+    }
+  },
+  {
     subActionId: 'import',
     text: '实现商品导入',
     state: 'registered',
@@ -224,6 +237,8 @@ function TimelineFixture({
                   )
                 }
                 renderApproval={() => <div />}
+                assignAgents={['claude', 'zcode']}
+                onAssignAgent={() => undefined}
                 onActionError={() => undefined}
               />
             )
@@ -250,4 +265,80 @@ export const threeTaskTimeline = defineFixture({
       ancestor = ancestor.parentElement
     }
   }
+})
+
+function RequestRowFixture({ input }: { input: RoutingEntryInput }): React.JSX.Element {
+  return (
+    <EntryInputRow
+      input={input}
+      repoId="inventory"
+      receivedAt={new Date(2026, 10, 22, 8, 53)}
+      facts={{
+        busy: false,
+        savePlan: asyncNoop,
+        assign: asyncNoop,
+        reviews: new Map(),
+        acceptReview: asyncNoop,
+        handback: asyncNoop,
+        transfer: asyncNoop,
+        sendSupplement: asyncNoop,
+        fetchWorkers: () => Promise.resolve([])
+      }}
+      automatic
+      approvalByDispatch={new Map()}
+      routing={false}
+      onHint={noop}
+      onRouteInput={noop}
+      onDelete={noop}
+      onActionError={noop}
+      cardActions={() => ({})}
+    />
+  )
+}
+
+/** 会话型请求（reply 动作 + query_status 答案）：回复气泡承载内容，徽章呈「已回复」。 */
+export const repliedNoDispatch = defineFixture({
+  width: 620,
+  render: () => (
+    <RequestRowFixture
+      input={{
+        inputId: 'chitchat',
+        text: '仓库系统做多少了',
+        receivedAt: at(22, 8),
+        decisionStatus: 'decided',
+        replies: [
+          {
+            key: 'a1',
+            text: '目前两项规划产物已完成验收：需求说明与原型设计稿都已合并。实施阶段还剩库存查询、Vue 页面两项在跑，跑完会各自过循环写审再请你验收。'
+          }
+        ],
+        queryAnswers: [
+          {
+            key: 'a2',
+            target: 'project',
+            answer:
+              '需求澄清与拆解：已完成；原型设计：已完成；实现库存查询：执行中；Vue 页面与交互实现：执行中'
+          }
+        ],
+        subActions: []
+      }}
+    />
+  )
+})
+
+/** reason-only 的无需派发（无回复内容）：保持原样——灰字理由 + 无需派发徽章。 */
+export const noDispatchReason = defineFixture({
+  width: 620,
+  render: () => (
+    <RequestRowFixture
+      input={{
+        inputId: 'noop',
+        text: '（测试消息，忽略这条）',
+        receivedAt: at(22, 9),
+        decisionStatus: 'decided',
+        decisionReason: '这是控制消息，无需任何处理。',
+        subActions: []
+      }}
+    />
+  )
 })

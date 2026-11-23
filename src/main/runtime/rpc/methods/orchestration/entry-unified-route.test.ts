@@ -660,7 +660,8 @@ describe('entry auto-route with the unified single-pass agent router', () => {
       inputId: input,
       subActionId: action.sub_action_id,
       targetDispatchId: dispatch.id,
-      text: action.text
+      text: action.text,
+      origin: 'route'
     })
     db.setRoutingDispatchHold(input, false)
     db.setRoutingDispatchAuthorized(input)
@@ -801,8 +802,7 @@ describe('entry auto-route with the unified single-pass agent router', () => {
       { input, decisionModel: unifiedModel },
       run,
       ['codex'],
-      undefined,
-      60
+      { timeoutMs: 60 }
     )
     expect(routed.routed).toBe(false)
     expect(db.getRoutingInput(input)?.decision_status).toBe('received')

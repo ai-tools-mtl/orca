@@ -3,6 +3,7 @@ import type { OrchestrationDb } from '../db/orchestration-db'
 import type { TaskRow } from '../db/orchestration-records'
 import type { RoutingStageGate, RoutingStageKind } from '../db/routing-records'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import { planAgentPoolSection } from './plan-agent-pool'
 
 // Plan §5.1: the Router is a restricted decision step over a persistent input — never a general
 // agent. The decision provider is a seam: Orca prepares the context (current message, source
@@ -20,6 +21,8 @@ export type RoutingDecisionProposal = {
     gate?: RoutingStageGate
     dependsOn?: (number | string)[]
     agentHint?: string | null
+    /** 控制行（§直接操作会话）：派发时中断目标任务会话而不是投递补充。 */
+    controlKind?: 'interrupt'
   }[]
   decision?: unknown
   /** Recorded when nothing needs to happen (§5.1: 无需处理时记录原因，子动作列表为空). */
@@ -33,6 +36,8 @@ export type RoutingDecisionContext = {
   executorCapabilities: readonly string[]
   /** 确定性进展摘要（§5.1）：状态查询的回答由运行时生成，不过模型。 */
   statusDigest?: string
+  /** 本 Run 最近几条输入及其裁决（会话连续性）：只供 reply/指代消解参考，工作路由仍以当前消息为准。 */
+  recentTurns?: { text: string; outcome: string }[]
 }
 
 export type RoutingDecisionProvider = (
@@ -106,6 +111,8 @@ export async function routeRoutingInput(
     executorCapabilities?: readonly string[]
     /** 确定性进展摘要，透传给 provider 上下文（状态查询的回答不过模型）。 */
     statusDigest?: string
+    /** 近期对话（会话连续性），透传给 provider 上下文。 */
+    recentTurns?: { text: string; outcome: string }[]
     /** 决定落库时的授权语义（§派发授权，与决定同一 SAVEPOINT 原子写入）：缺省 hold。 */
     dispatchIntent?: 'hold' | 'granted'
   }
@@ -148,7 +155,8 @@ export async function routeRoutingInput(
         text: row.raw_text,
         candidateTasks,
         executorCapabilities: input.executorCapabilities ?? [],
-        ...(input.statusDigest ? { statusDigest: input.statusDigest } : {})
+        ...(input.statusDigest ? { statusDigest: input.statusDigest } : {}),
+        ...(input.recentTurns ? { recentTurns: input.recentTurns } : {})
       }),
       input.timeoutMs ?? DEFAULT_ROUTER_TIMEOUT_MS
     )
@@ -224,15 +232,20 @@ export async function routeRoutingInput(
  *  gates (验收与范围是仅有的人类决策点；门卡呈现计划 stages); clarification auto-releases —
  *  阶段内 ask 已把用户放进环，产物随后还要过 plan 门，中间这道人工点击是冗余的。Stages carry
  *  the §5.1 role baseline as agent hint (方案/拆解 claude→…, 原型绘制 dsh→…; dispatch
- *  re-checks the hint against the host's installed pool); the template texts avoid the
- *  investigation/read-only heuristic's patterns on purpose — stage authority is the gate, and
- *  stages skip the heuristic at dispatch. */
+ *  re-checks the hint against the host's installed pool); the plan stage also embeds the
+ *  host's installed agent pool with capability profiles so per-stage agents follow the
+ *  strengths of each agent instead of collapsing the chain onto one; the template texts avoid
+ *  the investigation/read-only heuristic's patterns on purpose — stage authority is the gate,
+ *  and stages skip the heuristic at dispatch. */
 export function planningTemplateSubActions(
   requirement: string,
   needsPrototype: boolean,
-  needsClarification: boolean
+  needsClarification: boolean,
+  availableAgents: readonly string[] = []
 ): RoutingDecisionProposal['subActions'] {
   const requirementText = `需求原文：\n${requirement}`
+  // 能力分工注入计划 prompt：计划 worker 只认识自己，不给池与画像就会把全部阶段填给自己。
+  const agentPoolSection = planAgentPoolSection(availableAgents)
   const clarification = {
     text: `需求澄清与拆解：先把需求整理成一份需求说明——目标、边界（明确不做什么）、模块划分、关键流程与验收要点，可写入 requirements.md。本阶段只产出需求说明，不做架构设计也不实施。需要向用户提问时，每个问题单独一行、用 1. 2. 3. 编号，不要把多条问题挤成一段。\n\n${requirementText}`,
     stageKind: 'clarification' as const,
@@ -246,7 +259,7 @@ export function planningTemplateSubActions(
     agentHint: 'dsh'
   }
   const plan = {
-    text: `任务设计与拆解：先核对仓库中与需求相关的代码，结合需求说明与原型，在报告末尾输出 orca-plan JSON 计划块（{"stages":[{"title":"…","agent":"…","spec":"…","checkpoint":true}]}，最多 8 个阶段，spec 为自包含指令）。计划块必须以 orca-plan 围栏代码块原文内嵌在报告正文里——不要只把计划写入文件或在报告里只给文件路径。checkpoint:true 标记里程碑阶段：该阶段完成后把链条累积产出合并进主分支（用户确认后执行），建议加在需求、原型、架构等文档类阶段；最后一个实施阶段应声明，未声明时系统会在链尾兜底追加合并。本阶段只产出计划，不实施需求本身。\n\n${requirementText}`,
+    text: `任务设计与拆解：先核对仓库中与需求相关的代码，结合需求说明与原型，在报告末尾输出 orca-plan JSON 计划块（{"stages":[{"title":"…","agent":"…","spec":"…","checkpoint":true}]}，最多 8 个阶段，spec 为自包含指令）。计划块必须以 orca-plan 围栏代码块原文内嵌在报告正文里——不要只把计划写入文件或在报告里只给文件路径。checkpoint:true 标记里程碑阶段：该阶段完成后把链条累积产出合并进主分支（用户确认后执行），建议加在需求、原型、架构等文档类阶段；最后一个实施阶段应声明，未声明时系统会在链尾兜底追加合并。${agentPoolSection ? `\n\n${agentPoolSection}` : ''}\n\n本阶段只产出计划，不实施需求本身。\n\n${requirementText}`,
     stageKind: 'plan' as const,
     gate: 'user_confirm' as const,
     agentHint: 'claude'

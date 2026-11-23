@@ -1,8 +1,13 @@
 import { useCallback, useState } from 'react'
-import { ChevronDown, FileText, Folder } from 'lucide-react'
+import { ChevronDown, FileText, Folder, Globe } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { useTranslate } from '@/i18n/use-translate'
+import {
+  openFileInBrowserTab,
+  useWorkspaceFileBrowserActionPredicate
+} from '@/lib/browser/documents/file-preview'
 import { getRelativePathInsideRoot, joinPath } from '@/lib/path'
 import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'
 import { getFileExplorerOperationRoute } from '../file-explorer/navigation/file-explorer-operation-owner'
@@ -19,6 +24,7 @@ type DirectoryProps = {
   root: string
   path: string
   owner: FileExplorerOperationOwner
+  onPreviewFile: (worktreeId: string, filePath: string) => void
 }
 
 function FileRow({
@@ -27,9 +33,20 @@ function FileRow({
   path,
   owner,
   name,
-  isSymlink
+  isSymlink,
+  onPreviewFile
 }: DirectoryProps & { name: string; isSymlink: boolean }) {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
+  const canOpenInBrowser = useWorkspaceFileBrowserActionPredicate(worktreeId)
+  const openInBrowser = useCallback(() => {
+    // Headless tab creation; the dispatch entry surface renders it, so no workspace reveal here.
+    const plan = openFileInBrowserTab({ filePath: path, worktreeId })
+    onPreviewFile(worktreeId, path)
+    if (plan.status === 'unsupported') {
+      toast.error(plan.message)
+    }
+  }, [onPreviewFile, path, worktreeId])
   const read = useCallback(async (): Promise<DispatchPreview> => {
     const route = getFileExplorerOperationRoute(owner)
     const relativePath = getRelativePathInsideRoot(path, root)
@@ -49,19 +66,36 @@ function FileRow({
   }, [isSymlink, owner, path, root, worktreeId])
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="w-full min-w-0 justify-start gap-1.5 px-1.5 text-xs"
-        >
-          <FileText className="size-3.5 text-muted-foreground" aria-hidden="true" />
-          <span className="truncate" title={name}>
-            {name}
-          </span>
-        </Button>
-      </CollapsibleTrigger>
+      <div className="flex min-w-0 items-center">
+        <CollapsibleTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="min-w-0 flex-1 justify-start gap-1.5 px-1.5 text-xs"
+          >
+            <FileText className="size-3.5 text-muted-foreground" aria-hidden="true" />
+            <span className="truncate" title={name}>
+              {name}
+            </span>
+          </Button>
+        </CollapsibleTrigger>
+        {canOpenInBrowser(path) ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="text-muted-foreground"
+            aria-label={t(
+              'auto.components.rightSidebar.DispatchWorktrees.openInBrowser',
+              'Open in Orca Browser'
+            )}
+            onClick={openInBrowser}
+          >
+            <Globe className="size-3.5" />
+          </Button>
+        ) : null}
+      </div>
       <CollapsibleContent>
         <DispatchWorktreePreview
           path={getRelativePathInsideRoot(path, root) ?? name}

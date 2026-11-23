@@ -14,6 +14,7 @@ import type { PeerRunStoreMethods } from './peer-runs/peer-run-store'
 import type { DispatchAuthorizationMethods } from '../routing/dispatch-authorization-attach'
 import type { RouteBypassLabelMethods } from '../routing/route-bypass-labels'
 import type { RoutingLedgerMethods } from '../routing/routing-ledger'
+import type { RoutingFallbackMethods } from '../routing/routing-fallback'
 import type { ReviewCycleMethods } from '../review/review-cycle-store'
 import type { LegacyAskOperationMethods } from './legacy/legacy-ask-operation'
 import type { LegacyCompatibilityCandidatesMethods } from './legacy/legacy-compatibility-candidates'
@@ -125,6 +126,7 @@ export type OrchestrationDbMethods = AttemptObservationStoreMethods &
   DecisionGateStoreMethods &
   RoutingLedgerMethods &
   DispatchAuthorizationMethods &
+  RoutingFallbackMethods &
   RouteBypassLabelMethods &
   ReviewCycleMethods &
   CoordinatorRunStoreMethods &

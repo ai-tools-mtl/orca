@@ -175,6 +175,21 @@ const unassignedAction: RoutingEntrySubAction = {
   deliveries: []
 }
 
+const failedAction: RoutingEntrySubAction = {
+  subActionId: 'sa-6-1',
+  text: 'Vue 页面与交互实现',
+  state: 'delivered',
+  taskId: 'task_6',
+  execution: {
+    agent: 'codex',
+    dispatchId: 'dispatch:ctx_f',
+    status: 'failed',
+    result: null,
+    failure: 'Codex hit its usage limit.'
+  },
+  deliveries: []
+}
+
 const decidedInput: RoutingEntryInput = {
   inputId: 'rinp_111111111111',
   text: '修登录，另外查启动慢，两项都不要改配置，启动问题等我确认才修改',
@@ -333,6 +348,13 @@ export const entryCardStates = defineFixture({
         onSendSupplement={() => undefined}
       />
       <EntryTaskCard action={queuedAction} inputText={doneInput.text} repoId="repo-1" />
+      <EntryTaskCard
+        action={failedAction}
+        inputText={doneInput.text}
+        repoId="repo-1"
+        assignAgents={['claude', 'zcode']}
+        onAssignAgent={() => undefined}
+      />
       <EntryTaskCard action={doneAction} inputText={doneInput.text} repoId="repo-1" unread />
     </div>
   )

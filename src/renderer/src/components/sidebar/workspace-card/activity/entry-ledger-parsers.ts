@@ -40,25 +40,33 @@ export function taskReferencesOf(
 }
 
 export type EntryClarification = { key: string; question: string; taskId?: string }
+export type EntryReply = { key: string; text: string }
+export type EntryQueryAnswer = { key: string; target: string; answer: string }
+
+/** decision.decision.<field> 里对象数组的小读取器：坏行静默降级为无。 */
+function entryDecisionItemsOf(
+  rawDecision: string | null | undefined,
+  field: string
+): Record<string, unknown>[] {
+  const record = decisionRecordOf(rawDecision)
+  const decision = record?.decision
+  const items =
+    decision && typeof decision === 'object'
+      ? (decision as Record<string, unknown>)[field]
+      : undefined
+  if (!Array.isArray(items)) {
+    return []
+  }
+  return items.filter(
+    (item): item is Record<string, unknown> => typeof item === 'object' && item !== null
+  )
+}
 
 /** 统一路由动作批里的待澄清项（decision.decision.clarifications）：坏行静默降级为无。 */
 export function entryClarificationsOf(
   rawDecision: string | null | undefined
 ): EntryClarification[] {
-  const record = decisionRecordOf(rawDecision)
-  const decision = record?.decision
-  const items =
-    decision && typeof decision === 'object'
-      ? (decision as Record<string, unknown>).clarifications
-      : undefined
-  if (!Array.isArray(items)) {
-    return []
-  }
-  return items.flatMap((item) => {
-    if (typeof item !== 'object' || item === null) {
-      return []
-    }
-    const entry = item as Record<string, unknown>
+  return entryDecisionItemsOf(rawDecision, 'clarifications').flatMap((entry) => {
     const key = typeof entry.key === 'string' ? entry.key : ''
     const question = typeof entry.question === 'string' ? entry.question.trim() : ''
     if (!question) {
@@ -71,6 +79,25 @@ export function entryClarificationsOf(
         ...(typeof entry.taskId === 'string' && entry.taskId ? { taskId: entry.taskId } : {})
       }
     ]
+  })
+}
+
+/** 路由模型的会话回复（decision.decision.replies，reply 动作裁决产物）：坏行静默降级为无。 */
+export function entryRepliesOf(rawDecision: string | null | undefined): EntryReply[] {
+  return entryDecisionItemsOf(rawDecision, 'replies').flatMap((entry) => {
+    const key = typeof entry.key === 'string' ? entry.key : ''
+    const text = typeof entry.text === 'string' ? entry.text.trim() : ''
+    return text ? [{ key, text }] : []
+  })
+}
+
+/** 状态查询的确定性答案（decision.decision.queries，query_status 裁决产物）。 */
+export function entryQueryAnswersOf(rawDecision: string | null | undefined): EntryQueryAnswer[] {
+  return entryDecisionItemsOf(rawDecision, 'queries').flatMap((entry) => {
+    const key = typeof entry.key === 'string' ? entry.key : ''
+    const target = typeof entry.target === 'string' ? entry.target : ''
+    const answer = typeof entry.answer === 'string' ? entry.answer.trim() : ''
+    return answer ? [{ key, target, answer }] : []
   })
 }
 

@@ -15,6 +15,7 @@ import { attachPeerRunStore } from './peer-runs/peer-run-store'
 import { attachDispatchAuthorization } from '../routing/dispatch-authorization-attach'
 import { attachRouteBypassLabels } from '../routing/route-bypass-label-attach'
 import { attachRoutingLedger } from '../routing/routing-ledger'
+import { attachRoutingFallback } from '../routing/routing-fallback'
 import { attachReviewCycleStore } from '../review/review-cycle-store'
 import { attachLegacyAskOperation } from './legacy/legacy-ask-operation'
 import { attachLegacyCompatibilityCandidates } from './legacy/legacy-compatibility-candidates'
@@ -128,6 +129,7 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachRoutingLedger(ctor)
   attachRouteBypassLabels(ctor)
   attachDispatchAuthorization(ctor)
+  attachRoutingFallback(ctor)
   attachReviewCycleStore(ctor)
   attachCoordinatorRunStore(ctor)
   attachOrchestrationReset(ctor)

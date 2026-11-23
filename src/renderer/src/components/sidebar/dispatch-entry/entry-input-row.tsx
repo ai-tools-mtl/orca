@@ -15,6 +15,7 @@ import type { useRoutingEntryFacts } from '../workspace-card/activity/use-routin
 import { EntryDeleteButton } from './entry-delete-button'
 import { EntryManualPlan } from './entry-manual-plan'
 import { EntryClarifyList } from './entry-clarify-list'
+import { EntryReplyCard } from './entry-reply-card'
 import { EntryRouteCard } from './entry-route-card'
 import { EntryTaskList } from './entry-task-list'
 import type { EntryTaskActionHandlers } from './entry-task-card'
@@ -75,6 +76,7 @@ export function EntryInputRow({
   const awaitingRoute = input.decisionStatus === 'received'
   const routingInProgress = awaitingRoute && routing
   const noWork = !awaitingRoute && input.subActions.length === 0
+  const hasReply = (input.replies?.length ?? 0) > 0 || (input.queryAnswers?.length ?? 0) > 0
   const states = input.subActions.map((action) =>
     entryCardStateOf(
       action,
@@ -101,7 +103,9 @@ export function EntryInputRow({
         ? t(`${ENTRY}.routingFailed`, 'Routing failed')
         : t(`${ENTRY}.awaitingRouting`, 'Awaiting routing')
     : noWork
-      ? t(`${ENTRY}.noDispatch`, 'No dispatch needed')
+      ? hasReply
+        ? t(`${ENTRY}.replied`, 'Replied')
+        : t(`${ENTRY}.noDispatch`, 'No dispatch needed')
       : failed
         ? hint || assignmentFailed
           ? t(`${ENTRY}.dispatchFailed`, 'Dispatch failed')
@@ -116,7 +120,9 @@ export function EntryInputRow({
   const StatusIcon = failed
     ? CircleAlert
     : noWork
-      ? CircleMinus
+      ? hasReply
+        ? CircleCheck
+        : CircleMinus
       : complete
         ? CircleCheck
         : CircleDot
@@ -175,7 +181,7 @@ export function EntryInputRow({
             tone={failed ? 'error' : complete ? 'success' : attention ? 'warning' : 'neutral'}
           />
           <EntryMessageText text={input.text} as="h3" className="font-medium" />
-          {noWork ? (
+          {noWork && !hasReply ? (
             <EntryMessageText
               text={
                 input.decisionReason ??
@@ -223,6 +229,7 @@ export function EntryInputRow({
             </CollapsibleContent>
           ) : null}
         </Collapsible>
+        <EntryReplyCard replies={input.replies} queryAnswers={input.queryAnswers} />
         {hint ? (
           <div
             className="flex flex-col items-start gap-1 border-s-2 border-destructive/30 ps-3"

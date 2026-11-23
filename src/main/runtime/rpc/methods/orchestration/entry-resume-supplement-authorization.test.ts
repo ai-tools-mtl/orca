@@ -351,7 +351,8 @@ describe('paused supplement resume authorization', () => {
       inputId: input,
       subActionId,
       targetDispatchId: dispatchId,
-      text: '补并发场景回归测试'
+      text: '补并发场景回归测试',
+      origin: 'route'
     })
     db.recordSupplementAttempt({
       supplementId: supplement.supplement_id,

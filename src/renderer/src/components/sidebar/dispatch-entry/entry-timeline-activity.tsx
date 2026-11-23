@@ -1,10 +1,12 @@
 import { FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type {
   RoutingEntryApproval,
   RoutingEntrySubAction
 } from '../workspace-card/activity/routing-entry-model'
+import { EntryAgentPickList } from './entry-assign-card'
 import { EntryAskCard } from './entry-ask-card'
 import { ENTRY_MESSAGE_SURFACE, EntryMessageHeader, EntryMessageText } from './entry-message'
 import { EntryStageCheckpoint } from './entry-stage-checkpoint'
@@ -25,6 +27,8 @@ export function EntryTimelineActivity({
   grantGate,
   rejectGate,
   renderApproval,
+  assignAgents,
+  onAssignAgent,
   onActionError
 }: {
   event: Exclude<EntryTimelineEvent, { kind: 'request' }>
@@ -38,6 +42,9 @@ export function EntryTimelineActivity({
   grantGate: (subActionId: string) => Promise<unknown>
   rejectGate?: (subActionId: string, text: string) => Promise<unknown>
   renderApproval: (approval: RoutingEntryApproval, context?: React.ReactNode) => React.JSX.Element
+  /** 失败结果卡的人工位（§执行失败兜底）：可选 agent 列表 + 重指派回调。 */
+  assignAgents?: TuiAgent[]
+  onAssignAgent?: (inputId: string, subActionId: string, agent: TuiAgent) => void
   onActionError: (error: string | null) => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -159,6 +166,18 @@ export function EntryTimelineActivity({
             showFullText={showFullResult}
             className={failed ? 'mt-1' : 'mt-1 text-destructive'}
           />
+        ) : null}
+        {failed && onAssignAgent ? (
+          <div className="mt-1 border-t px-3 pb-2.5 pt-2">
+            <p className="px-0.5 pb-1 text-2xs text-muted-foreground">
+              {t(`${ENTRY}.reassignTitle`, 'Reassign another worker to continue the chain')}
+            </p>
+            <EntryAgentPickList
+              agents={assignAgents}
+              busy={busy}
+              onPick={(agent) => onAssignAgent(event.input.inputId, action.subActionId, agent)}
+            />
+          </div>
         ) : null}
         {seenButton}
       </article>

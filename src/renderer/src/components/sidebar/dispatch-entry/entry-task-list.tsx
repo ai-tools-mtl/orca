@@ -121,6 +121,8 @@ export function EntryTaskList({
             embedded
             busy={busy}
             approval={approval}
+            assignAgents={agents}
+            onAssignAgent={onAssign}
             onDelete={remove}
             review={action.taskId ? reviews.get(action.taskId) : undefined}
             onAcceptReview={(taskId, cycleId, revision) => {
