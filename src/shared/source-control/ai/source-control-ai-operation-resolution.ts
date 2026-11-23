@@ -42,6 +42,8 @@ import type {
 export type ResolvedSourceControlAiGenerationParams = {
   agentId: TuiAgent | 'custom'
   model: string
+  /** Orca passed its own default (spec.defaultModelId) because no available model was picked. */
+  usesOrcaDefaultModel?: boolean
   thinkingLevel?: string
   customPrompt?: string
   commandInputTemplate?: string
@@ -240,14 +242,13 @@ export function resolveSourceControlAiForOperation(
     repoOverrides,
     operation: input.operation,
     hostKey,
-    agentId: resolvedAgent,
-    defaultModelId: spec.defaultModelId
+    agentId: resolvedAgent
   })
   const discoveredModels = getDiscoveredModels(source, legacy, hostKey, resolvedAgent)
-  const model =
+  const pickedModel =
     spec.models.find((candidate) => candidate.id === persistedModelId) ??
-    discoveredModels.find((candidate) => candidate.id === persistedModelId) ??
-    getCommitMessageModel(resolvedAgent, spec.defaultModelId)
+    discoveredModels.find((candidate) => candidate.id === persistedModelId)
+  const model = pickedModel ?? getCommitMessageModel(resolvedAgent, spec.defaultModelId)
   if (!model) {
     return resolveFailure(
       textGenerationFailure('noModelForAgent', { label: spec.label }),
@@ -269,6 +270,7 @@ export function resolveSourceControlAiForOperation(
       params: {
         agentId: resolvedAgent,
         model: model.id,
+        ...(pickedModel ? {} : { usesOrcaDefaultModel: true }),
         thinkingLevel,
         ...commonParams,
         ...(customAgentCommand ? { customAgentCommand } : {}),

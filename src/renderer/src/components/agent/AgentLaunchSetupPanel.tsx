@@ -29,6 +29,7 @@ import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
 import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { NativeChatSessionOptionRows } from '../native-chat/session/options/controls/NativeChatSessionOptionRows'
 import { AgentLaunchSetupFooter, type AgentLaunchSetupFooterHandle } from './AgentLaunchSetupFooter'
+import { AgentLaunchSetupPermission } from './AgentLaunchSetupPermission'
 import {
   acceptAgentPickerArguments,
   applyAgentPickerEdit,
@@ -151,7 +152,8 @@ export function AgentLaunchSetupPanel({
         ? setupRowKey(resultStart)
         : undefined
       : modelRows.start,
-    searching ? '' : modelQuery
+    searching ? '' : modelQuery,
+    models.length
   )
   const handleUse = (surface: AgentPickerSurface) => {
     const current = getDraft()
@@ -169,11 +171,7 @@ export function AgentLaunchSetupPanel({
         selection="palette"
         disabled={state.modelDisabled}
         data-current={current}
-        onSelect={() => {
-          if (!model.unlisted) {
-            pickModel({ kind: 'choice', patch: { model: model.id } })
-          }
-        }}
+        onSelect={() => model.unlisted || pickModel({ kind: 'choice', patch: { model: model.id } })}
       >
         <span className="min-w-0 flex-1 truncate">{model.label}</span>
         <span className="flex size-3.5 shrink-0 items-center justify-center">
@@ -195,7 +193,8 @@ export function AgentLaunchSetupPanel({
       : []
   return (
     <div
-      className="flex w-full flex-col"
+      // Why min-h-0: in a height-capped picker only the model list gives up room.
+      className="flex min-h-0 w-full flex-col"
       data-agent-launch-setup=""
       onKeyDownCapture={(event) => {
         if (isScreenSubmitShortcut(event)) {
@@ -282,7 +281,7 @@ export function AgentLaunchSetupPanel({
         {!installed && !searching ? (
           <AgentLaunchInstallPrompt entry={entry} />
         ) : (
-          <CommandList className="max-h-56 scroll-py-0" data-focus-behavior="page">
+          <CommandList className="max-h-56 min-h-0 scroll-py-0" data-focus-behavior="page">
             {catalogMessage && !searching ? (
               <div
                 className="flex items-center gap-2 px-2.5 py-2 text-xs text-muted-foreground"
@@ -350,7 +349,7 @@ export function AgentLaunchSetupPanel({
         )}
       </Command>
       {optionRows.length ? (
-        <div className="flex min-h-9 min-w-0 items-center border-t border-border px-2.5 py-1.5">
+        <div className="flex min-h-9 min-w-0 shrink-0 items-center border-t border-border px-2.5 py-1.5">
           <div className="min-w-0 flex-1">
             <NativeChatSessionOptionRows
               options={optionRows}
@@ -375,6 +374,9 @@ export function AgentLaunchSetupPanel({
       ) : null}
       {mode === 'select' ? (
         <>
+          {installed && !searching ? (
+            <AgentLaunchSetupPermission {...{ entry, draft, disabled }} onEdit={editDraft} />
+          ) : null}
           {installed || searching ? children : null}
           {choices.length && !searching ? (
             <AgentPickerChoiceRows

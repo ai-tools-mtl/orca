@@ -1,4 +1,4 @@
-import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
+import { motionSafeScrollBehavior } from '@/hooks/theme/usePrefersReducedMotion'
 import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../../../shared/agent-launch/catalog/tui-agent-display-names'

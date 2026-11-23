@@ -54,7 +54,10 @@ const VERSIONED_POST_V6_COLUMNS = [
   { version: 45, table: 'federated_dispatches', column: 'home_auto_release_state' },
   { version: 46, table: 'dispatch_contexts', column: 'follow_up_of_dispatch_id' },
   { version: 46, table: 'dispatch_contexts', column: 'follow_up_mail_at' },
-  { version: 46, table: 'worker_terminal_resources', column: 'resume_session' }
+  { version: 46, table: 'worker_terminal_resources', column: 'resume_session' },
+  { version: 47, table: 'dispatch_contexts', column: 'creator_turn_source' },
+  { version: 48, table: 'dispatch_contexts', column: 'origin_ref' },
+  { version: 50, table: 'dispatch_contexts', column: 'for_message_id' }
 ] as const
 
 // v34 stamps can lack these repairs; v35 probes must verify their stored defaults.
@@ -194,6 +197,15 @@ export function resolveOrchestrationMigrationStartVersion(
 ): number {
   if (storedVersion > schemaVersion) {
     return storedVersion
+  }
+  // A fork-chain routing ledger (v51+) that predates this merge lacks the upstream v47-v50
+  // columns its claimed version says it has. Replaying from 46 applies those afresh; the
+  // renumbered fork steps v51+ are probe-guarded, so the replay over them is a no-op.
+  if (
+    hasOrchestrationColumn(db, 'routing_inputs', 'input_id') &&
+    !hasOrchestrationColumn(db, 'dispatch_contexts', 'creator_turn_source')
+  ) {
+    return Math.min(storedVersion, schemaVersion, 46)
   }
   if (hasCompletePostV6Schema(db, storedVersion)) {
     return storedVersion

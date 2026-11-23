@@ -37,6 +37,10 @@ import { migrateV63 } from './migrate-v63'
 import { migrateV64 } from './migrate-v64'
 import { migrateV65 } from './migrate-v65'
 import { migrateV66 } from './migrate-v66'
+import { migrateV67 } from './migrate-v67'
+import { migrateV68 } from './migrate-v68'
+import { migrateV69 } from './migrate-v69'
+import { migrateV70 } from './migrate-v70'
 import { DROP_REMOVED_WORK_TRIGGERS_SQL } from '../reset/removed-orchestration-work-store'
 
 // CREATE TABLE IF NOT EXISTS won't alter existing tables; migrate atomically before bumping user_version.
@@ -91,6 +95,10 @@ export function migrate(this: OrchestrationDb): void {
     migrateV64.call(this, current)
     migrateV65.call(this, current)
     migrateV66.call(this, current)
+    migrateV67.call(this, current)
+    migrateV68.call(this, current)
+    migrateV69.call(this, current)
+    migrateV70.call(this, current)
     this.createMailboxDeliveryIndexesIfPossible()
     // Recreate derived objects after table rebuilds; existing views would prevent RENAME.
     this.db.exec(DERIVED_DELIVERY_SCHEMA_SQL)

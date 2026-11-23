@@ -1,10 +1,12 @@
 import type { BranchContext } from './worktree-agent-branch-context'
 import React, { useCallback, useContext, useLayoutEffect, useMemo, useRef } from 'react'
-import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
+import { shallow } from 'zustand/shallow'
 import { useAppStore } from '@/store/index'
+import { agentAttentionTurnAt } from '@/attention/agent-attention-acknowledgement'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
-import { useNow } from '@/hooks/use-now'
+import { useNow } from '@/lib/window-activity/use-now'
 import { deriveRunningAgentSendTargets } from '@/lib/agent-session/messaging/running-agent-targets'
 import {
   selectSendTargetControlInputs,
@@ -12,8 +14,11 @@ import {
 } from './worktree-card-send-target-inputs'
 import { useAgentPresentation, useWorktreeAgentRow } from './useWorktreeAgentRows'
 import { useHostRootKeys } from './use-worktree-agent-host-roots'
-import { KeyedSummary } from './worktree-card-agent-keyed-summary'
-import { WorktreeAgentSummaryTarget } from './worktree-card-agent-summary-slot'
+import {
+  WorktreeAgentCompactSummary,
+  WorktreeAgentSummaryPanel,
+  WorktreeAgentSummaryTarget
+} from './worktree-card-agent-summary-slot'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useWorktreeAgentDisplay } from './use-worktree-agent-display'
 import { cn } from '@/lib/class-names'
@@ -29,7 +34,7 @@ import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { useWorktreeAgentActivation } from './use-worktree-agent-activation'
 import { opensClaudeParentConversation } from '@/lib/agent-session/navigation/claude-agent-row-view'
 import { IdleChildAgentGroupRow } from './worktree-card-idle-child-agents'
-import type { AgentChildren } from '@/store/slices/agent-status/agent-row-display-index'
+import type { AgentChildren } from '@/store/slices/agent-status/projection/agent-row-display-model'
 import type { DashboardAgentRow as AgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 
 const stopBubble = (event: React.SyntheticEvent) => event.stopPropagation()
@@ -77,7 +82,10 @@ function WorktreeCardAgentsBody({
   const onDismiss = useAppStore((s) => s.dropAgentStatus)
   const send = useAppStore((s) => s.sendPromptToSidebarAgentTarget)
   const control = useAppStore(useShallow((s) => selectSendTargetControlInputs(s, worktreeId)))
-  const inputs = useAppStore(useShallow((s) => selectSendTargetInputs(s, worktreeId)))
+  const inputs = useAppStoreWithHostStatuses(
+    (s, statuses) => selectSendTargetInputs(s, statuses, worktreeId),
+    shallow
+  )
   const targets = useMemo(
     () =>
       recomputeOn([languageRevision], () => {
@@ -145,20 +153,10 @@ function WorktreeCardAgentsBody({
       now
     ]
   )
+  const summaryTarget = useContext(WorktreeAgentSummaryTarget)
   const compact = display.agentActivityDisplayMode === 'compact',
     summary = compact && roots.length > 1 && !targets
-  const summaryTarget = useContext(WorktreeAgentSummaryTarget)
-  const inlineSummary = summary && summaryTarget !== null
-  const summaryButton = summary ? (
-    <KeyedSummary
-      worktreeId={worktreeId}
-      roots={roots}
-      hostFiltered={hostFiltered}
-      expanded={expansion.compactRootListExpanded}
-      onToggle={expansion.toggleCompactRootList}
-      inline={inlineSummary}
-    />
-  ) : null
+
   const rootRef = useRef<HTMLDivElement | null>(null),
     previousExpanded = useRef(expansion.compactRootListExpanded)
   useLayoutEffect(() => {
@@ -176,7 +174,11 @@ function WorktreeCardAgentsBody({
       ref={rootRef}
       className={cn(
         compact ? 'flex flex-col mt-1 gap-0.5' : 'flex flex-col mt-1',
-        inlineSummary ? (expansion.compactRootListExpanded ? 'mt-0' : 'hidden') : className
+        summary && summaryTarget !== null
+          ? expansion.compactRootListExpanded
+            ? 'mt-0'
+            : 'hidden'
+          : className
       )}
       onClick={stopBubble}
       onDoubleClick={stopBubble}
@@ -187,13 +189,13 @@ function WorktreeCardAgentsBody({
       data-compact-agent-list={compact || undefined}
     >
       {summary ? (
-        <div
-          className={cn(
-            'compact-agent-summary-panel',
-            expansion.compactRootListExpanded && 'compact-agent-summary-panel-expanded'
-          )}
-        >
-          {summaryTarget ? createPortal(summaryButton, summaryTarget) : summaryButton}
+        <WorktreeAgentSummaryPanel expanded={expansion.compactRootListExpanded}>
+          <WorktreeAgentCompactSummary
+            worktreeId={worktreeId}
+            roots={roots}
+            hostFiltered={hostFiltered}
+            expansion={expansion}
+          />
           <CompactAgentExpansion expanded={expansion.compactRootListExpanded}>
             <AgentBranches
               keysToRender={roots}
@@ -202,7 +204,7 @@ function WorktreeCardAgentsBody({
               root
             />
           </CompactAgentExpansion>
-        </div>
+        </WorktreeAgentSummaryPanel>
       ) : (
         <AgentBranches keysToRender={roots} context={context} timerActive root />
       )}
@@ -292,7 +294,7 @@ const AgentBranch = React.memo(function AgentBranch({
     agent: row,
     showModel: context.showAgentModels,
     now: context.now,
-    isUnvisited: row.rowSource === 'live' && acknowledgedAt < row.entry.stateStartedAt,
+    isUnvisited: row.rowSource === 'live' && acknowledgedAt < agentAttentionTurnAt(row.entry),
     onActivate: context.onActivate,
     childAgentCount: hasChildren ? children.keys.length : undefined,
     childAgentsExpanded: expanded,

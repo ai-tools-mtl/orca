@@ -3,6 +3,7 @@ import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionAdapter as Adapter } from './structured-agent-session-adapter'
+import { unsupportedSteerOutcome } from './structured-agent-session-expected-steer'
 import type { StructuredAgentSessionAcquisitionReceipt } from '../startup/structured-agent-session-startup-attempt-contract'
 import type {
   StructuredAgentRegistration,
@@ -52,20 +53,21 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
   dispatch: Adapter['dispatch'] = (input) => this.owner(input.sessionId).dispatch(input)
 
   /** Targeted delivery routes to the owning adapter; one without it refuses as unsupported. */
-  steerExpectedTurn: NonNullable<Adapter['steerExpectedTurn']> = (input) =>
-    Promise.resolve(
-      this.owner(input.sessionId).steerExpectedTurn?.(input) ?? {
-        status: 'refused' as const,
-        kind: 'unsupported' as const,
-        expectedTurnId: input.expectedTurnId
-      }
-    )
+  steerExpectedTurn: NonNullable<Adapter['steerExpectedTurn']> = async (input) =>
+    this.owner(input.sessionId).steerExpectedTurn?.(input) ?? unsupportedSteerOutcome(input)
 
   permissionModeRequiresAcquisition = (
     sessionId: string,
     mode: AgentChatPermissionChoice
   ): boolean | undefined =>
     this.liveOwnerOrNull(sessionId)?.permissionModeRequiresAcquisition?.(sessionId, mode)
+
+  applyPermissionMode: NonNullable<Adapter['applyPermissionMode']> = async (input) => {
+    await this.liveOwnerOrNull(input.sessionId)?.applyPermissionMode?.(input)
+  }
+
+  runningPermissionMode: NonNullable<Adapter['runningPermissionMode']> = (sessionId) =>
+    this.liveOwnerOrNull(sessionId)?.runningPermissionMode?.(sessionId)
 
   settlePermissionTransition: NonNullable<Adapter['settlePermissionTransition']> = (input) =>
     this.liveOwnerOrNull(input.sessionId)?.settlePermissionTransition?.(input) ??
@@ -103,6 +105,13 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
   stopProviderNaming = (): void => {
     for (const adapter of this.adapters()) {
       adapter.stopProviderNaming?.()
+    }
+  }
+
+  // Every adapter, so a session still starting hears it; only one that holds the session acts.
+  promptSuggestionInterestChanged = (sessionId: string, wanted: boolean): void => {
+    for (const adapter of this.adapters()) {
+      adapter.promptSuggestionInterestChanged?.(sessionId, wanted)
     }
   }
 
@@ -211,6 +220,8 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
 
   canSetOptionWhileIdle: Adapter['canSetOptionWhileIdle'] = (input) =>
     this.liveOwnerOrNull(input.sessionId)?.canSetOptionWhileIdle?.(input) === true
+  noteModelPick: Adapter['noteModelPick'] = (input) =>
+    this.liveOwnerOrNull(input.sessionId)?.noteModelPick?.(input)
   captureMessageSteeringInputs: Adapter['captureMessageSteeringInputs'] = (input) =>
     this.liveOwnerOrNull(input.sessionId)?.captureMessageSteeringInputs?.(input) ?? {
       kind: 'codex-unavailable'

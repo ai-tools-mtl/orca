@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { AGENT_TYPE_MAX_LENGTH } from '../../../../../shared/agent-status/contracts/agent-status-field-normalization'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
@@ -23,11 +24,32 @@ export function workerLaunchAgent(value: unknown): string | null {
     : null
 }
 
+export function workerLaunchModel(value: unknown): string | null {
+  const parsed = launch.safeParse(value)
+  return parsed.success ? parsed.data.effective?.model || null : null
+}
+
 function startOptions(json: string): Record<string, unknown> {
   try {
     return object.parse(JSON.parse(json))
   } catch {
     return {}
+  }
+}
+
+/** --follow-up 助手不得由只读调查 worker 发起：只读行没有写放行，链式派生会绕过审批。 */
+export function assertHelperCreatorNotReadOnly(
+  db: OrchestrationDb,
+  helperCreatorId: string | undefined
+): void {
+  if (
+    helperCreatorId !== undefined &&
+    workerStartOptionsReadOnly(db.getWorkerDispatch(helperCreatorId)?.start_options)
+  ) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      'A read-only investigation cannot start another worker.'
+    )
   }
 }
 

@@ -8,6 +8,7 @@ import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent
 import { pickTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import { detectAgentsOnHost } from '../../../../preflight/workspace-agent-detection'
 
 /** 方向 2 (entry-stage-pipeline-plan §7): 分流而非一刀切——写前审批的 Allow 在「意图 agent 就是
  *  实际派发的只读 worker」时保持任务接续（原会话获准写入）；只在只读分类强制 codex 顶替了别人
@@ -119,6 +120,65 @@ export function entryWriteHandoffAgent(
       settings.disabledTuiAgents
     )
   return intended && intended !== dispatched ? intended : null
+}
+
+/** 分流的便捷解析：现场探测已装 agent 后应用 {@link entryWriteHandoffAgent} 判据。
+ *  null = 无需转派（非 person Allow、Deny，或意图 agent 已在会话内）。 */
+export async function resolveEntryWriteHandoff(args: {
+  db: OrchestrationDb
+  dispatch: DispatchContextRow
+  entryApproval: boolean
+  decision: 'allow' | 'deny'
+  settings: Partial<
+    Pick<GlobalSettings, 'defaultTuiAgent' | 'disabledTuiAgents' | 'agentCmdOverrides'>
+  >
+}): Promise<{ investigation: RoutingSubActionRow; targetAgent: TuiAgent } | null> {
+  const investigation =
+    args.entryApproval && args.decision === 'allow'
+      ? args.db.getRoutingSubActionByTask(args.dispatch.task_id)
+      : undefined
+  if (!investigation) {
+    return null
+  }
+  const installed = await detectAgentsOnHost(
+    { kind: 'local' },
+    {
+      disabledTuiAgents: args.settings.disabledTuiAgents,
+      agentCmdOverrides: args.settings.agentCmdOverrides
+    }
+  )
+  const targetAgent = entryWriteHandoffAgent(
+    args.db,
+    args.dispatch,
+    investigation,
+    args.settings,
+    installed
+  )
+  return targetAgent ? { investigation, targetAgent } : null
+}
+
+/** Approve 转派落账并通知原 worker 收尾。 */
+export function mintAndNotifyEntryWriteHandoff(args: {
+  db: OrchestrationDb
+  dispatch: DispatchContextRow
+  approvalId: string
+  investigation: RoutingSubActionRow
+  targetAgent: TuiAgent
+  writeDetail: string
+  notify: (handle: string, type: string) => void
+}): void {
+  mintEntryWriteHandoff(args.db, {
+    approvalId: args.approvalId,
+    investigation: args.investigation,
+    targetAgent: args.targetAgent,
+    writeDetail: args.writeDetail
+  })
+  notifyEntryWriteHandoff({
+    db: args.db,
+    dispatch: args.dispatch,
+    approvalId: args.approvalId,
+    notify: args.notify
+  })
 }
 
 /** Why the write stage was handed off, for the approval card's closing line. */

@@ -12,7 +12,7 @@ vi.mock('../../zcode-v2-plan-credentials', () => ({
 afterEach(() => vi.resetAllMocks())
 
 it('uses the active BigModel login when the default Z.AI site has no Orca key', async () => {
-  vi.mocked(readZcodePlanApiKey).mockReturnValue(null)
+  vi.mocked(readZcodePlanApiKey).mockResolvedValue(null)
   vi.mocked(readZcodeV2PlanCredential).mockResolvedValue({
     status: 'ok',
     apiKey: 'synthetic-v2-token',

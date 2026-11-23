@@ -35,3 +35,10 @@ export async function steerExpectedTurnViaAdapter(
   }
   return steer(input)
 }
+
+/** The router's default when the owning adapter has no targeted steer: refuse as unsupported. */
+export function unsupportedSteerOutcome(input: {
+  expectedTurnId: string
+}): AgentSessionExpectedSteerOutcome {
+  return { status: 'refused', kind: 'unsupported', expectedTurnId: input.expectedTurnId }
+}

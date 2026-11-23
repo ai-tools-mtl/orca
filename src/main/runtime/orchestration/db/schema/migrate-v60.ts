@@ -1,30 +1,37 @@
 import type { OrchestrationDb } from '../orchestration-db'
 
-/** v60：专用决策模型旁路对照（entry-intent-routing-design §专用决策模型旁路验收）——
- *  route_bypass_labels 存人工标注（分组、期望动作集、备注），trial 走 decision_model_audits
- *  (source='dedicated_bypass')。顺带给审计表补 output_tokens（旁路对照报告的每请求成本
- *  指标需要 completion 侧计数；v55 只落了 input_tokens）。 */
 export function migrateV60(this: OrchestrationDb, current: number): void {
   if (current >= 60) {
     return
   }
-  this.db.exec(`
-    CREATE TABLE IF NOT EXISTS route_bypass_labels (
-      label_id TEXT PRIMARY KEY,
-      run_id TEXT NOT NULL,
-      input_id TEXT NOT NULL,
-      category TEXT NOT NULL CHECK (
-        category IN ('status_only', 'single_task', 'composite', 'continuation_ambiguous', 'write_gated')
-      ),
-      expected_json TEXT NOT NULL,
-      notes TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      UNIQUE(run_id, input_id)
-    );
-    CREATE INDEX IF NOT EXISTS idx_route_bypass_labels_run ON route_bypass_labels(run_id);
-  `)
-  if (!this.hasColumn('decision_model_audits', 'output_tokens')) {
-    this.db.exec('ALTER TABLE decision_model_audits ADD COLUMN output_tokens INTEGER')
+  // 探测式加列：重放迁移的夹具可能用当前建表 SQL 造出已含本列的「旧版本号」库。
+  if (!this.hasColumn('routing_inputs', 'require_write_approval')) {
+    this.db.exec('ALTER TABLE routing_inputs ADD COLUMN require_write_approval INTEGER')
   }
+  if (!this.hasColumn('review_cycles', 'reviewed_workspace_revision')) {
+    this.db.exec('ALTER TABLE review_cycles ADD COLUMN reviewed_workspace_revision TEXT')
+  }
+  this.db.exec(`
+    PRAGMA secure_delete = ON;
+    UPDATE routing_inputs
+       SET review_model_json = CASE
+         WHEN json_valid(review_model_json)
+           THEN json_object('source', json_extract(review_model_json, '$.source'),
+                            'agent', json_extract(review_model_json, '$.agent'))
+         ELSE NULL END
+     WHERE review_model_json IS NOT NULL;
+    UPDATE routing_sub_actions
+       SET stage_kind = 'clarification', plan_json = NULL
+     WHERE stage_kind = 'plan' AND gate = 'user_confirm'
+       AND text LIKE '需求澄清与拆解：先把需求整理成一份需求说明%';
+    UPDATE routing_sub_actions SET gate_granted_at = NULL
+     WHERE gate = 'user_confirm' AND gate_granted_at IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM tasks WHERE id = routing_sub_actions.task_id AND status = 'completed');
+    CREATE TABLE IF NOT EXISTS entry_review_dispatch_intents (
+      intent_id TEXT PRIMARY KEY,
+      sub_action_id TEXT NOT NULL REFERENCES routing_sub_actions(sub_action_id) ON DELETE CASCADE,
+      spec_json TEXT NOT NULL,
+      dispatch_id TEXT
+    );
+  `)
 }

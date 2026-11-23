@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { AppWorkspaceShell } from '@/app-shell/AppWorkspaceShell'
-import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
+import { ConfirmationDialogProvider } from '@/components/dismiss/confirmation/confirmation-dialog'
 import { useAppChromeLayout } from '@/app-shell/chrome/use-app-chrome-layout'
 import { useAppStore } from '@/store'
 import { defineFixture } from '../../../component-fixtures/component-fixture'

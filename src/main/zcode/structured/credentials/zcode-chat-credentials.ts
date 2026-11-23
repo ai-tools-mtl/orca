@@ -35,7 +35,7 @@ export function zcodePlanProviderId(site: ZcodePlanSite): string {
 export async function resolveZcodeChatCredentials(
   source: ZcodeChatAccountSource = {}
 ): Promise<ZcodeChatCredentials | null> {
-  const apiKey = readZcodePlanApiKeyOrNull()
+  const apiKey = await readZcodePlanApiKeyOrNull()
   if (apiKey && source.site) {
     return { site: source.site, apiKey, providerId: zcodePlanProviderId(source.site) }
   }
@@ -58,9 +58,9 @@ export async function resolveZcodeChatCredentials(
   return null
 }
 
-function readZcodePlanApiKeyOrNull(): string | null {
+async function readZcodePlanApiKeyOrNull(): Promise<string | null> {
   try {
-    return readZcodePlanApiKey()
+    return await readZcodePlanApiKey()
   } catch {
     // Undecryptable or absent; the v2 store decides.
     return null

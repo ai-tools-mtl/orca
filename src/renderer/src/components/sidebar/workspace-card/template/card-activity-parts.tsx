@@ -1,8 +1,10 @@
 import React from 'react'
-import { LinearAgentSkillSetupPrompt } from '../../LinearAgentSkillSetupPrompt'
+import { LinearAgentSkillSetupPrompt } from '../../../skills/setup/LinearAgentSkillSetupPrompt'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 import WorktreeCardAgents from '../activity/WorktreeCardAgents'
+import { WorktreeCardLineAgents } from '../activity/worktree-card-line-agents'
 import { WorktreeAgentSummarySlot } from '../activity/worktree-card-agent-summary-slot'
+import { WorktreeCardLineAgentMore } from '../activity/worktree-card-line-agent-more'
 import {
   renderWorktreeCardIndicators,
   WorktreeCardIdentityHover,
@@ -41,6 +43,7 @@ function detailsHover(
       card={card}
       branchName={optionalText(props.branchName)}
       workspaceTitle={optionalText(props.workspaceTitle)}
+      closed={props.closed === true}
     >
       {child}
     </WorktreeCardIdentityHover>
@@ -48,10 +51,10 @@ function detailsHover(
 }
 
 export const CARD_ACTIVITY_PARTS = {
+  AgentSummarySlot: part([], () => <WorktreeAgentSummarySlot />),
   StatusLane: part(['unreadAction'], (props, _children, card) => (
     <WorktreeCardStatusLane card={card} showUnreadAction={props.unreadAction === true} />
   )),
-  AgentSummarySlot: part([], () => <WorktreeAgentSummarySlot />),
   Agents: part(['tight'], (props, _children, card) => (
     <WorktreeCardAgents
       worktreeId={card.worktree.id}
@@ -59,6 +62,12 @@ export const CARD_ACTIVITY_PARTS = {
       // Why: counterbalance the card stack gap so agents right after the title read as one group.
       className={props.tight === true ? '-mt-1' : 'mt-0'}
     />
+  )),
+  LineAgents: part([], (_props, _children, card) => (
+    <WorktreeCardLineAgents worktreeId={card.worktree.id} />
+  )),
+  LineAgentMore: part([], (_props, _children, card) => (
+    <WorktreeCardLineAgentMore worktreeId={card.worktree.id} />
   )),
   RemoteBranchConflict: part([], (_props, _children, { remoteBranchConflict }) =>
     remoteBranchConflict ? (
@@ -97,5 +106,5 @@ export const CARD_ACTIVITY_PARTS = {
       content
     )
   }),
-  DetailsHover: part(['branchName', 'workspaceTitle'], detailsHover)
+  DetailsHover: part(['branchName', 'workspaceTitle', 'closed'], detailsHover)
 }

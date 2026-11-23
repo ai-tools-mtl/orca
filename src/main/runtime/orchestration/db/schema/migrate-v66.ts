@@ -1,14 +1,28 @@
 import type { OrchestrationDb } from '../orchestration-db'
 
-/** v66：控制行（§直接操作会话）。控制任务类请求（暂停/停止正在执行的任务）不再把指令文本
- *  steer 进 worker 会话，而是登记 control_kind='interrupt' 的续接行，派发时直接中断目标
- *  会话并结算账本——任务卡不再因会话收尾无 worker_done 而永远执行中。 */
+/** v66：撤销 v61 旧版对统一路由决定的误回填（§派发授权）。v61 初版没有 strategy 条件，
+ *  把「决定已提交、保持未写入」的中断产物、手动规划（entryPlan）等统一路由决定也回填成
+ *  dispatchAuthorized=true——这些账本无法把回填值与真实授权区分开，不能继续当成授权
+ *  证据：撤销统一路由行上「dispatchAuthorized=true 且无 dispatchHold 且无来源标记」的
+ *  回填值，改写派发保持（待授权）；已绑定/已受理的动作与回执原样保留，泵不重派已绑定
+ *  行，需要派发时由用户显式 dispatch=true。真实 dispatch=true 的授权从不带来源标记且
+ *  一定清除了保持（dispatchHold 缺失）——凡带来源标记或保持仍在的行不是本迁移产物，
+ *  不动。 */
 export function migrateV66(this: OrchestrationDb, current: number): void {
   if (current >= 66) {
     return
   }
-  // 探测式加列：重放迁移的夹具可能用当前建表 SQL 造出已含本列的「旧版本号」库。
-  if (!this.hasColumn('routing_sub_actions', 'control_kind')) {
-    this.db.exec('ALTER TABLE routing_sub_actions ADD COLUMN control_kind TEXT')
-  }
+  this.db.exec(`
+    UPDATE routing_inputs
+       SET decision_json = json_remove(
+             json_set(decision_json, '$.dispatchHold', json('true')),
+             '$.dispatchAuthorized', '$.dispatchAuthorizedSource'
+           )
+     WHERE decision_status = 'decided'
+       AND json_valid(decision_json)
+       AND json_extract(decision_json, '$.dispatchAuthorized') IS NOT NULL
+       AND json_extract(decision_json, '$.dispatchHold') IS NULL
+       AND json_extract(decision_json, '$.dispatchAuthorizedSource') IS NULL
+       AND json_extract(decision_json, '$.decision.strategy') = 'unified_agent'
+  `)
 }

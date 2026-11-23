@@ -19,16 +19,16 @@ import type { ZcodePlanCredentialsStatus } from '../../shared/agent-accounts/usa
 type UsageRefresher = Pick<RateLimitService, 'refresh' | 'invalidateZcodeCredentialState'>
 
 export async function getZcodePlanCredentialsStatus(): Promise<ZcodePlanCredentialsStatus> {
-  const apiKeyConfigured = hasZcodePlanApiKey()
+  const apiKeyConfigured = await hasZcodePlanApiKey()
   return {
     apiKeyConfigured,
     zcodeCliConfigured: await hasZcodeCliPlanCredentials(),
-    apiKeyProtection: getZcodePlanApiKeyProtection(),
-    apiKeyUnreadable: apiKeyConfigured ? apiKeyUnreadable() : undefined
+    apiKeyProtection: await getZcodePlanApiKeyProtection(),
+    apiKeyUnreadable: apiKeyConfigured ? await apiKeyUnreadable() : undefined
   }
 }
 
-function apiKeyUnreadable(): ReturnType<typeof savedCredentialUnreadable> {
+async function apiKeyUnreadable(): Promise<ReturnType<typeof savedCredentialUnreadable>> {
   return savedCredentialUnreadable({
     path: getZcodePlanApiKeyPath(),
     envelopePrefix: API_KEY_ENVELOPE_PREFIX
@@ -36,8 +36,8 @@ function apiKeyUnreadable(): ReturnType<typeof savedCredentialUnreadable> {
 }
 
 /** Reject save when this host cannot open the existing seal; forgetting remains allowed. */
-export function assertZcodePlanApiKeyOpensHere(): void {
-  if (apiKeyUnreadable() === 'sealed-elsewhere') {
+export async function assertZcodePlanApiKeyOpensHere(): Promise<void> {
+  if ((await apiKeyUnreadable()) === 'sealed-elsewhere') {
     refuseCredentialSealedElsewhere('GLM Coding Plan API key')
   }
 }
@@ -58,7 +58,7 @@ export async function saveZcodePlanApiKeyCredential(
   if (typeof key !== 'string') {
     throw new Error('GLM Coding Plan API key must be a string')
   }
-  saveZcodePlanApiKey(key)
+  await saveZcodePlanApiKey(key)
   refreshAfterChange(rateLimits, 'save')
   return getZcodePlanCredentialsStatus()
 }
@@ -66,7 +66,7 @@ export async function saveZcodePlanApiKeyCredential(
 export async function clearZcodePlanApiKeyCredential(
   rateLimits: UsageRefresher | null
 ): Promise<ZcodePlanCredentialsStatus> {
-  clearZcodePlanApiKey()
+  await clearZcodePlanApiKey()
   refreshAfterChange(rateLimits, 'clear')
   return getZcodePlanCredentialsStatus()
 }

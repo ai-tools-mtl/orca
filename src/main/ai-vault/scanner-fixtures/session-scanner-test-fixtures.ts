@@ -67,7 +67,7 @@ export function isolatedScanRoots(root: string) {
     // Avoid discovering the user's real dsh sessions.
     dshSessionsDir: join(root, 'dsh-sessions'),
     devinTranscriptsDir: join(root, 'devin-transcripts'),
-    hermesSessionsDir: join(root, 'hermes-sessions'),
+    hermesHome: join(root, 'hermes-home'),
     rovoSessionsDir: join(root, 'rovo-sessions'),
     openclawStateDir: join(root, 'openclaw-state'),
     openclawLegacyStateDir: join(root, 'openclaw-legacy-state'),

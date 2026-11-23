@@ -9,6 +9,7 @@ export function buildDefaultSkipConfirmations(): Pick<
   | 'skipDeleteAutomationConfirm'
   | 'skipDeleteArtifactConfirm'
   | 'skipCodexRateLimitResetConfirm'
+  | 'skipDeleteChatConfirm'
 > {
   return {
     skipDeleteWorktreeConfirm: false,
@@ -17,6 +18,7 @@ export function buildDefaultSkipConfirmations(): Pick<
     skipCloseTerminalWithRunningProcessConfirm: false,
     skipDeleteAutomationConfirm: false,
     skipDeleteArtifactConfirm: false,
-    skipCodexRateLimitResetConfirm: false
+    skipCodexRateLimitResetConfirm: false,
+    skipDeleteChatConfirm: false
   }
 }

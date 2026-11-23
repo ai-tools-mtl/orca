@@ -1,13 +1,15 @@
 import type { OrchestrationDb } from '../orchestration-db'
 
-/** clarification 的门自动放行（模板已改 'auto'）：在环监督发生在阶段内的 ask，产物随后还要过
- *  plan 的人工门，中间这道 pending 的人工点击是冗余的。已放行的行不动。 */
 export function migrateV58(this: OrchestrationDb, current: number): void {
   if (current >= 58) {
     return
   }
-  this.db.exec(`
-    UPDATE routing_sub_actions SET gate = 'auto'
-     WHERE stage_kind = 'clarification' AND gate = 'user_confirm' AND gate_granted_at IS NULL;
-  `)
+  // 探测式加列：重放迁移的夹具可能用当前建表 SQL 造出已含本列的「旧版本号」库。
+  for (const table of ['routing_inputs', 'routing_sub_actions']) {
+    for (const column of ['entry_deleted_at', 'entry_error']) {
+      if (!this.hasColumn(table, column)) {
+        this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} TEXT`)
+      }
+    }
+  }
 }
