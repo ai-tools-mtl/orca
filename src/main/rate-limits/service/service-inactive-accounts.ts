@@ -57,6 +57,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
             allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
             networkProxySettings: this.networkProxySettingsResolver?.(),
             readsByHome,
+            rejectedTokensByHome: this.inactiveClaudeRejectedTokens,
             signal
           })
           if (
