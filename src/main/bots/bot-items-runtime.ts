@@ -49,6 +49,15 @@ export type BotItemsHostDeps = {
   sendMail: (mail: BotItemMail) => Promise<boolean>
 }
 
+function isHomeChat(
+  bot: Pick<Bot, 'chatSessionId'> | undefined,
+  chatId: string,
+  root: (id: string) => string
+): boolean {
+  const home = bot?.chatSessionId
+  return home ? root(home) === chatId : false
+}
+
 export class BotItemsHost {
   private readonly stores = new Map<string, TrackedBotItems>()
   private readonly join: BotItemLinkJoin
@@ -155,7 +164,7 @@ export class BotItemsHost {
     root: (id: string) => string,
     title: string | null
   ): BotItemSource {
-    if (bot.chatSessionId && root(bot.chatSessionId) === chatId) {
+    if (isHomeChat(bot, chatId, root)) {
       return { kind: 'home', title: 'Home Chat' }
     }
     const thread = this.deps.threadChats().find((entry) => root(entry.sessionId) === chatId)
@@ -177,9 +186,24 @@ export class BotItemsHost {
   }
 
   /** The chat that owns an item, as the item view shows it. */
-  owningChat({ chatId: id, source }: Pick<BotItemRecord, 'chatId' | 'source'>): BotItem['chat'] {
+  owningChat({
+    chatId: id,
+    ownerBotId,
+    source
+  }: Pick<BotItemRecord, 'chatId' | 'ownerBotId' | 'source'>): BotItem['chat'] {
     const gone = this.deps.chatExists(id) ? {} : { gone: true as const }
-    return { id, kind: source.kind, title: this.deps.chatTitle(id) ?? source.title, ...gone }
+    const { kind, title } = this.currentSource(ownerBotId, id, source)
+    return { id, kind, title: this.deps.chatTitle(id) ?? title, ...gone }
+  }
+
+  /** `bot new-chat` leaves items made in the old Home Chat recording `home`; that chat is a plain
+   *  chat now, so it goes by its own title, not "Home Chat". */
+  private currentSource(ownerBotId: string, chatId: string, source: BotItemSource): BotItemSource {
+    if (source.kind !== 'home') {
+      return source
+    }
+    const owner = this.deps.bots().find((bot) => bot.id === ownerBotId)
+    return isHomeChat(owner, chatId, this.deps.chatRoot) ? source : { kind: 'chat', title: null }
   }
 
   /** These items changed: their bots' lists re-read just them, and one that is now In progress with

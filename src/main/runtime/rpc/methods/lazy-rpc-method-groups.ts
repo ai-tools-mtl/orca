@@ -147,12 +147,6 @@ export const DEFAULT_LAZY_RPC_METHOD_GROUPS: readonly LazyRpcMethodGroup[] = [
     async () => (await import('./reference/reference')).REFERENCE_METHODS
   ),
   prefixRpcMethodGroup(
-    ['workspaceCleanup.'],
-    async () =>
-      (await import('./workspaces/workspace-cleanup-runner-methods'))
-        .WORKSPACE_CLEANUP_RUNNER_METHODS
-  ),
-  prefixRpcMethodGroup(
     [],
     async () => (await import('./workspaces/worktree-archive-methods')).WORKTREE_ARCHIVE_METHODS,
     { exactNames: ['worktree.archive', 'worktree.restore'] }
@@ -220,6 +214,26 @@ export const DEFAULT_LAZY_RPC_METHOD_GROUPS: readonly LazyRpcMethodGroup[] = [
     { exactNames: Object.values(AUTO_NAME_RPC_METHODS) }
   ),
   prefixRpcMethodGroup(
+    ['worktree.'],
+    async () => (await import('./workspaces/worktree')).WORKTREE_METHODS,
+    { exactNames: ['workspaceCleanup.scan'] }
+  ),
+  prefixRpcMethodGroup(
+    ['workspaceCleanup.'],
+    async () =>
+      (await import('./workspaces/workspace-cleanup-runner-methods'))
+        .WORKSPACE_CLEANUP_RUNNER_METHODS
+  ),
+  prefixRpcMethodGroup(
+    ['repo.', 'project.', 'projectGroup.', 'projectHostSetup.', 'folderWorkspace.'],
+    async () => (await import('./projects/repo')).REPO_METHODS
+  ),
+  prefixRpcMethodGroup(
+    ['session.tabs.', 'markdown.'],
+    async () => (await import('./session-tabs/session-tabs')).SESSION_TAB_METHODS,
+    { streamingNames: ['session.tabs.subscribe', 'session.tabs.subscribeAll'] }
+  ),
+  prefixRpcMethodGroup(
     [],
     async () => (await import('./terminal/terminal-orphan')).TERMINAL_ORPHAN_METHODS,
     { exactNames: ['terminal.adoptOrphans'] }
@@ -228,6 +242,17 @@ export const DEFAULT_LAZY_RPC_METHOD_GROUPS: readonly LazyRpcMethodGroup[] = [
     [],
     async () => (await import('./terminal/agent-session')).AGENT_SESSION_METHODS,
     { exactNames: ['terminal.ensureAgentSession', 'terminal.createAgentSession'] }
+  ),
+  prefixRpcMethodGroup(
+    ['terminal.', 'agentTeams.'],
+    async () => (await import('./terminal/terminal')).TERMINAL_METHODS,
+    {
+      streamingNames: [
+        'terminal.subscribe',
+        'terminal.multiplex',
+        'terminal.subscribeClaudeAgentViews'
+      ]
+    }
   ),
   prefixRpcMethodGroup(
     ['agentSessionAttachment.'],

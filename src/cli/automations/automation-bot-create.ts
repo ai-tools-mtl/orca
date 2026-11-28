@@ -32,7 +32,7 @@ import {
 } from '../arguments/flags'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { findBot } from '../bots/bot'
-import { getEnabledFlag } from './automation-handler-flags'
+import { getEnabledFlag, getPromptFlag } from './automation-handler-flags'
 import { getPrecheckFlag } from './automation-precheck-flag'
 import { getTimezoneFlags } from './automation-timezone-flag'
 import { legacyPlaceOf } from '../../shared/connector-place-names'
@@ -309,7 +309,7 @@ export async function createBotAutomation(
   const item = await automationItemFlag(client, flags, bot.id)
   const saved = await client.call<{ automation: Automation }>('automation.create', {
     name: getRequiredStringFlag(flags, 'name'),
-    prompt: getRequiredStringFlag(flags, 'prompt'),
+    prompt: getPromptFlag(flags),
     precheck: getPrecheckFlag(flags),
     agentId: botAutomationSetup(target, bot).agent,
     bot: target,

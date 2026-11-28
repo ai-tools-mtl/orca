@@ -21,6 +21,12 @@ import {
   type JournalLegacyCompare
 } from './database/journal-legacy-compare'
 import { readForgottenJournalChats } from './journal-forgotten-chats'
+import {
+  JOURNAL_LEGACY_SOURCE_RECEIPT,
+  type JournalLegacyAbsorbedSource
+} from './database/journal-legacy-source-receipt'
+import { JOURNAL_LEGACY_REVISIONS_KEPT } from './database/journal-legacy-reconcile'
+import { readMeta } from './database/journal-legacy-reconcile-marks'
 import { readDeletedChats } from './journal-deleted-chats'
 import type { DeletedChat } from '../chat-deletion/deleted-chats'
 import {
@@ -56,6 +62,7 @@ export type JournalSqlDatabaseRead =
   | { kind: 'attachment-claims'; after: number }
   | { kind: 'attachment-sweeps'; after: string | null }
   | { kind: 'legacy-compares'; after: string | null }
+  | { kind: 'legacy-absorbed' }
   | { kind: 'forgotten-chats'; after: string | null }
   | { kind: 'deleted-chats' }
   | { kind: 'connector-replies'; sessionId?: string }
@@ -76,6 +83,7 @@ export type JournalSqlDatabaseReadResult =
   | { kind: 'chat-exists'; exists: boolean }
   | { kind: 'message-chats'; sessionIds: string[] }
   | { kind: 'legacy-compares'; compares: JournalLegacyCompare[] }
+  | ({ kind: 'legacy-absorbed' } & JournalLegacyAbsorbedSource)
   | { kind: 'retired-heads'; heads: JournalRetiredHead[]; through: string | null }
   | {
       kind: 'attachment-claims'
@@ -166,6 +174,13 @@ function read(
       return {
         kind: 'legacy-compares',
         compares: pendingJournalLegacyCompares(db, operation.after)
+      }
+    case 'legacy-absorbed':
+      // The original as the last complete older-Orca reconcile absorbed it.
+      return {
+        kind: 'legacy-absorbed',
+        receipt: readMeta(db, JOURNAL_LEGACY_SOURCE_RECEIPT) ?? null,
+        kept: readMeta(db, JOURNAL_LEGACY_REVISIONS_KEPT) !== undefined
       }
     case 'sessions': {
       const rows =

@@ -47,8 +47,8 @@ vi.mock('../../../google/google-setup-runs', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   googleSetupRuns: () => state.runs
 }))
-vi.mock('../../../google/google-connect', () => ({
-  getGoogleConnect: () => ({
+vi.mock('../../../google/google-connect-slot', () => ({
+  resolveGoogleConnect: async () => ({
     client: async () => OLD_CLIENT,
     accounts: async () => state.accounts,
     checkAccounts: async () => state.accounts,

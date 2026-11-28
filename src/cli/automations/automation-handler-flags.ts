@@ -64,6 +64,22 @@ function getOptionalDayFlag(flags: Map<string, string | boolean>): number | unde
   return day
 }
 
+function requirePromptText(prompt: string): string {
+  if (!prompt.trim()) {
+    throw new RuntimeClientError('invalid_argument', '--prompt requires non-whitespace text')
+  }
+  return prompt
+}
+
+export function getPromptFlag(flags: Map<string, string | boolean>): string {
+  return requirePromptText(getRequiredStringFlag(flags, 'prompt'))
+}
+
+export function getOptionalPromptFlag(flags: Map<string, string | boolean>): string | undefined {
+  const prompt = getOptionalStringFlag(flags, 'prompt')
+  return prompt === undefined ? undefined : requirePromptText(prompt)
+}
+
 export function getProviderFlag(flags: Map<string, string | boolean>): TuiAgent {
   const provider = getRequiredStringFlag(flags, 'provider')
   if (!isTuiAgent(provider)) {

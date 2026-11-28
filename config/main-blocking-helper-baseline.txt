@@ -810,8 +810,7 @@
 4 src/main/observability/index.ts
 4 src/main/observability/local-file-sink.ts
 2 src/main/omp/omp-transcript-import.ts
-1 src/main/opencode-usage/opencode-usage-provider.ts
-1 src/main/opencode-usage/store.ts
+2 src/main/opencode-usage/store.ts # scanOpenCodeUsageDatabasesViaWorker moved here from the deleted opencode-usage-provider.ts; net-neutral, matches claude-usage/store.ts
 1 src/main/opencode/acp/opencode-acp-connection.ts
 1 src/main/opencode/model-launch/opencode-launch-capabilities.ts
 1 src/main/opencode/model-launch/opencode-launch-model-context.ts
@@ -1095,10 +1094,8 @@
 2 src/main/rate-limits/providers/zcode/zcode-usage-fetcher.ts
 1 src/main/rate-limits/service/service-fetch-targets.ts
 1 src/main/rate-limits/service/service-full-cycle-application.ts
-7 src/main/rate-limits/service/service-full-cycle-preparation.ts
+1 src/main/rate-limits/service/service-full-cycle-preparation.ts
 1 src/main/rate-limits/service/service-inactive-accounts.ts
-1 src/main/rate-limits/service/service-muse-usage-fetch.ts
-3 src/main/rate-limits/service/service-provider-cycles.ts
 1 src/main/rate-limits/service/service-state.ts
 1 src/main/rate-limits/service/service-target-usage-read.ts # the same sync Codex state-db read the poller already does, reached only when the WSL HTTP read fails; bounded by the renderer TTL and Retry-After
 2 src/main/remote-policies/release-asset-policy-live-update.ts
@@ -1358,7 +1355,7 @@
 4 src/main/startup/main-process-ready.ts
 1 src/main/startup/main-window/main-process-i18n-menu.ts
 15 src/main/startup/main-window/main-window-controller.ts
-4 src/main/startup/main-window/main-window-core-services.ts
+3 src/main/startup/main-window/main-window-core-services.ts
 1 src/main/startup/native-setting-subscriptions.ts # HTTP/1 marker write moved here from main-process-ready-foundation.ts (settings change only)
 3 src/main/startup/network-compatibility/http1-compatibility-marker.ts
 9 src/main/startup/network-compatibility/http1-compatibility-profile-state.ts

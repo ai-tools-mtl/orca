@@ -36,7 +36,9 @@ import { resolveCurrentWorktreeSelector } from '../workspace-selection/workspace
 import { getExplicitTarget } from './automation-target-flags'
 import {
   getEnabledFlag,
+  getOptionalPromptFlag,
   getOptionalProviderFlag,
+  getPromptFlag,
   getProviderFlag,
   getReuseSessionFlag,
   getSourceContextFlag,
@@ -143,7 +145,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     // Built before the destination read so a contradictory flag still fails without a runtime call.
     const create = {
       name: getRequiredStringFlag(flags, 'name'),
-      prompt: getRequiredStringFlag(flags, 'prompt'),
+      prompt: getPromptFlag(flags),
       precheck: getPrecheckFlag(flags),
       agentId: getProviderFlag(flags),
       extraAgentArgs: getExtraAgentArgsFlag(flags),
@@ -196,7 +198,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     const precheckFlags = readPrecheckFlags(flags)
     const updates = {
       name: getOptionalStringFlag(flags, 'name'),
-      prompt: getOptionalStringFlag(flags, 'prompt'),
+      prompt: getOptionalPromptFlag(flags),
       agentId: getOptionalProviderFlag(flags),
       extraAgentArgs: getExtraAgentArgsFlag(flags),
       ...(setupDecision !== undefined ? { setupDecision } : {}),

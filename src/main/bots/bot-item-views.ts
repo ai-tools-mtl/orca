@@ -9,7 +9,7 @@ import type { BotItemRecord } from './bot-items-schema'
 export type BotItemViewDeps = {
   join: BotItemLinkJoin
   bots: () => readonly Bot[]
-  owningChat: (item: Pick<BotItemRecord, 'chatId' | 'source'>) => BotItem['chat']
+  owningChat: (item: Pick<BotItemRecord, 'chatId' | 'ownerBotId' | 'source'>) => BotItem['chat']
 }
 
 export async function botItemViewsFromRows(
