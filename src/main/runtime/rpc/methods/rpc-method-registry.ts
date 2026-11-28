@@ -1,4 +1,7 @@
 import { EAGER_CORE_RPC_METHODS, EAGER_SERVICE_RPC_METHODS } from './eager-rpc-method-registry'
+import { REPO_METHODS } from './projects/repo'
+import { WORKTREE_METHODS } from './workspaces/worktree'
+import { SESSION_TAB_METHODS } from './session-tabs/session-tabs'
 import { BOT_RPC_METHODS } from './bot-rpc-methods'
 import { CONNECTOR_METHODS } from './connectors/connector'
 import { CONNECTOR_SLACK_MIRROR_METHODS } from './connectors/connector-slack-mirror'
@@ -72,6 +75,7 @@ import { ORCAD_TERMINAL_CENSUS_METHODS } from './orcad/orcad-terminal-census'
 import { SESSION_TERMINAL_SCROLLBACK_METHODS } from './terminal/session-terminal-scrollback'
 import { WORKTREE_AUTO_NAME_METHODS } from './workspaces/worktree-auto-name-methods'
 import { TERMINAL_ORPHAN_METHODS } from './terminal/terminal-orphan'
+import { TERMINAL_METHODS } from './terminal/terminal'
 import { AGENT_SESSION_METHODS } from './terminal/agent-session'
 import { STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS } from './structured-sessions/attachments/structured-agent-session-attachments'
 import { STRUCTURED_AGENT_SESSION_VISUAL_METHODS } from './structured-sessions/attachments/structured-agent-session-visual'
@@ -85,6 +89,8 @@ import { NATIVE_CHAT_METHODS } from './native-chat/native-chat'
 
 const CORE_RPC_METHODS = [
   ...EAGER_CORE_RPC_METHODS,
+  ...REPO_METHODS,
+  ...WORKTREE_METHODS,
   ...ARTIFACT_METHODS,
   ...AUTOMATION_METHODS,
   ...CONNECTOR_METHODS,
@@ -112,6 +118,7 @@ const CORE_RPC_METHODS = [
 
 const SERVICE_RPC_METHODS = [
   ...EAGER_SERVICE_RPC_METHODS,
+  ...SESSION_TAB_METHODS,
   ...GOOGLE_METHODS,
   ...GOOGLE_READ_METHODS,
   ...GOOGLE_FILES_METHODS,
@@ -168,6 +175,7 @@ const SERVICE_RPC_METHODS = [
   ...GIT_METHODS,
   ...CLIPBOARD_METHODS,
   ...TERMINAL_ORPHAN_METHODS,
+  ...TERMINAL_METHODS,
   ...TERMINAL_DAEMON_METHODS,
   ...CLIENT_UI_METHODS,
   ...NATIVE_CHAT_METHODS
