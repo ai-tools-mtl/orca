@@ -6,10 +6,7 @@ import {
   type PluginMarketplaceEntry,
   type PluginMarketplaceGitSource
 } from '../../../shared/plugins/catalog/plugin-marketplace'
-import {
-  fetchPluginMarketplace,
-  type PluginMarketplaceFetchResult
-} from './plugin-marketplace-fetch'
+import type { PluginMarketplaceFetchResult } from './plugin-marketplace-fetch'
 import {
   marketplaceSourceId,
   PluginMarketplaceStore,
@@ -76,7 +73,12 @@ export class PluginMarketplaceService {
     this.hostVersion = options.hostVersion ?? null
     this.imageCache = options.imageCache ?? null
     this.store = options.store ?? new PluginMarketplaceStore(options.pluginsDataDir)
-    this.fetcher = options.fetcher ?? fetchPluginMarketplace
+    this.fetcher =
+      options.fetcher ??
+      (async (source) => {
+        const { fetchPluginMarketplace } = await import('./plugin-marketplace-fetch')
+        return fetchPluginMarketplace(source)
+      })
     this.getKillListEntry = options.getKillListEntry ?? (() => null)
     this.teamPolicy = new PluginMarketplaceTeamPolicy(options.getTeamCapabilities)
     this.communitySeed = new CommunityMarketplaceSeed(this.store, (source) =>
