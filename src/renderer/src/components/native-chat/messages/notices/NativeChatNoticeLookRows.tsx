@@ -1,6 +1,6 @@
 import { BotTidyUpLine } from '@/components/bots/BotTidyUpLine'
 import { nativeChatBotCard } from '../../native-chat-bot-cards'
-import * as Fallback from '../../../../../../shared/native-chat/transcript/notices/claude-model-fallback'
+import { nativeChatSwitchNoticeText } from './native-chat-switch-notice-text'
 import { Notebook } from 'lucide-react'
 import { NativeChatForkedFromRow } from './NativeChatForkedFromRow'
 import { NativeChatAutoReviewDenialRow } from './NativeChatAutoReviewDenialRow'
@@ -132,14 +132,10 @@ export function nativeChatNoticeLookRow({
       </p>
     )
   }
-  if (look.kind === 'model-fallback') {
+  if (look.kind === 'account-switch' || look.kind === 'model-fallback') {
     return (
       <p className="min-w-0 max-w-full select-text text-sm text-chat-foreground-faint [overflow-wrap:anywhere]">
-        {t(
-          'components.native-chat.notices.modelFallback',
-          Fallback.CLAUDE_MODEL_FALLBACK_COPY,
-          Fallback.claudeModelFallbackLabels(look)
-        )}
+        {nativeChatSwitchNoticeText(look, t)}
       </p>
     )
   }

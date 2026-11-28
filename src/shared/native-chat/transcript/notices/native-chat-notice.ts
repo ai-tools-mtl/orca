@@ -5,6 +5,10 @@ import {
   AGENT_SESSION_MODEL_SWITCH_PRESENTATION,
   readAgentSessionModelSwitchFrame
 } from '../../../agent-session/journal/agent-session-model-switch'
+import {
+  readAgentAccountSwitchFrame,
+  type AgentAccountSwitchNotice
+} from './agent-account-switch-notice'
 import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../../../agent-session/journal/agent-session-turn-notice'
 import {
   isAgentSessionHostStatusPresentation,
@@ -50,6 +54,8 @@ export type NativeChatNoticeLook =
   | { kind: 'model-fallback'; from: string; to: string }
   /** A provider's own model switch, centered with its icon. */
   | { kind: 'model-switch'; from: string; to: string }
+  /** A turn finishing on the account it started on, or a chat that couldn't start on the selected one. */
+  | ({ kind: 'account-switch' } & AgentAccountSwitchNotice)
   /** Faint, as a system row with no notice of its own is. */
   | { kind: 'aside' }
   | {
@@ -127,6 +133,13 @@ export function nativeChatNoticeLook(block: NativeChatTextBlock): NativeChatNoti
       : null
   if (modelFallback) {
     return { kind: 'model-fallback', ...modelFallback }
+  }
+  const accountSwitch =
+    presentation === AGENT_SESSION_TURN_NOTICE_PRESENTATION && !block.failure
+      ? readAgentAccountSwitchFrame(block.providerFrame)
+      : null
+  if (accountSwitch) {
+    return { kind: 'account-switch', ...accountSwitch }
   }
   // Declared notification kinds select disclosure; prose and nested failures do not.
   if (presentation === undefined && !block.failure && !block.orcaStop) {
