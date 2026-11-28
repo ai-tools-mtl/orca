@@ -18,7 +18,7 @@ import {
   BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY
 } from '../../../shared/browser/runtime/browser-runtime-capabilities'
 import { orcaAccountRuntimeCapabilities } from '../../orca-profiles/orca-server-sign-in-slot'
-import { googleRuntimeCapabilities } from '../../google/google-connect'
+import { googleRuntimeCapabilities } from '../../google/google-connect-slot'
 import {
   runtimeBrowserCommandsFactoryIsHeadless,
   runtimeBrowserCommandsFactorySupportsEngineCapability,

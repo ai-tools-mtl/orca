@@ -13,7 +13,7 @@ import type { DesktopCore } from '../../core-desktop/desktop-core'
 import type { Store } from '../../persistence/loading-store/store'
 import { createDesktopOrcaAccountService } from '../desktop-orca-account-service'
 import { installOrcaServerSignIn } from '../../orca-profiles/orca-server-sign-in-slot'
-import { GoogleConnect, installGoogleConnect } from '../../google/google-connect'
+import { installGoogleConnect } from '../../google/google-connect-slot'
 import { setBotToolSignInBrowser } from '../../bots/tool-oauth/bot-tool-sign-in-browser-slot'
 
 export type DesktopAccountServiceDeps = {
@@ -62,7 +62,10 @@ export async function initializeMainProcessAccountServices(
     const { OrcaServerSignIn } = await import('../../orca-profiles/orca-server-sign-in')
     return new OrcaServerSignIn({ account: orcaAccount })
   })
-  installGoogleConnect(new GoogleConnect({ openBrowser: openExternal }))
+  installGoogleConnect(async () => {
+    const { GoogleConnect } = await import('../../google/google-connect')
+    return new GoogleConnect({ openBrowser: openExternal })
+  })
   setBotToolSignInBrowser(openExternal)
   // Defer shared-home migration; compatibility launches re-arm non-destructive scans for new rollouts (#4444, #8612, #12480).
   core.codexSessionMigration.scheduleInitialRun()

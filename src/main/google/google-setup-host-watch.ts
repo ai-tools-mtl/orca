@@ -6,7 +6,7 @@ import { setPageTextWithheld } from '../browser/agent-browser/agent-browser-with
 import type { StandingDownloadClaimResolver } from '../browser/guest-lifecycle/manager/downloads/browser-manager-download-creation'
 import { setClientDownloadClaimant } from '../runtime/browser/downloads/client-download-claims'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { getGoogleConnect } from './google-connect'
+import { resolveGoogleConnect } from './google-connect-slot'
 import {
   googleSetupClientDownloadClaimant,
   googleSetupKeyDownloadClaim,
@@ -37,7 +37,7 @@ export function installGoogleSetupHostWatch(
     runs: () => googleSetupRuns().list(),
     botWorkspace,
     importKey: async (text) => {
-      const connect = getGoogleConnect()
+      const connect = await resolveGoogleConnect()
       if (!connect) {
         throw new Error("Google isn't available on this computer.")
       }
