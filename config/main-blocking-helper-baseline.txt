@@ -810,8 +810,7 @@
 4 src/main/observability/index.ts
 4 src/main/observability/local-file-sink.ts
 2 src/main/omp/omp-transcript-import.ts
-1 src/main/opencode-usage/opencode-usage-provider.ts
-1 src/main/opencode-usage/store.ts
+2 src/main/opencode-usage/store.ts # scanOpenCodeUsageDatabasesViaWorker moved here from the deleted opencode-usage-provider.ts; net-neutral, matches claude-usage/store.ts
 1 src/main/opencode/acp/opencode-acp-connection.ts
 1 src/main/opencode/model-launch/opencode-launch-capabilities.ts
 1 src/main/opencode/model-launch/opencode-launch-model-context.ts
